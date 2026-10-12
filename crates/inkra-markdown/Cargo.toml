@@ -1,6 +1,6 @@
 [package]
 name = "inkra-markdown"
-description = "Markdown parsing: incremental block + inline parser, AST with exact source ranges, lossless serialization back to Markdown."
+description = "Markdown parsing: incremental block + inline parser, AST with exact source ranges, lossless serialization."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,3 +13,12 @@ workspace = true
 
 [dependencies]
 inkra-text.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+proptest.workspace = true
+criterion.workspace = true
+
+[[bench]]
+name = "parse"
+harness = false
