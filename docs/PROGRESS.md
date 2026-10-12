@@ -1,11 +1,12 @@
 # Inkra 开发进度
 
 更新时间：2026-10-13
-当前里程碑：M2 行内解析与源码模式编辑器（M0、M1 已完成）
+当前里程碑：M3 实时渲染 MVP（M0、M1、M2 已完成）
 CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 测试机均通过；macOS 仅做交叉 `cargo clippy --target aarch64-apple-darwin`，未实机运行；无 GitHub 远程仓库，Actions 未实际运行）
 
 ## 已完成的需求编号
 - M0：AD-3（命令注册表）、CM-001（框架 + 3 个样例命令）、PR-001、PR-003、PR-018（键）、UI-001（菜单骨架，macOS muda 原生菜单）、UI-002、UI-010（默认快捷键表）、UI-050、NF-002（命令边界 catch_unwind）、NF-008、CM-004（`--version` / `--help` / `--measure-startup` / `--config` 等参数解析）
+- M2：ED-010（输入、IME 预编辑与候选窗定位）、ED-011（拖拽/Shift 扩展/双击词/三击块/Ctrl+A 两段式）、ED-012（源码模式下按字/词/行首删除）、ED-013（源码模式换行延续：列表、任务、引用、代码缩进、空项退出、嵌套空项先提升）、ED-014、ED-015、ED-016（复制 Markdown+HTML、粘贴 HTML→Markdown、URL 粘贴为链接、纯文本粘贴、AI 公式分隔符转换、文件列表）、ED-020（闪烁 530 ms、自动滚动留 2 行边距、PageUp/Down）、ED-100、ED-101（自动续写与有序列表重编号）、ED-110、ED-111、ED-120（切换命令与状态栏按钮）、ED-121（等宽、行号、Markdown 高亮、软换行）、FS-025（状态栏字数，基础）、FS-040（性能叠层）
 - M1：AD-1、AD-2、MD-001～MD-015 的块级结构（含 Front Matter、TOC、脚注定义、Alerts、数学块）、MD-030～MD-043 行内解析（M2 内容一并完成）、MD-091（未修改字节逐字保留）、ED-015（撤销分组）、ED-106（编码与换行检测、原样回写）、TS-001、TS-002、TS-003
 
 ## 验收数据
@@ -25,11 +26,20 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 | proptest 无 panic | 随机 Markdown（含 2 KB 随机字节）不 panic；增量 = 全量解析 200,000 例 × 两种方言通过 |
 | 任意文件 round-trip 字节一致 | 1673 个真实世界文件（rust-lang book/reference/nomicon/cargo/rbe、两个中文教程）解码→编码字节一致；插入编辑后增量 = 全量，撤销后字节一致 |
 
+### M2
+| 验收项 | 结果 |
+|---|---|
+| CommonMark 行内例子 ≥ 95% | 356/356（100%） |
+| 源码模式完成 ED-010～016、ED-100、ED-101、ED-110、ED-111 | 通过：engine 单测 37 项 + egui_kittest 交互测试 12 项；Windows 实机验证微软拼音输入（预编辑下划线、候选窗跟随光标）、HTML 剪贴板转换、Ctrl+End、查找条 |
+| 输入延迟 p95 < 16 ms（10 万字） | Windows 实机（性能叠层）：p50 1.29 ms、p95 2.36 ms；无头 CPU：p50 0.65 ms、p95 0.75 ms |
+| 偏离 | ED-016 规则 1（粘贴位图）依赖 M3 的图片插入流程（ED-092），在 M3 实现；拼写检查为 P1 |
+
 ## 进行中
-- [ ] M2：源码模式编辑器（inkra-layout 文本运行与命中测试、inkra-render、inkra-ui 编辑画布、IME、选区、剪贴板、查找替换、Markdown 高亮、行号、自动配对、列表延续）
+- [ ] M3：实时渲染（扁平化块布局、行内标记显隐、代码高亮、图片）、实时模式编辑语义、3.3/3.4 P0 命令、右键菜单、文件生命周期（FS-001～008）、主题（TH-001～003）
 
 ## 已知问题
 - Windows GUI 子系统下 `inkra --version` 的输出出现在 cmd 提示符之后（系统行为）；脚本场景可用 `inkra-cli`。
+- egui-winit 在剪贴板无文本时不产生粘贴事件；Inkra 自行接管 winit 事件循环捕获 `Ctrl+V`（`apps/inkra/src/main.rs` 的 `Hooked`）。
 - egui 内置界面主题暂为默认外观，品牌主题（Paper/Ink）随 M3 TH-001～TH-003 交付。
 - Wayland 下窗口图标依赖安装 `.desktop` 与 hicolor 图标（`apps/inkra/linux/`），打包在 M7。
 
@@ -49,6 +59,7 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 - 空窗口冷启动（Release，Windows Server 2022，RTX 3080，DX12）：~400 ms（热）/ ~690 ms（首次）；GL：~260 ms
 - 空窗口冷启动（Release，Linux，Xvfb + llvmpipe GL）：~120 ms
 - 1 MB Markdown 全量解析：47 ms；单字符增量编辑：平均 8.7 µs / 最坏 48 µs
+- 10 万字源码模式输入延迟（Windows 实机）：p50 1.29 ms / p95 2.36 ms
 
 ## 测试环境备注
 - Windows 测试机经代理上网，crates.io 索引不可达：依赖通过 `cargo vendor` 上传（`C:\work\vendor`，`~/.cargo/config.toml` 源替换）。
@@ -56,4 +67,4 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 - 语料：`cargo xtask corpus` 拉取固定提交的 7 个仓库到 `target/corpus`（不入库）。
 
 ## 下次会话从这里继续
-- 进入 M2：先实现 inkra-layout 的通用"文本运行 + 源码映射 + 命中测试"框架（源码模式与 M3 实时渲染共用），再做 inkra-ui 编辑画布与 inkra-engine 编辑器状态机。
+- M3：inkra-layout `live` 模块（容器扁平化为叶子块项、行内 LayoutJob 与源码映射、活动元素显示标记），随后实时模式编辑语义与文件生命周期。
