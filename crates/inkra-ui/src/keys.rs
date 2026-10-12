@@ -76,7 +76,16 @@ pub fn chord(
     modifiers: egui::Modifiers,
     os: Os,
 ) -> Option<KeyChord> {
-    let k = physical_key.and_then(map_key).or_else(|| map_key(key))?;
+    // Named keys (arrows, Home/End, F-keys…) and Latin letters use the logical
+    // key: a numpad End must stay End, and letter shortcuts follow the layout.
+    // Digits and punctuation use the physical key so that `Ctrl+Shift+[` and
+    // `Ctrl+=` work whatever the shifted character is.
+    let logical = map_key(key);
+    let k = match logical {
+        Some(Key::Char(c)) if c.is_ascii_alphabetic() => Key::Char(c),
+        Some(Key::Char(_)) | None => physical_key.and_then(map_key).or(logical)?,
+        Some(named) => named,
+    };
     Some(KeyChord {
         ctrl: modifiers.command,
         shift: modifiers.shift,

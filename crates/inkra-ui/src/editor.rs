@@ -318,7 +318,7 @@ impl EditorView {
             ctx.request_repaint_after(Duration::from_secs_f64(next.max(0.01)));
             ctx.output_mut(|o| {
                 o.ime = Some(egui::output::IMEOutput {
-                    rect: text_rect,
+                    rect: r, // egui-winit uses `rect` as the IME cursor area (ED-010)
                     cursor_rect: r,
                     purpose: Default::default(),
                     should_interrupt_composition: false,

@@ -29,6 +29,17 @@ pub use menubar::Invocation;
 /// The 256 px application icon (UI-050, UI-052).
 pub const ICON_PNG: &[u8] = include_bytes!("../../../assets/brand/inkra-256.png");
 
+/// Raw key signals from the platform event loop, for shortcuts that egui's
+/// winit integration consumes without an event (e.g. `Ctrl+V` when the clipboard
+/// holds only an image or only HTML).
+#[derive(Debug, Default)]
+pub struct RawKeys {
+    /// `Ctrl+V` (or `Cmd+V`) was pressed.
+    pub paste: std::sync::atomic::AtomicBool,
+    /// It was `Ctrl+Shift+V`.
+    pub paste_plain: std::sync::atomic::AtomicBool,
+}
+
 /// How long a toast stays visible (UI-041).
 const TOAST_SECS: f64 = 3.0;
 
@@ -56,6 +67,9 @@ pub struct Shell {
     status: status_bar::StatusCache,
     setup_done: bool,
     perf: perf::Perf,
+    engine_effects_override: Option<Vec<Effect>>,
+    /// Raw key signals (set by the platform event loop).
+    pub raw_keys: std::sync::Arc<RawKeys>,
     #[cfg(target_os = "macos")]
     native_menu: Option<native_menu::NativeMenu>,
 }
@@ -85,6 +99,8 @@ impl Shell {
             status: Default::default(),
             setup_done: false,
             perf: perf::Perf::default(),
+            raw_keys: Default::default(),
+            engine_effects_override: None,
             #[cfg(target_os = "macos")]
             native_menu: None,
         }
@@ -137,7 +153,11 @@ impl Shell {
     }
 
     fn apply_effects(&mut self, ctx: &egui::Context) {
-        for effect in self.engine.take_effects() {
+        let effects = match self.engine_effects_override.take() {
+            Some(e) => e,
+            None => self.engine.take_effects(),
+        };
+        for effect in effects {
             match effect {
                 Effect::Quit => {
                     self.quit_requested = true;
@@ -177,6 +197,28 @@ impl Shell {
                 }
             }
         }
+    }
+
+    /// `Ctrl+V` seen by the platform loop: read every clipboard format ourselves and
+    /// drop egui's text-only paste event (ED-016 rule order).
+    fn handle_raw_paste(&mut self, ctx: &egui::Context) {
+        use std::sync::atomic::Ordering;
+        if !self.raw_keys.paste.swap(false, Ordering::SeqCst) {
+            return;
+        }
+        let plain = self.raw_keys.paste_plain.swap(false, Ordering::SeqCst);
+        ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Paste(_))));
+        // Only when the editor (not a text field) has focus.
+        let focus = ctx.memory(|m| m.focused());
+        if focus.is_some() && focus != Some(self.editor.id()) {
+            return;
+        }
+        self.apply_effect_list(ctx, vec![Effect::RequestPaste { plain }]);
+    }
+
+    fn apply_effect_list(&mut self, ctx: &egui::Context, effects: Vec<Effect>) {
+        self.engine_effects_override = Some(effects);
+        self.apply_effects(ctx);
     }
 
     /// Dispatches key presses bound in the keymap and removes them from the input.
@@ -235,6 +277,7 @@ impl Shell {
             })
         });
         self.perf.begin(had_input);
+        self.handle_raw_paste(&ctx);
         self.handle_shortcuts(&ctx);
 
         #[cfg(target_os = "macos")]
