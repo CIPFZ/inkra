@@ -45,6 +45,43 @@ impl eframe::App for App {
     }
 }
 
+/// wgpu setup: one backend per platform (DX12 on Windows, which falls back to the
+/// WARP software adapter without a GPU; Metal on macOS; Vulkan or GL on Linux)
+/// and our own adapter choice, which saves wgpu a second adapter enumeration
+/// (~100 ms on Windows). `WGPU_BACKEND` still overrides the backend.
+fn wgpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
+    use eframe::egui_wgpu::{WgpuConfiguration, WgpuSetup, WgpuSetupCreateNew};
+    use eframe::wgpu;
+    let mut setup = WgpuSetupCreateNew::without_display_handle();
+    let default_backends = if cfg!(windows) {
+        wgpu::Backends::DX12
+    } else if cfg!(target_os = "macos") {
+        wgpu::Backends::METAL
+    } else {
+        wgpu::Backends::VULKAN | wgpu::Backends::GL
+    };
+    setup.instance_descriptor.backends = wgpu::Backends::from_env().unwrap_or(default_backends);
+    setup.native_adapter_selector = Some(Arc::new(|adapters, surface| {
+        let rank = |t: wgpu::DeviceType| match t {
+            wgpu::DeviceType::IntegratedGpu => 0,
+            wgpu::DeviceType::DiscreteGpu => 1,
+            wgpu::DeviceType::VirtualGpu => 2,
+            wgpu::DeviceType::Other => 3,
+            wgpu::DeviceType::Cpu => 4,
+        };
+        adapters
+            .iter()
+            .filter(|a| surface.is_none_or(|s| a.is_surface_supported(s)))
+            .min_by_key(|a| rank(a.get_info().device_type))
+            .cloned()
+            .ok_or_else(|| "no wgpu adapter can present to this window".to_owned())
+    }));
+    WgpuConfiguration {
+        wgpu_setup: WgpuSetup::CreateNew(setup),
+        ..Default::default()
+    }
+}
+
 fn icon() -> Option<egui::IconData> {
     match eframe::icon_data::from_png_bytes(inkra_ui::ICON_PNG) {
         Ok(i) => Some(i),
@@ -109,6 +146,7 @@ fn main() -> std::process::ExitCode {
     let options = eframe::NativeOptions {
         viewport,
         persistence_path: Some(paths.data.join("egui.ron")),
+        wgpu_options: wgpu_options(),
         ..Default::default()
     };
     let measure_startup = args.measure_startup;
@@ -116,6 +154,10 @@ fn main() -> std::process::ExitCode {
         APP_ID,
         options,
         Box::new(move |cc| {
+            log::info!(
+                "startup: window and renderer ready after {:.1} ms",
+                started.elapsed().as_secs_f64() * 1e3
+            );
             let mut shell = Shell::new(engine, i18n, problem);
             shell.setup(&cc.egui_ctx);
             log::info!(

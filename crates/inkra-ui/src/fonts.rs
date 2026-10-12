@@ -56,6 +56,7 @@ pub fn find_cjk_font() -> Option<(&'static str, u32)> {
 
 /// Installs egui's default fonts plus a system CJK fallback if one is found.
 pub fn install(ctx: &egui::Context) {
+    let t0 = std::time::Instant::now();
     let mut fonts = FontDefinitions::default();
     if let Some((path, index)) = find_cjk_font() {
         match std::fs::read(path) {
@@ -78,4 +79,8 @@ pub fn install(ctx: &egui::Context) {
         log::warn!("no system CJK font found; CJK text will render as boxes");
     }
     ctx.set_fonts(fonts);
+    log::info!(
+        "fonts installed in {:.1} ms",
+        t0.elapsed().as_secs_f64() * 1e3
+    );
 }
