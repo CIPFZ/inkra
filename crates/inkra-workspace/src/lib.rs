@@ -6,6 +6,7 @@
 //! documents, crash recovery, session and recent files, file watching, and (M4)
 //! the file tree model and search.
 
+pub mod assets;
 pub mod files;
 pub mod fs;
 pub mod logfile;
