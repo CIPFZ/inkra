@@ -85,6 +85,95 @@ fn wgpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
     }
 }
 
+/// Forwards all events to eframe, noting `Ctrl+V` first: egui's winit
+/// integration only reports pastes when the clipboard has text, but Inkra also
+/// pastes images, files and HTML (ED-016).
+struct Hooked<'a> {
+    inner: eframe::EframeWinitApplication<'a>,
+    mods: winit::keyboard::ModifiersState,
+    raw: Arc<inkra_ui::RawKeys>,
+}
+
+impl winit::application::ApplicationHandler<eframe::UserEvent> for Hooked<'_> {
+    fn resumed(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        self.inner.resumed(event_loop);
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        window_id: winit::window::WindowId,
+        event: winit::event::WindowEvent,
+    ) {
+        use std::sync::atomic::Ordering;
+        use winit::event::{ElementState, WindowEvent};
+        use winit::keyboard::{Key, KeyCode, PhysicalKey};
+        match &event {
+            WindowEvent::ModifiersChanged(m) => self.mods = m.state(),
+            WindowEvent::KeyboardInput { event: k, .. }
+                if k.state == ElementState::Pressed && !k.repeat =>
+            {
+                let primary = if cfg!(target_os = "macos") {
+                    self.mods.super_key()
+                } else {
+                    self.mods.control_key()
+                };
+                let is_v = matches!(&k.logical_key, Key::Character(c) if c.eq_ignore_ascii_case("v"))
+                    || k.physical_key == PhysicalKey::Code(KeyCode::KeyV);
+                if primary && is_v {
+                    self.raw
+                        .paste_plain
+                        .store(self.mods.shift_key(), Ordering::SeqCst);
+                    self.raw.paste.store(true, Ordering::SeqCst);
+                }
+            }
+            _ => {}
+        }
+        self.inner.window_event(event_loop, window_id, event);
+    }
+
+    fn new_events(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        cause: winit::event::StartCause,
+    ) {
+        self.inner.new_events(event_loop, cause);
+    }
+
+    fn user_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        event: eframe::UserEvent,
+    ) {
+        self.inner.user_event(event_loop, event);
+    }
+
+    fn device_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        device_id: winit::event::DeviceId,
+        event: winit::event::DeviceEvent,
+    ) {
+        self.inner.device_event(event_loop, device_id, event);
+    }
+
+    fn about_to_wait(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        self.inner.about_to_wait(event_loop);
+    }
+
+    fn suspended(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        self.inner.suspended(event_loop);
+    }
+
+    fn exiting(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        self.inner.exiting(event_loop);
+    }
+
+    fn memory_warning(&mut self, event_loop: &winit::event_loop::ActiveEventLoop) {
+        self.inner.memory_warning(event_loop);
+    }
+}
+
 fn icon() -> Option<egui::IconData> {
     match eframe::icon_data::from_png_bytes(inkra_ui::ICON_PNG) {
         Ok(i) => Some(i),
@@ -170,7 +259,18 @@ fn main() -> std::process::ExitCode {
         ..Default::default()
     };
     let measure_startup = args.measure_startup;
-    let result = eframe::run_native(
+    let raw = Arc::new(inkra_ui::RawKeys::default());
+    let raw_for_app = raw.clone();
+    let event_loop =
+        match winit::event_loop::EventLoop::<eframe::UserEvent>::with_user_event().build() {
+            Ok(l) => l,
+            Err(e) => {
+                log::error!("fatal: cannot create event loop: {e}");
+                eprintln!("inkra: {e}");
+                return std::process::ExitCode::from(2);
+            }
+        };
+    let inner = eframe::create_native(
         APP_ID,
         options,
         Box::new(move |cc| {
@@ -179,6 +279,7 @@ fn main() -> std::process::ExitCode {
                 started.elapsed().as_secs_f64() * 1e3
             );
             let mut shell = Shell::new(engine, i18n, problem);
+            shell.raw_keys = raw_for_app;
             shell.setup(&cc.egui_ctx);
             log::info!(
                 "startup: UI set up after {:.1} ms",
@@ -191,7 +292,14 @@ fn main() -> std::process::ExitCode {
                 measure_startup,
             }))
         }),
+        &event_loop,
     );
+    let mut hooked = Hooked {
+        inner,
+        mods: Default::default(),
+        raw,
+    };
+    let result = event_loop.run_app(&mut hooked);
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {

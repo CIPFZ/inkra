@@ -1705,6 +1705,7 @@ dependencies = [
  "inkra-workspace",
  "log",
  "windows-sys 0.61.2",
+ "winit",
  "winresource",
 ]
 

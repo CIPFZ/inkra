@@ -39,6 +39,7 @@ inkra-i18n = { path = "crates/inkra-i18n" }
 
 # third party (see xtask/src/deps.rs for the reviewed allowlist)
 egui = "0.36"
+winit = { version = "0.30", default-features = false }
 epaint = "0.36"
 eframe = { version = "0.36", default-features = false }
 egui_kittest = "0.36"

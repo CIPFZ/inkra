@@ -41,6 +41,12 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         "image decoding (SPEC 2.1)",
     ),
     (
+        "winit",
+        Scope::Only(&["inkra"]),
+        "Apache-2.0",
+        "same winit as eframe; raw key hook for clipboard formats egui drops (ED-016)",
+    ),
+    (
         "arboard",
         Scope::Only(&["inkra-ui"]),
         "MIT OR Apache-2.0",
