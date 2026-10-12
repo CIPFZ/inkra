@@ -1,0 +1,18 @@
+[package]
+name = "inkra-i18n"
+description = "Fluent resource loading and message lookup (cross-cutting L0)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+fluent-bundle.workspace = true
+unic-langid.workspace = true
+sys-locale.workspace = true
+log.workspace = true
