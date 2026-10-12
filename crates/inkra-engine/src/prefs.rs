@@ -1,0 +1,319 @@
+//! User preferences (PR-001, PR-003).
+//!
+//! Stored as a flat JSON object with dotted lowerCamel keys in
+//! `<config_dir>/conf.user.json`. Unknown keys are preserved on save so that newer
+//! or older versions of Inkra can share one file. Writes are atomic.
+
+use std::path::{Path, PathBuf};
+
+use serde_json::{Map, Value};
+
+use inkra_workspace::fs::atomic_write;
+use inkra_workspace::time::Utc;
+
+/// Kind of value a preference holds (documentation and validation).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrefKind {
+    /// `true`/`false`.
+    Bool,
+    /// A number.
+    Number,
+    /// Free text.
+    String,
+    /// One of the listed strings.
+    Enum(&'static [&'static str]),
+    /// A list of strings.
+    StringList,
+}
+
+/// Static description of one preference key.
+#[derive(Debug, Clone, Copy)]
+pub struct PrefSpec {
+    /// Dotted lowerCamel key, e.g. `editor.autoPair`.
+    pub key: &'static str,
+    /// Default value as JSON.
+    pub default: &'static str,
+    /// Value kind.
+    pub kind: PrefKind,
+    /// Requirement id, e.g. `PR-031`.
+    pub req: &'static str,
+    /// One-line English description for `docs/preferences.md`.
+    pub doc: &'static str,
+}
+
+/// All known preference keys. `cargo xtask prefs` renders this table to
+/// `docs/preferences.md`.
+pub const PREFS: &[PrefSpec] = &[PrefSpec {
+    key: "general.language",
+    default: r#""system""#,
+    kind: PrefKind::String,
+    req: "PR-018",
+    doc: "UI language: `system` to follow the OS, or a tag such as `zh-CN` / `en-US`.",
+}];
+
+/// Looks up the spec of `key`.
+pub fn spec(key: &str) -> Option<&'static PrefSpec> {
+    PREFS.iter().find(|p| p.key == key)
+}
+
+fn default_of(key: &str) -> Value {
+    spec(key)
+        .and_then(|s| serde_json::from_str(s.default).ok())
+        .unwrap_or(Value::Null)
+}
+
+/// Whether `v` fits `kind`.
+fn fits(kind: PrefKind, v: &Value) -> bool {
+    match kind {
+        PrefKind::Bool => v.is_boolean(),
+        PrefKind::Number => v.is_number(),
+        PrefKind::String => v.is_string(),
+        PrefKind::Enum(options) => v.as_str().is_some_and(|s| options.contains(&s)),
+        PrefKind::StringList => v.as_array().is_some_and(|a| a.iter().all(Value::is_string)),
+    }
+}
+
+/// Problems found while loading preferences.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LoadProblem {
+    /// The file was not valid JSON (or not an object). It was moved to `backup` and
+    /// defaults are used (PR-003).
+    Corrupt {
+        /// Where the broken file was moved.
+        backup: PathBuf,
+        /// Parse error.
+        error: String,
+    },
+    /// The file could not be read.
+    Unreadable {
+        /// I/O error.
+        error: String,
+    },
+}
+
+/// The preference store.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Preferences {
+    values: Map<String, Value>,
+}
+
+impl Preferences {
+    /// Defaults only.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Parses a JSON object.
+    pub fn from_json(text: &str) -> Result<Self, String> {
+        match serde_json::from_str::<Value>(text) {
+            Ok(Value::Object(values)) => Ok(Self { values }),
+            Ok(_) => Err("top-level value is not an object".to_owned()),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    /// Loads `path`. A missing file yields defaults; a corrupt file is backed up as
+    /// `conf.user.json.bak-<YYYYMMDDHHmmss>` and defaults are returned together with
+    /// a [`LoadProblem`] so the UI can tell the user.
+    pub fn load(path: &Path) -> (Self, Option<LoadProblem>) {
+        let text = match std::fs::read_to_string(path) {
+            Ok(t) => t,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return (Self::new(), None),
+            Err(e) => {
+                log::error!("cannot read preferences {}: {e}", path.display());
+                return (
+                    Self::new(),
+                    Some(LoadProblem::Unreadable {
+                        error: e.to_string(),
+                    }),
+                );
+            }
+        };
+        // Tolerate a UTF-8 BOM written by some editors.
+        let text = text.strip_prefix('\u{feff}').unwrap_or(&text);
+        if text.trim().is_empty() {
+            return (Self::new(), None);
+        }
+        match Self::from_json(text) {
+            Ok(p) => (p, None),
+            Err(error) => {
+                let backup = backup_path(path);
+                log::warn!(
+                    "preferences {} are corrupt ({error}); backing up to {}",
+                    path.display(),
+                    backup.display()
+                );
+                if let Err(e) = std::fs::rename(path, &backup) {
+                    log::error!("cannot back up corrupt preferences: {e}");
+                }
+                (Self::new(), Some(LoadProblem::Corrupt { backup, error }))
+            }
+        }
+    }
+
+    /// Writes the store atomically as pretty JSON.
+    pub fn save(&self, path: &Path) -> std::io::Result<()> {
+        let mut text = serde_json::to_string_pretty(&self.values).map_err(std::io::Error::other)?;
+        text.push('\n');
+        atomic_write(path, text.as_bytes())
+    }
+
+    /// Value of `key`: the stored value if it has the right kind, else the default.
+    pub fn get(&self, key: &str) -> Value {
+        match (self.values.get(key), spec(key)) {
+            (Some(v), Some(s)) if fits(s.kind, v) => v.clone(),
+            (Some(v), None) => v.clone(),
+            (Some(v), Some(_)) => {
+                log::warn!("preference `{key}` has invalid value {v}; using default");
+                default_of(key)
+            }
+            (None, _) => default_of(key),
+        }
+    }
+
+    /// Boolean value of `key` (`false` if not a boolean).
+    pub fn bool(&self, key: &str) -> bool {
+        self.get(key).as_bool().unwrap_or(false)
+    }
+
+    /// Numeric value of `key` (`0.0` if not a number).
+    pub fn f64(&self, key: &str) -> f64 {
+        self.get(key).as_f64().unwrap_or(0.0)
+    }
+
+    /// String value of `key` (empty if not a string).
+    pub fn string(&self, key: &str) -> String {
+        self.get(key).as_str().unwrap_or_default().to_owned()
+    }
+
+    /// String list value of `key`.
+    pub fn strings(&self, key: &str) -> Vec<String> {
+        self.get(key)
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Sets `key`. Setting a known key to its default removes it from the file so
+    /// that future default changes apply. Returns `false` if the value has the wrong
+    /// kind for a known key.
+    pub fn set(&mut self, key: &str, value: Value) -> bool {
+        if let Some(s) = spec(key) {
+            if !fits(s.kind, &value) {
+                return false;
+            }
+            if value == default_of(key) {
+                self.values.remove(key);
+                return true;
+            }
+        }
+        self.values.insert(key.to_owned(), value);
+        true
+    }
+
+    /// Raw stored entries, including unknown keys.
+    pub fn raw(&self) -> &Map<String, Value> {
+        &self.values
+    }
+}
+
+fn backup_path(path: &Path) -> PathBuf {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let stamp = Utc::now().compact();
+    let mut candidate = path.with_file_name(format!("{name}.bak-{stamp}"));
+    let mut n = 1;
+    while candidate.exists() {
+        candidate = path.with_file_name(format!("{name}.bak-{stamp}-{n}"));
+        n += 1;
+    }
+    candidate
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn defaults_are_valid_json_of_the_right_kind() {
+        let mut keys = std::collections::HashSet::new();
+        for p in PREFS {
+            let v: Value =
+                serde_json::from_str(p.default).unwrap_or_else(|e| panic!("{}: {e}", p.key));
+            assert!(fits(p.kind, &v), "{} default does not fit its kind", p.key);
+            assert!(keys.insert(p.key), "duplicate key {}", p.key);
+            assert!(
+                crate::command::is_valid_id(p.key) || !p.key.contains('.'),
+                "{}",
+                p.key
+            );
+        }
+    }
+
+    #[test]
+    fn round_trip_preserves_unknown_keys() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("conf.user.json");
+        std::fs::write(
+            &path,
+            r#"{"future.key": [1, 2], "general.language": "zh-CN"}"#,
+        )
+        .unwrap();
+        let (mut p, problem) = Preferences::load(&path);
+        assert!(problem.is_none());
+        assert_eq!(p.string("general.language"), "zh-CN");
+        assert!(p.set("general.language", Value::from("en-US")));
+        p.save(&path).unwrap();
+        let (q, _) = Preferences::load(&path);
+        assert_eq!(q.raw().get("future.key"), Some(&serde_json::json!([1, 2])));
+        assert_eq!(q.string("general.language"), "en-US");
+    }
+
+    #[test]
+    fn corrupt_file_is_backed_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("conf.user.json");
+        std::fs::write(&path, "{ not json").unwrap();
+        let (p, problem) = Preferences::load(&path);
+        assert_eq!(p, Preferences::new());
+        let Some(LoadProblem::Corrupt { backup, .. }) = problem else {
+            panic!("{problem:?}")
+        };
+        assert!(
+            backup
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("conf.user.json.bak-")
+        );
+        assert_eq!(std::fs::read_to_string(backup).unwrap(), "{ not json");
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn missing_file_and_wrong_types() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut p, problem) = Preferences::load(&dir.path().join("nope.json"));
+        assert!(problem.is_none());
+        assert_eq!(p.string("general.language"), "system");
+        assert!(!p.set("general.language", Value::from(3)));
+        let q = Preferences::from_json(r#"{"general.language": 3}"#).unwrap();
+        assert_eq!(q.string("general.language"), "system");
+        assert!(Preferences::from_json("[1]").is_err());
+    }
+
+    #[test]
+    fn setting_default_removes_key() {
+        let mut p = Preferences::new();
+        p.set("general.language", Value::from("zh-CN"));
+        assert!(p.raw().contains_key("general.language"));
+        p.set("general.language", Value::from("system"));
+        assert!(!p.raw().contains_key("general.language"));
+    }
+}
