@@ -1,5 +1,6 @@
 //! Application state that commands operate on, and the effects they request.
 
+use crate::editor::Editor;
 use crate::prefs::Preferences;
 
 /// View flags of a window.
@@ -7,6 +8,8 @@ use crate::prefs::Preferences;
 pub struct ViewState {
     /// Whether the sidebar is shown (`view.toggleSidebar`).
     pub sidebar_visible: bool,
+    /// Performance overlay (`view.debugOverlay`, FS-040).
+    pub debug_overlay: bool,
 }
 
 /// State shared by all commands.
@@ -16,6 +19,8 @@ pub struct AppState {
     pub prefs: Preferences,
     /// View flags.
     pub view: ViewState,
+    /// The document editor of the window.
+    pub editor: Editor,
 }
 
 /// User-visible notices requested by the engine.
@@ -37,6 +42,22 @@ pub enum Effect {
     ShowAbout,
     /// Show a notice.
     Notify(Notice),
+    /// Put text on the clipboard (`text/plain` and optional `text/html`).
+    SetClipboard {
+        /// Plain text (Markdown source).
+        text: String,
+        /// Rendered HTML.
+        html: Option<String>,
+    },
+    /// Read the clipboard and run `edit.paste` with its content.
+    RequestPaste {
+        /// Paste as plain text.
+        plain: bool,
+    },
+    /// Scroll so the caret is visible.
+    ScrollToCaret,
+    /// Move keyboard focus to the find bar.
+    FocusFind,
 }
 
 /// Context passed to every command.

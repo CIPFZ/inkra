@@ -44,4 +44,19 @@ pub fn register_all(r: &mut CommandRegistry) {
         )
         .checked(|cx| Some(cx.app.view.sidebar_visible)),
     );
+    r.register(
+        FnCommand::new(
+            spec(
+                "view.debugOverlay",
+                Category::View,
+                "FS-040",
+                "Show the performance overlay (frame and input latency).",
+            ),
+            |cx, _| {
+                cx.app.view.debug_overlay = !cx.app.view.debug_overlay;
+                Ok(Outcome::Done)
+            },
+        )
+        .checked(|cx| Some(cx.app.view.debug_overlay)),
+    );
 }
