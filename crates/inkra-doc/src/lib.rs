@@ -38,7 +38,12 @@ pub struct Doc {
     undo: UndoStack,
     version: u64,
     saved_version: u64,
+    /// Recent raw edits: `(version after the edit, start, removed len, inserted len)`.
+    log: std::collections::VecDeque<(u64, usize, usize, usize)>,
 }
+
+/// Number of raw edits remembered for [`Doc::dirty_since`].
+const LOG_LEN: usize = 512;
 
 impl Default for Doc {
     fn default() -> Self {
@@ -67,6 +72,7 @@ impl Doc {
             undo: UndoStack::default(),
             version: 0,
             saved_version: 0,
+            log: Default::default(),
         }
     }
 
@@ -110,6 +116,46 @@ impl Doc {
     pub fn set_options(&mut self, options: ParseOptions) {
         self.ast.set_options(&self.text, options);
         self.version += 1;
+        // Not a text change, but layouts depend on the parse: force a full rebuild.
+        self.log.clear();
+    }
+
+    /// The region changed since `version`: `(range in the current text, total
+    /// length delta)`. `None` if the history does not reach back that far (callers
+    /// rebuild everything); `Some((empty, 0))` if nothing changed.
+    pub fn dirty_since(&self, version: u64) -> Option<(std::ops::Range<usize>, isize)> {
+        if version == self.version {
+            return Some((0..0, 0));
+        }
+        let first = self.log.iter().position(|e| e.0 > version)?;
+        if first == 0 && self.log.front().is_some_and(|e| e.0 != version + 1) {
+            return None;
+        }
+        let mut dirty: Option<std::ops::Range<usize>> = None;
+        let mut delta: isize = 0;
+        for &(_, start, removed, inserted) in self.log.iter().skip(first) {
+            let end = start + removed;
+            let d = inserted as isize - removed as isize;
+            let map = |p: usize| -> usize {
+                if p < start {
+                    p
+                } else if p >= end {
+                    (p as isize + d) as usize
+                } else {
+                    start + inserted
+                }
+            };
+            let new = start..start + inserted;
+            dirty = Some(match dirty {
+                None => new,
+                Some(r) => {
+                    let (a, b) = (map(r.start), map(r.end));
+                    a.min(new.start)..b.max(new.end)
+                }
+            });
+            delta += d;
+        }
+        Some((dirty.unwrap_or(0..0), delta))
     }
 
     /// Monotonic version, incremented by every change.
@@ -168,11 +214,16 @@ impl Doc {
     fn apply_raw(&mut self, tx: &Transaction) -> Transaction {
         let inverse = tx.invert(&self.text);
         // Apply from the end so earlier ranges stay valid.
+        self.version += 1;
         for e in tx.edits.iter().rev() {
             self.text.replace(e.range.clone(), &e.text);
             self.ast.edit(&self.text, e.range.clone(), e.text.len());
+            self.log
+                .push_back((self.version, e.range.start, e.range.len(), e.text.len()));
+            if self.log.len() > LOG_LEN {
+                self.log.pop_front();
+            }
         }
-        self.version += 1;
         inverse
     }
 

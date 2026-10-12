@@ -127,3 +127,17 @@ proptest! {
         prop_assert_eq!(d.ast().to_blocks(), full.blocks);
     }
 }
+
+#[test]
+fn dirty_since_merges_edits() {
+    let mut d = Doc::from_str("0123456789", ParseOptions::default());
+    let v0 = d.version();
+    d.apply(Transaction::single(2..2, "ab"), UndoPolicy::NewGroup); // 01ab23456789
+    d.apply(Transaction::single(8..10, ""), UndoPolicy::NewGroup); // 01ab2345 89 -> "01ab234589"
+    let (r, delta) = d.dirty_since(v0).unwrap();
+    assert_eq!(d.text().to_string(), "01ab234589");
+    assert_eq!(delta, 0);
+    assert_eq!(r, 2..8);
+    assert_eq!(d.dirty_since(d.version()), Some((0..0, 0)));
+    assert!(d.dirty_since(v0.wrapping_sub(1)).is_none() || v0 == 0);
+}
