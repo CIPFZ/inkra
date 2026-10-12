@@ -59,6 +59,18 @@ pub fn show(
             Counts::of(&e.doc.text().slice(e.sel.range())).words
         };
         ui.label(i18n.tr_args("status-words", &[("count", (words as i64).into())]));
+        // Mode indicators (WM-001, WM-002).
+        if engine.state.view.focus {
+            ui.label(egui::RichText::new("F").strong())
+                .on_hover_text(i18n.tr("cmd-view-focusMode"));
+        }
+        if engine.state.view.typewriter {
+            ui.label(egui::RichText::new("T").strong())
+                .on_hover_text(i18n.tr("cmd-view-typewriterMode"));
+        }
+        if (engine.state.view.zoom - 1.0).abs() > 1e-3 {
+            ui.label(format!("{:.0}%", engine.state.view.zoom * 100.0));
+        }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let t = e.doc.text();
             let (line, col) = t.byte_to_line_col(e.sel.head);

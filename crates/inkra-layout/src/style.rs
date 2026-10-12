@@ -226,3 +226,24 @@ impl Default for Style {
         }
     }
 }
+
+impl Style {
+    /// This style with text and spacing scaled by `zoom` (FS-040 editor zoom).
+    pub fn scaled(&self, zoom: f32) -> Style {
+        if (zoom - 1.0).abs() < 1e-3 {
+            return self.clone();
+        }
+        let mut s = self.clone();
+        s.size = (self.size * zoom).round();
+        s.mono_size = (self.mono_size * zoom).round();
+        s.max_width = self.max_width * zoom;
+        s.code_padding = self.code_padding * zoom;
+        s.code_radius = self.code_radius * zoom;
+        s.padding_y = self.padding_y * zoom;
+        s.version = self
+            .version
+            .wrapping_mul(31)
+            .wrapping_add((zoom * 100.0).round() as u64);
+        s
+    }
+}

@@ -7,6 +7,7 @@
 //! invocations; it never edits documents directly.
 
 pub mod clipboard;
+mod context_menu;
 pub mod dialogs;
 pub mod editor;
 pub mod find_bar;
@@ -205,6 +206,8 @@ impl Shell {
             self.recovery_offer = inkra_workspace::recovery::Recovery::new(p.recovery_dir()).list();
         }
         self.os = keys::os_of(ctx.os());
+        // Ctrl+= / Ctrl+- are heading shortcuts; editor zoom is ours (FS-040).
+        ctx.options_mut(|o| o.zoom_with_keyboard = false);
         #[cfg(target_os = "macos")]
         {
             self.native_menu = Some(native_menu::NativeMenu::install(
@@ -363,6 +366,21 @@ impl Shell {
                 Effect::ShowAbout => self.about_open = true,
                 Effect::SetClipboard { text, html } => self.clipboard.set(&text, html.as_deref()),
                 Effect::RequestPaste { plain } => {
+                    // ED-016 rule 1: a bitmap is inserted as an image file.
+                    let e = &self.engine.state.editor;
+                    let in_code =
+                        inkra_engine::editor::context::in_code_content(&e.doc, e.sel.head);
+                    if !plain
+                        && !in_code
+                        && let Some(png) = self.clipboard.image_png()
+                    {
+                        self.invoke(
+                            ctx,
+                            "format.insertImageFile",
+                            &json!({ "path": png, "pasted": true }),
+                        );
+                        continue;
+                    }
                     let c = self.clipboard.read(None);
                     let params = json!({
                         "text": c.text,
@@ -399,8 +417,7 @@ impl Shell {
                 Effect::OpenUrl(url) => self.open_url(ctx, &url),
                 Effect::NewWindow(id) => {
                     let mut w = WinUi::new();
-                    w.editor.style = self.engine.state.style.clone();
-                    w.editor.syntax_theme = self.engine.state.style.syntax_theme.clone();
+                    w.editor.set_style(self.engine.state.style.clone());
                     self.windows.insert(id, w);
                     self.focus_request = Some(id);
                 }
@@ -448,6 +465,21 @@ impl Shell {
                     );
                 }
                 Effect::Reveal(path) => reveal(&path),
+                Effect::WindowFlags => {
+                    let v = &self.engine.state.view;
+                    let vid = if self.engine.state.active() == self.root {
+                        egui::ViewportId::ROOT
+                    } else {
+                        egui::ViewportId::from_hash_of(("inkra-window", self.engine.state.active()))
+                    };
+                    ctx.send_viewport_cmd_to(vid, egui::ViewportCommand::Fullscreen(v.fullscreen));
+                    let level = if v.always_on_top {
+                        egui::WindowLevel::AlwaysOnTop
+                    } else {
+                        egui::WindowLevel::Normal
+                    };
+                    ctx.send_viewport_cmd_to(vid, egui::ViewportCommand::WindowLevel(level));
+                }
                 Effect::Error(msg) => self.toast(ctx, format!("✕ {msg}")),
                 Effect::Notify(Notice::OperationFailed { command }) => {
                     let text = self
@@ -539,6 +571,33 @@ impl Shell {
         self.apply_effects(ctx, Some(vec![Effect::RequestPaste { plain }]));
     }
 
+    /// Files dropped on the window (FS-002, ED-017): Markdown files open, images
+    /// are inserted, anything else becomes a link.
+    fn handle_drops(&mut self, ctx: &egui::Context) {
+        let dropped = ctx.input(|i| i.raw.dropped_files.clone());
+        for f in dropped {
+            let path = f.path().to_path_buf();
+            if path.as_os_str().is_empty() {
+                continue;
+            }
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(str::to_ascii_lowercase)
+                .unwrap_or_default();
+            if dialogs::MARKDOWN_EXTS.contains(&ext.as_str()) {
+                self.invoke(ctx, "file.open", &json!({ "path": path }));
+            } else if matches!(
+                ext.as_str(),
+                "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "svg" | "tif" | "tiff"
+            ) {
+                self.invoke(ctx, "format.insertImageFile", &json!({ "path": path }));
+            } else {
+                self.invoke(ctx, "edit.paste", &json!({ "files": [path] }));
+            }
+        }
+    }
+
     /// Follows a link: `#anchor` jumps to the heading (MD-033), Markdown files
     /// open in Inkra, other targets open with the system handler.
     fn open_url(&mut self, ctx: &egui::Context, url: &str) {
@@ -585,12 +644,7 @@ impl Shell {
         for (purpose, path) in self.dialogs.poll() {
             match (purpose, path) {
                 (dialogs::Purpose::InsertImage, Some(path)) => {
-                    let src = relative_src(self.engine.state.editor.path.as_deref(), &path);
-                    let alt = path
-                        .file_stem()
-                        .map(|s| s.to_string_lossy().into_owned())
-                        .unwrap_or_default();
-                    self.invoke(ctx, "format.image", &json!({ "src": src, "alt": alt }));
+                    self.invoke(ctx, "format.insertImageFile", &json!({ "path": path }));
                 }
                 (dialogs::Purpose::Open, Some(path)) => {
                     self.invoke(ctx, "file.open", &json!({ "path": path }))
@@ -740,15 +794,14 @@ impl Shell {
             && self
                 .windows
                 .values()
-                .all(|w| w.editor.style.version == style.version)
+                .all(|w| w.editor.base_version() == style.version)
         {
             return;
         }
         self.applied_style = style.version;
         apply_visuals(ctx, style);
         for w in self.windows.values_mut() {
-            w.editor.style = style.clone();
-            w.editor.syntax_theme = style.syntax_theme.clone();
+            w.editor.set_style(style.clone());
         }
         // Hot reload of user themes (TH-003).
         let dir = self.engine.state.paths.as_ref().map(|p| p.themes_dir());
@@ -967,6 +1020,7 @@ impl Shell {
         if focused {
             self.handle_raw_paste(&ctx);
         }
+        self.handle_drops(&ctx);
         self.handle_shortcuts(&ctx);
 
         #[cfg(target_os = "macos")]
@@ -980,7 +1034,13 @@ impl Shell {
             }
         }
 
-        if !self.uses_native_menu() {
+        // The menu bar can be hidden (TH-008); holding Alt shows it, as do
+        // fullscreen-style windows via Alt (WM-003).
+        let alt = ctx.input(|i| i.modifiers.alt && !i.modifiers.command && !i.modifiers.shift);
+        let show_menu = (self.engine.state.view.menu_bar && !self.engine.state.view.fullscreen)
+            || alt
+            || egui::Popup::is_any_open(&ctx);
+        if !self.uses_native_menu() && show_menu {
             let mut invocation = None;
             let data = self.menu_data();
             egui::Panel::top("inkra-menubar").show(ui, |ui| {
@@ -1003,20 +1063,22 @@ impl Shell {
 
         let style_bg = self.win().editor.style.bg;
         let style = self.win().editor.style.clone();
-        egui::Panel::bottom("inkra-status")
-            .frame(
-                egui::Frame::new()
-                    .fill(style_bg)
-                    .inner_margin(egui::Margin::symmetric(10, 3)),
-            )
-            .show(ui, |ui| {
-                let w = self.windows.entry(id).or_insert_with(WinUi::new);
-                if let Some(cmd) =
-                    status_bar::show(ui, &mut w.status, &self.engine, &self.i18n, &style)
-                {
-                    self.invoke(&ctx, &cmd, &Value::Null);
-                }
-            });
+        if self.engine.state.view.status_bar {
+            egui::Panel::bottom("inkra-status")
+                .frame(
+                    egui::Frame::new()
+                        .fill(style_bg)
+                        .inner_margin(egui::Margin::symmetric(10, 3)),
+                )
+                .show(ui, |ui| {
+                    let w = self.windows.entry(id).or_insert_with(WinUi::new);
+                    if let Some(cmd) =
+                        status_bar::show(ui, &mut w.status, &self.engine, &self.i18n, &style)
+                    {
+                        self.invoke(&ctx, &cmd, &Value::Null);
+                    }
+                });
+        }
 
         egui::CentralPanel::default()
             .frame(egui::Frame::new())
@@ -1033,7 +1095,9 @@ impl Shell {
                     }
                 }
                 let w = self.windows.entry(id).or_insert_with(WinUi::new);
-                let out = w.editor.show(ui, &mut self.engine, &mut self.clipboard);
+                let out = w
+                    .editor
+                    .show(ui, &mut self.engine, &mut self.clipboard, &self.i18n);
                 for (cmd, params) in out.commands {
                     self.invoke(&ctx, &cmd, &params);
                 }

@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **90**
+Registered commands: **105**
 
 
 ## App
@@ -21,6 +21,10 @@ Registered commands: **90**
 | Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
 |---|---|---|---|---|---|---|---|
 | `edit.copy` | Copy | 复制 | `Ctrl+C` | `⌘C` | — | ED-016 | Copy the selection as Markdown (text/plain) and rendered HTML (text/html). |
+| `edit.copyAsHtml` | HTML | HTML |  |  | — | ED-016 | Copy the selection as rich HTML (plain text alongside). |
+| `edit.copyAsHtmlCode` | HTML Code | HTML 代码 |  |  | — | ED-016 | Copy the HTML source of the selection as text. |
+| `edit.copyAsMarkdown` | Markdown | Markdown |  |  | — | ED-016 | Copy the selection as Markdown source. |
+| `edit.copyAsPlain` | Plain Text | 纯文本 |  |  | — | ED-016 | Copy the selection as plain text without Markdown syntax. |
 | `edit.cut` | Cut | 剪切 | `Ctrl+X` | `⌘X` | — | ED-016 | Cut the selection to the clipboard. |
 | `edit.deleteBackward` | Delete Backward | 向后删除 |  |  | `{"type":"object","properties":{"unit":{"enum":["char","word","line"]}}}` | ED-012 | Backspace by char, word or to line start. |
 | `edit.deleteForward` | Delete Forward | 向前删除 |  |  | `{"type":"object","properties":{"unit":{"enum":["char","word","line"]}}}` | ED-012 | Delete forward by char, word or to line end. |
@@ -77,8 +81,10 @@ Registered commands: **90**
 | `format.image` | Insert Image… | 插入图像… | `Ctrl+Shift+I` | `⇧⌘I` | `{"type":"object","properties":{"src":{"type":"string"},"alt":{"type":"string"}}}` | ED-040 | Insert an image: `src` inserts directly, otherwise a file picker opens. |
 | `format.imageLocal` | Insert Local Image… | 插入本地图片… |  |  | — | ED-040 | Insert a local image file. |
 | `format.inlineMath` | Inline Math | 行内公式 |  |  | — | ED-042 | Toggle $inline math$. |
+| `format.insertImageFile` | Insert Image File | 插入图片文件 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"},"pasted":{"type":"boolean"}}}` | ED-092 | Insert an image file, copying it per the image preferences (`pasted`: a saved clipboard bitmap). |
 | `format.italic` | Italic | 斜体 | `Ctrl+I` | `⌘I` | — | ED-031 | Toggle *italic*. |
 | `format.link` | Hyperlink | 超链接 | `Ctrl+K` | `⌘K` | `{"type":"object","properties":{"url":{"type":"string"}}}` | ED-039 | Insert or make a link `[text](url)`; the URL defaults to the clipboard. |
+| `format.removeLink` | Remove Link | 移除链接 |  |  | — | ED-130 | Turn the link at the caret back into plain text. |
 | `format.strike` | Strikethrough | 删除线 | `Shift+Alt+5` | `⌥⇧5` | — | ED-034 | Toggle ~~strikethrough~~. |
 | `format.subscript` | Subscript | 下标 |  |  | — | ED-037 | Toggle ~subscript~ (needs MD-061). |
 | `format.superscript` | Superscript | 上标 |  |  | — | ED-036 | Toggle ^superscript^ (needs MD-062). |
@@ -127,10 +133,19 @@ Registered commands: **90**
 
 | Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
 |---|---|---|---|---|---|---|---|
+| `view.actualSize` | Actual Size | 实际大小 | `Ctrl+Shift+0` | `⇧⌘0` | — | FS-040 | Reset the editor zoom to 100%. |
+| `view.alwaysOnTop` | Always on Top | 总是在最前 |  |  | — | FS-040 | Keep the window above others. |
 | `view.debugOverlay` | Performance Overlay | 性能叠层 |  |  | — | FS-040 | Show the performance overlay (frame and input latency). |
+| `view.focusMode` | Focus Mode | 专注模式 | `F8` | `F8` | — | WM-001 | Focus mode: dim everything except the current block. |
+| `view.fullscreen` | Full Screen | 全屏 | `F11` | `⌃⌘F` | — | WM-003 | Toggle full screen. |
 | `view.sourceMode` | Source Code Mode | 源代码模式 | `Ctrl+/` | `⌘/` | — | ED-120 | Toggle between live rendering and source mode. |
 | `view.switchWindow` | Switch Window | 切换窗口 |  |  | `{"type":"object","required":["window"],"properties":{"window":{"type":"integer"}}}` | FS-040 | Bring a window to the front. |
+| `view.toggleMenuBar` | Menu Bar | 显示菜单栏 |  |  | — | TH-008 | Show or hide the menu bar (Alt shows it temporarily). |
 | `view.toggleSidebar` | Sidebar | 侧边栏 | `Ctrl+Shift+L` | `⇧⌘L` | — | FS-040 | Show or hide the sidebar. |
+| `view.toggleStatusBar` | Status Bar | 显示状态栏 |  |  | — | PR-043 | Show or hide the status bar. |
+| `view.typewriterMode` | Typewriter Mode | 打字机模式 | `F9` | `F9` | — | WM-002 | Typewriter mode: keep the caret line vertically centered. |
+| `view.zoomIn` | Zoom In | 放大 | `Ctrl+Shift+=` | `⇧⌘=` | — | FS-040 | Zoom the editor in by 10% (max 300%). |
+| `view.zoomOut` | Zoom Out | 缩小 | `Ctrl+Shift+-` | `⇧⌘-` | — | FS-040 | Zoom the editor out by 10% (min 50%). |
 
 ## Reserved ids (in menus or key map, not implemented yet)
 
@@ -138,10 +153,6 @@ These appear greyed out in menus.
 
 - `app.commandPalette` — Command Palette
 - `app.preferences` — Preferences…
-- `edit.copyAsHtml` — HTML
-- `edit.copyAsHtmlCode` — HTML Code
-- `edit.copyAsMarkdown` — Markdown
-- `edit.copyAsPlain` — Plain Text
 - `edit.emojiSymbols` — Emoji & Symbols
 - `edit.selectStyleScope` — Select Style Scope
 - `edit.toggleSmartPunctuation` — Use Smart Punctuation
@@ -178,17 +189,8 @@ These appear greyed out in menus.
 - `table.insertRowBelow` — Insert Row Below
 - `table.moveRowDown` — Move Row Down
 - `table.moveRowUp` — Move Row Up
-- `view.actualSize` — Actual Size
-- `view.alwaysOnTop` — Always on Top
 - `view.articles` — Articles
 - `view.fileTree` — File Tree
-- `view.focusMode` — Focus Mode
-- `view.fullscreen` — Full Screen
 - `view.outline` — Outline
 - `view.showWhitespace` — Show Formatting Marks
-- `view.toggleMenuBar` — Menu Bar
-- `view.toggleStatusBar` — Status Bar
 - `view.toggleToolbar` — Toolbar
-- `view.typewriterMode` — Typewriter Mode
-- `view.zoomIn` — Zoom In
-- `view.zoomOut` — Zoom Out

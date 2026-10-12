@@ -17,6 +17,10 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `appearance.themeAuto` | bool | `false` | TH-002 | Follow the system light/dark setting (Auto theme). |
 | `appearance.lightTheme` | string | `"Paper"` | TH-002 | Theme used by Auto in light mode. |
 | `appearance.darkTheme` | string | `"Ink"` | TH-002 | Theme used by Auto in dark mode. |
+| `image.insertAction` | `assets` / `folder` / `none` | `"assets"` | ED-092 | Inserted images: copy to `./<name>.assets/`, copy to `image.copyFolder`, or keep the original path. |
+| `image.copyFolder` | string | `""` | ED-092 | Target folder pattern for `folder` (supports `${filename}`, `${filepath}`). |
+| `image.applyToLocal` | bool | `false` | ED-092 | Also copy inserted local image files (pasted bitmaps are always saved). |
+| `image.preferRelative` | bool | `true` | ED-092 | Insert image paths relative to the document. |
 | `markdown.inlineMath` | bool | `false` | MD-060 | Inline math `$...$`. |
 | `markdown.subscript` | bool | `false` | MD-061 | Subscript `~x~`. |
 | `markdown.superscript` | bool | `false` | MD-062 | Superscript `^x^`. |

@@ -42,6 +42,22 @@ impl Clipboard {
         }
     }
 
+    /// A bitmap on the clipboard, saved as a temporary PNG named
+    /// `image-YYYYMMDDHHmmssSSS.png` (ED-092).
+    pub fn image_png(&mut self) -> Option<std::path::PathBuf> {
+        let c = self.get()?;
+        let img = c.get_image().ok()?;
+        let (w, h) = (img.width as u32, img.height as u32);
+        let rgba = image::RgbaImage::from_raw(w, h, img.bytes.into_owned())?;
+        let mut png = Vec::new();
+        image::DynamicImage::ImageRgba8(rgba)
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+            .ok()?;
+        let dir = std::env::temp_dir().join("inkra-paste");
+        inkra_workspace::assets::write_unique(&dir, &inkra_workspace::assets::pasted_name(), &png)
+            .ok()
+    }
+
     /// Reads all supported formats. `fallback_text` is the text egui already read
     /// (used if arboard cannot read the clipboard).
     pub fn read(&mut self, fallback_text: Option<String>) -> ClipboardContent {

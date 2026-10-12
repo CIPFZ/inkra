@@ -52,6 +52,8 @@ pub struct EditorView {
     pub images: Images,
     /// Caret blinks (PR-042).
     pub blink: bool,
+    base_style: Style,
+    zoom: f32,
     /// syntect theme for code blocks.
     pub syntax_theme: String,
     last_mode: Option<Mode>,
@@ -83,8 +85,30 @@ impl EditorView {
             last_ms: 0.0,
             images: Images::default(),
             blink: true,
+            base_style: Style::default(),
+            zoom: 1.0,
             syntax_theme: "InspiredGitHub".to_owned(),
             last_mode: None,
+        }
+    }
+
+    /// Sets the theme style (the zoomed copy is derived from it).
+    pub fn set_style(&mut self, s: Style) {
+        self.style = s.scaled(self.zoom);
+        self.syntax_theme = s.syntax_theme.clone();
+        self.base_style = s;
+    }
+
+    /// Version of the theme style this view uses.
+    pub fn base_version(&self) -> u64 {
+        self.base_style.version
+    }
+
+    fn apply_zoom(&mut self, zoom: f32) {
+        if (zoom - self.zoom).abs() > 1e-3 {
+            self.zoom = zoom;
+            self.style = self.base_style.scaled(zoom);
+            self.scroll_to_caret = true;
         }
     }
 
@@ -121,6 +145,7 @@ impl EditorView {
         ui: &mut egui::Ui,
         engine: &mut Engine,
         clipboard: &mut Clipboard,
+        i18n: &inkra_i18n::I18n,
     ) -> EditorOutput {
         let t0 = std::time::Instant::now();
         let mut out = EditorOutput::default();
@@ -156,6 +181,23 @@ impl EditorView {
                 },
             )
         });
+
+        // Ctrl+wheel zoom (PR-039).
+        if resp.contains_pointer() {
+            let z = ctx.input(|i| i.zoom_delta());
+            if (z - 1.0).abs() > 1e-3 {
+                out.commands.push((
+                    if z > 1.0 {
+                        "view.zoomIn"
+                    } else {
+                        "view.zoomOut"
+                    }
+                    .into(),
+                    Value::Null,
+                ));
+            }
+        }
+        self.apply_zoom(engine.state.view.zoom);
 
         // Geometry.
         let mode = Self::mode(engine);
@@ -243,6 +285,14 @@ impl EditorView {
             let view = &mut self.view;
             ctx.fonts_mut(|fonts| caret_rect = view.caret_rect(caret, &lcx, fonts));
         }
+        let typewriter = engine.state.view.typewriter;
+        if self.scroll_to_caret && typewriter {
+            // WM-002: the caret line stays in the vertical middle.
+            if let Some(r) = caret_rect {
+                self.scroll = r.center().y + pad - viewport_h / 2.0;
+            }
+            self.scroll_to_caret = false;
+        }
         if self.scroll_to_caret {
             if let Some(r) = caret_rect {
                 let margin = 2.0 * row_h(&self.style);
@@ -257,9 +307,15 @@ impl EditorView {
             self.scroll_to_caret = false;
         }
         let total = self.view.total_height() + 2.0 * pad;
-        // Leave room to scroll the last line up to the middle of the viewport.
+        // Leave room to scroll the last line up to the middle of the viewport (and,
+        // in typewriter mode, the first line down to it).
         let max_scroll = (total - viewport_h * 0.5).max(0.0);
-        self.scroll = self.scroll.clamp(0.0, max_scroll);
+        let min_scroll = if typewriter {
+            -viewport_h * 0.5 + pad
+        } else {
+            0.0
+        };
+        self.scroll = self.scroll.clamp(min_scroll, max_scroll.max(min_scroll));
 
         // Lay out and paint visible items.
         let offset = vec2(text_rect.left(), rect.top() + pad - self.scroll);
@@ -311,13 +367,34 @@ impl EditorView {
                 inkra_render::paint_selection(&mut shapes, &rects, offset, color);
             }
         }
+        // Focus mode (WM-001): items outside the current top-level block fade.
+        let focus = engine.state.view.focus;
+        let active_block = {
+            let ast = engine.state.editor.doc.ast();
+            ast.index_at(caret)
+                .map(|i| ast.start(i)..ast.end(i))
+                .unwrap_or(caret..caret)
+        };
+        let alphas: Vec<f32> = visible
+            .clone()
+            .map(|i| {
+                let it = &self.view.items()[i];
+                let active = it.src.start <= active_block.end && it.src.end >= active_block.start;
+                let target = if !focus || active {
+                    1.0
+                } else {
+                    self.style.focus_dim_opacity
+                };
+                ctx.animate_value_with_time(self.id.with(("focus", it.src.start)), target, 0.15)
+            })
+            .collect();
         let mut deco_shapes = Vec::new();
         let images = &self.images;
         let lookup = |src: &str| images.texture(src);
-        for i in visible.clone() {
+        for (k, i) in visible.clone().enumerate() {
             let top = self.view.top(i);
             if let Some(l) = self.view.layout(i) {
-                inkra_render::paint_decos(&mut deco_shapes, &l, top, offset, 1.0, &lookup);
+                inkra_render::paint_decos(&mut deco_shapes, &l, top, offset, alphas[k], &lookup);
             }
         }
         painter.extend(deco_shapes);
@@ -330,9 +407,9 @@ impl EditorView {
             };
             inkra_render::paint_selection(&mut shapes, &rects, offset, color);
         }
-        for i in visible.clone() {
+        for (k, i) in visible.clone().enumerate() {
             let runs = self.view.runs(i);
-            inkra_render::paint_runs(&mut shapes, &runs, offset, self.style.fg, 1.0);
+            inkra_render::paint_runs(&mut shapes, &runs, offset, self.style.fg, alphas[k]);
         }
         // Line numbers.
         if gutter > 0.0 {
@@ -415,6 +492,12 @@ impl EditorView {
                 })
             });
         }
+
+        // Right-click menu (ED-130).
+        resp.context_menu(|ui| {
+            let cmds = crate::context_menu::show(ui, engine, i18n);
+            out.commands.extend(cmds);
+        });
 
         // Scrollbar.
         self.scrollbar(ui, rect, total, viewport_h, max_scroll);
@@ -607,6 +690,15 @@ impl EditorView {
             )
         });
         let Some(screen) = pos else { return };
+        // Right click: move the caret there unless it is inside the selection.
+        if ctx.input(|i| i.pointer.secondary_pressed()) && resp.contains_pointer() {
+            let p = self.doc_pos(screen, rect, text_rect);
+            let at = self.hit(ctx, engine, p);
+            let e = &mut engine.state.editor;
+            if e.sel.is_empty() || at < e.sel.start() || at > e.sel.end() {
+                e.set_selection(Selection::caret(at));
+            }
+        }
         let in_text_area = rect.contains(screen) && screen.x < rect.right() - 10.0;
         if pressed && in_text_area && resp.contains_pointer() {
             let p = self.doc_pos(screen, rect, text_rect);
