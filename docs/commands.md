@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **33**
+Registered commands: **72**
 
 
 ## App
@@ -12,7 +12,9 @@ Registered commands: **33**
 | Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
 |---|---|---|---|---|---|---|---|
 | `app.about` | About Inkra | 关于 Inkra |  |  | — | UI-052 | Show the About dialog. |
+| `app.openUrl` | Open Link | 打开链接 |  |  | `{"type":"object","required":["url"],"properties":{"url":{"type":"string"}}}` | MD-033 | Open a link (internal anchors scroll, files open, URLs go to the browser). |
 | `app.quit` | Quit | 退出 | `Ctrl+Q` | `⌘Q` | — | FS-005 | Quit the application, closing all windows. |
+| `app.setClipboard` | Copy Text | 复制文本 |  |  | `{"type":"object","required":["text"],"properties":{"text":{"type":"string"}}}` | ED-016 | Put text on the clipboard. |
 
 ## Edit
 
@@ -24,6 +26,7 @@ Registered commands: **33**
 | `edit.deleteForward` | Delete Forward | 向前删除 |  |  | `{"type":"object","properties":{"unit":{"enum":["char","word","line"]}}}` | ED-012 | Delete forward by char, word or to line end. |
 | `edit.deleteLine` | Delete Line | 删除当前行 |  |  | — | ED-012 | Delete the current line. |
 | `edit.deleteWord` | Delete Word | 删除当前词 | `Ctrl+Shift+D` | `⇧⌘D` | — | ED-012 | Delete the word at the caret. |
+| `edit.exitBlock` | Leave Block | 离开当前块 |  |  | — | ED-013 | Ctrl+Enter: leave a code/math block, or add a paragraph above the first block. |
 | `edit.find` | Find | 查找 | `Ctrl+F` | `⌘F` | — | ED-110 | Open the find bar (pre-filled with the selection). |
 | `edit.findNext` | Find Next | 查找下一个 | `F3` | `F3` | — | ED-110 | Select the next match. |
 | `edit.findPrev` | Find Previous | 查找上一个 | `Shift+F3` | `⇧F3` | — | ED-110 | Select the previous match. |
@@ -45,12 +48,53 @@ Registered commands: **33**
 | `edit.tab` | Tab | 制表 |  |  | `{"type":"object","properties":{"outdent":{"type":"boolean"}}}` | ED-014 | Tab / Shift+Tab: indent or outdent list items and code, or insert spaces. |
 | `edit.undo` | Undo | 撤销 | `Ctrl+Z` | `⌘Z` | — | ED-015 | Undo the last change group. |
 
+## Format
+
+| Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
+|---|---|---|---|---|---|---|---|
+| `format.bold` | Bold | 加粗 | `Ctrl+B` | `⌘B` | — | ED-030 | Toggle **bold** on the selection (or insert `****`). |
+| `format.code` | Code | 代码 | `Ctrl+Shift+`` | `⇧⌘`` | — | ED-033 | Toggle `inline code` (double backticks when the text has one). |
+| `format.comment` | Comment | 注释 |  |  | — | ED-038 | Wrap the selection in an HTML comment. |
+| `format.highlight` | Highlight | 高亮 |  |  | — | ED-035 | Toggle ==highlight== (needs MD-063). |
+| `format.image` | Insert Image… | 插入图像… | `Ctrl+Shift+I` | `⇧⌘I` | `{"type":"object","properties":{"src":{"type":"string"},"alt":{"type":"string"}}}` | ED-040 | Insert an image: `src` inserts directly, otherwise a file picker opens. |
+| `format.imageLocal` | Insert Local Image… | 插入本地图片… |  |  | — | ED-040 | Insert a local image file. |
+| `format.inlineMath` | Inline Math | 行内公式 |  |  | — | ED-042 | Toggle $inline math$. |
+| `format.italic` | Italic | 斜体 | `Ctrl+I` | `⌘I` | — | ED-031 | Toggle *italic*. |
+| `format.link` | Hyperlink | 超链接 | `Ctrl+K` | `⌘K` | `{"type":"object","properties":{"url":{"type":"string"}}}` | ED-039 | Insert or make a link `[text](url)`; the URL defaults to the clipboard. |
+| `format.strike` | Strikethrough | 删除线 | `Shift+Alt+5` | `⌥⇧5` | — | ED-034 | Toggle ~~strikethrough~~. |
+| `format.subscript` | Subscript | 下标 |  |  | — | ED-037 | Toggle ~subscript~ (needs MD-061). |
+| `format.superscript` | Superscript | 上标 |  |  | — | ED-036 | Toggle ^superscript^ (needs MD-062). |
+| `format.underline` | Underline | 下划线 | `Ctrl+U` | `⌘U` | — | ED-032 | Toggle <u>underline</u>. |
+
 ## Paragraph
 
 | Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
 |---|---|---|---|---|---|---|---|
+| `paragraph.codeFences` | Code Block | 代码块 | `Ctrl+Shift+K` | `⇧⌘K` | `{"type":"object","properties":{"lang":{"type":"string"}}}` | ED-054 | Turn the paragraph or selection into a fenced code block. |
+| `paragraph.ensureTrailing` | New Paragraph at End | 在末尾新建段落 |  |  | — | ED-006 | Ensure an empty paragraph at the end and move there. |
+| `paragraph.frontMatter` | YAML Front Matter | YAML Front Matter |  |  | — | ED-065 | Insert YAML front matter at the top. |
+| `paragraph.heading1` | Heading 1 | 标题 1 | `Ctrl+1` | `⌘1` | — | ED-050 | Make the block(s) a heading of this level (again: back to paragraph). |
+| `paragraph.heading2` | Heading 2 | 标题 2 | `Ctrl+2` | `⌘2` | — | ED-050 | Make the block(s) a heading of this level (again: back to paragraph). |
+| `paragraph.heading3` | Heading 3 | 标题 3 | `Ctrl+3` | `⌘3` | — | ED-050 | Make the block(s) a heading of this level (again: back to paragraph). |
+| `paragraph.heading4` | Heading 4 | 标题 4 | `Ctrl+4` | `⌘4` | — | ED-050 | Make the block(s) a heading of this level (again: back to paragraph). |
+| `paragraph.heading5` | Heading 5 | 标题 5 | `Ctrl+5` | `⌘5` | — | ED-050 | Make the block(s) a heading of this level (again: back to paragraph). |
+| `paragraph.heading6` | Heading 6 | 标题 6 | `Ctrl+6` | `⌘6` | — | ED-050 | Make the block(s) a heading of this level (again: back to paragraph). |
+| `paragraph.headingDown` | Demote Heading | 降低标题级别 | `Ctrl+-` | `⌘-` | — | ED-052 | Demote: H1→H2, H6→paragraph. |
+| `paragraph.headingUp` | Promote Heading | 提升标题级别 | `Ctrl+=` | `⌘=` | — | ED-052 | Promote: H2→H1, paragraph→H6. |
+| `paragraph.hr` | Horizontal Rule | 水平线 |  |  | — | ED-063 | Insert a horizontal rule after the block. |
 | `paragraph.indent` | Indent | 增加缩进 | `Ctrl+]` | `⌘]` | — | ED-061 | Indent the list item (nest it). |
+| `paragraph.insertAbove` | Insert Paragraph Above | 在上方插入段落 |  |  | — | ED-070 | Insert an empty paragraph before the block. |
+| `paragraph.insertBelow` | Insert Paragraph Below | 在下方插入段落 |  |  | — | ED-070 | Insert an empty paragraph after the block. |
+| `paragraph.mathBlock` | Math Block | 公式块 | `Ctrl+Shift+M` | `⇧⌘M` | — | ED-055 | Insert a `$$` math block. |
+| `paragraph.normal` | Paragraph | 段落 | `Ctrl+0` | `⌘0` | — | ED-051 | Make the block(s) plain paragraphs. |
+| `paragraph.orderedList` | Ordered List | 有序列表 | `Ctrl+Shift+[` | `⇧⌘[` | — | ED-057 | Toggle an ordered list. |
 | `paragraph.outdent` | Outdent | 减少缩进 | `Ctrl+[` | `⌘[` | — | ED-061 | Outdent the list item. |
+| `paragraph.quote` | Quote | 引用 | `Ctrl+Shift+Q` | `⇧⌘Q` | — | ED-056 | Toggle a block quote. |
+| `paragraph.table` | Table… | 表格… | `Ctrl+T` | `⌘T` | `{"type":"object","properties":{"rows":{"type":"integer","minimum":1},"cols":{"type":"integer","minimum":1}}}` | ED-053 | Insert a table (`rows`, `cols`; without them a dialog asks). |
+| `paragraph.taskList` | Task List | 任务列表 |  |  | — | ED-059 | Toggle a task list. |
+| `paragraph.taskStatus` | Toggle Task Status | 切换任务状态 |  |  | `{"type":"object","properties":{"at":{"type":"integer"}}}` | ED-060 | Toggle the task checkbox at the caret (or at `at`). |
+| `paragraph.toc` | Table of Contents | 目录 |  |  | — | ED-064 | Insert `[TOC]`. |
+| `paragraph.unorderedList` | Unordered List | 无序列表 | `Ctrl+Shift+]` | `⇧⌘]` | — | ED-058 | Toggle a bullet list. |
 
 ## View
 
@@ -97,21 +141,8 @@ These appear greyed out in menus.
 - `file.save` — Save
 - `file.saveAll` — Save All
 - `file.saveAs` — Save As…
-- `format.bold` — Bold
 - `format.clear` — Clear Format
-- `format.code` — Code
-- `format.comment` — Comment
-- `format.highlight` — Highlight
-- `format.image` — Insert Image…
-- `format.imageLocal` — Insert Local Image…
 - `format.imageOps` — Image Operations…
-- `format.inlineMath` — Inline Math
-- `format.italic` — Italic
-- `format.link` — Hyperlink
-- `format.strike` — Strikethrough
-- `format.subscript` — Subscript
-- `format.superscript` — Superscript
-- `format.underline` — Underline
 - `help.changelog` — Changelog
 - `help.checkUpdates` — Check for Updates
 - `help.customThemes` — Custom Themes
@@ -120,31 +151,11 @@ These appear greyed out in menus.
 - `help.reportIssue` — Report Issue
 - `help.shortcuts` — Keyboard Shortcuts
 - `paragraph.alert` — Alert
-- `paragraph.codeFences` — Code Block
 - `paragraph.footnoteDefinition` — Footnote
-- `paragraph.frontMatter` — YAML Front Matter
-- `paragraph.heading1` — Heading 1
-- `paragraph.heading2` — Heading 2
-- `paragraph.heading3` — Heading 3
-- `paragraph.heading4` — Heading 4
-- `paragraph.heading5` — Heading 5
-- `paragraph.heading6` — Heading 6
-- `paragraph.headingDown` — Demote Heading
-- `paragraph.headingUp` — Promote Heading
-- `paragraph.hr` — Horizontal Rule
 - `paragraph.html` — HTML Block
 - `paragraph.linkReference` — Link Reference
-- `paragraph.mathBlock` — Math Block
 - `paragraph.moveDown` — Move Down
 - `paragraph.moveUp` — Move Up
-- `paragraph.normal` — Paragraph
-- `paragraph.orderedList` — Ordered List
-- `paragraph.quote` — Quote
-- `paragraph.table` — Table…
-- `paragraph.taskList` — Task List
-- `paragraph.taskStatus` — Toggle Task Status
-- `paragraph.toc` — Table of Contents
-- `paragraph.unorderedList` — Unordered List
 - `search.global` — Search in Folder
 - `table.insertRowBelow` — Insert Row Below
 - `table.moveRowDown` — Move Row Down

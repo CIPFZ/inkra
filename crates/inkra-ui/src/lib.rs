@@ -7,8 +7,10 @@
 //! invocations; it never edits documents directly.
 
 pub mod clipboard;
+pub mod dialogs;
 pub mod editor;
 pub mod find_bar;
+pub mod images;
 pub mod keys;
 pub mod menubar;
 #[cfg(target_os = "macos")]
@@ -68,6 +70,8 @@ pub struct Shell {
     setup_done: bool,
     perf: perf::Perf,
     engine_effects_override: Option<Vec<Effect>>,
+    dialogs: dialogs::Dialogs,
+    table_dialog: Option<(u32, u32)>,
     /// Raw key signals (set by the platform event loop).
     pub raw_keys: std::sync::Arc<RawKeys>,
     #[cfg(target_os = "macos")]
@@ -101,6 +105,8 @@ impl Shell {
             perf: perf::Perf::default(),
             raw_keys: Default::default(),
             engine_effects_override: None,
+            dialogs: Default::default(),
+            table_dialog: None,
             #[cfg(target_os = "macos")]
             native_menu: None,
         }
@@ -119,6 +125,10 @@ impl Shell {
             t0.elapsed().as_secs_f64() * 1e3
         );
         apply_visuals(ctx, &self.editor.style);
+        // Syntax definitions load in the background (AD-5).
+        let c = ctx.clone();
+        inkra_highlight::on_ready(move || c.request_repaint());
+        inkra_highlight::preload();
         self.os = keys::os_of(ctx.os());
         #[cfg(target_os = "macos")]
         {
@@ -184,6 +194,19 @@ impl Shell {
                     self.editor.reveal_caret();
                 }
                 Effect::ScrollToCaret => self.editor.reveal_caret(),
+                Effect::PickImage => {
+                    let dir = self
+                        .engine
+                        .state
+                        .editor
+                        .path
+                        .as_ref()
+                        .and_then(|p| p.parent().map(|d| d.to_owned()));
+                    self.dialogs
+                        .open(ctx, dialogs::Purpose::InsertImage, dir, None);
+                }
+                Effect::ShowTableDialog => self.table_dialog = Some((3, 3)),
+                Effect::OpenUrl(url) => self.open_url(ctx, &url),
                 Effect::FocusFind => self.find_focus = true,
                 Effect::Notify(Notice::OperationFailed { command }) => {
                     let text = self
@@ -219,6 +242,103 @@ impl Shell {
     fn apply_effect_list(&mut self, ctx: &egui::Context, effects: Vec<Effect>) {
         self.engine_effects_override = Some(effects);
         self.apply_effects(ctx);
+    }
+
+    /// Follows a link: `#anchor` jumps to the heading (MD-033), other targets open
+    /// with the system handler.
+    fn open_url(&mut self, ctx: &egui::Context, url: &str) {
+        if let Some(anchor) = url.strip_prefix('#') {
+            let e = &mut self.engine.state.editor;
+            let blocks = e.doc.ast().to_blocks();
+            let headings = inkra_markdown::walk::headings(e.doc.text(), &blocks);
+            if let Some(h) = headings.iter().find(|h| h.anchor == anchor) {
+                e.sel = inkra_doc::Selection::caret(h.span.end);
+                self.editor.reveal_caret();
+            }
+            return;
+        }
+        if !dialogs::open_external(url) {
+            let now = ctx.input(|i| i.time);
+            self.toasts.push(Toast {
+                text: format!("✕ {url}"),
+                until: now + TOAST_SECS,
+            });
+        }
+    }
+
+    fn handle_dialogs(&mut self, ctx: &egui::Context) {
+        for (purpose, path) in self.dialogs.poll() {
+            let Some(path) = path else { continue };
+            match purpose {
+                dialogs::Purpose::InsertImage => {
+                    let src = relative_src(self.engine.state.editor.path.as_deref(), &path);
+                    let alt = path
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    self.invoke(
+                        ctx,
+                        "format.image",
+                        &serde_json::json!({ "src": src, "alt": alt }),
+                    );
+                }
+                other => self.file_dialog_result(ctx, other, path),
+            }
+        }
+    }
+
+    fn file_dialog_result(
+        &mut self,
+        _ctx: &egui::Context,
+        _purpose: dialogs::Purpose,
+        _path: std::path::PathBuf,
+    ) {
+    }
+
+    fn table_dialog(&mut self, ctx: &egui::Context) {
+        let Some((mut rows, mut cols)) = self.table_dialog else {
+            return;
+        };
+        let mut done = None;
+        let i18n = &self.i18n;
+        let resp = egui::Modal::new(egui::Id::new("inkra-table-dialog")).show(ctx, |ui| {
+            ui.heading(i18n.tr("cmd-paragraph-table"));
+            egui::Grid::new("table-grid").show(ui, |ui| {
+                ui.label(i18n.tr("table-rows"));
+                ui.add(egui::DragValue::new(&mut rows).range(1..=200));
+                ui.end_row();
+                ui.label(i18n.tr("table-cols"));
+                ui.add(egui::DragValue::new(&mut cols).range(1..=30));
+                ui.end_row();
+            });
+            ui.add_space(6.0);
+            ui.horizontal(|ui| {
+                if ui.button(i18n.tr("dialog-ok")).clicked()
+                    || ui.input(|i| i.key_pressed(egui::Key::Enter))
+                {
+                    done = Some(true);
+                }
+                if ui.button(i18n.tr("dialog-cancel")).clicked() {
+                    done = Some(false);
+                }
+            });
+        });
+        self.table_dialog = Some((rows, cols));
+        if resp.should_close() {
+            done = Some(false);
+        }
+        match done {
+            Some(true) => {
+                self.table_dialog = None;
+                self.invoke(
+                    ctx,
+                    "paragraph.table",
+                    &serde_json::json!({ "rows": rows, "cols": cols }),
+                );
+            }
+            Some(false) => self.table_dialog = None,
+            None => {}
+        }
     }
 
     /// Dispatches key presses bound in the keymap and removes them from the input.
@@ -278,6 +398,7 @@ impl Shell {
         });
         self.perf.begin(had_input);
         self.handle_raw_paste(&ctx);
+        self.handle_dialogs(&ctx);
         self.handle_shortcuts(&ctx);
 
         #[cfg(target_os = "macos")]
@@ -353,6 +474,7 @@ impl Shell {
         if self.engine.state.view.debug_overlay {
             self.perf.overlay(&ctx, self.editor.last_ms);
         }
+        self.table_dialog(&ctx);
         self.about_dialog(&ctx);
         self.prefs_problem_dialog(&ctx);
         self.toasts(&ctx);
@@ -452,6 +574,21 @@ impl Shell {
             .map(|t| t.until)
             .fold(f64::INFINITY, f64::min);
         ctx.request_repaint_after(Duration::from_secs_f64((next - now).max(0.0)));
+    }
+}
+
+/// Image source for `path` relative to the document (ED-092 "prefer relative paths").
+pub fn relative_src(doc: Option<&std::path::Path>, path: &std::path::Path) -> String {
+    let rel = doc
+        .and_then(|d| d.parent())
+        .and_then(|dir| path.strip_prefix(dir).ok())
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| path.to_path_buf());
+    let s = rel.to_string_lossy().replace('\\', "/");
+    if s.contains(' ') {
+        s.replace(' ', "%20")
+    } else {
+        s
     }
 }
 

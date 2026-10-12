@@ -231,6 +231,8 @@ fn main() -> std::process::ExitCode {
             Ok(bytes) => {
                 let doc = inkra_doc::Doc::from_bytes(&bytes, None, Default::default());
                 engine.state.editor = inkra_engine::editor::Editor::new(doc);
+                engine.state.editor.path =
+                    Some(std::fs::canonicalize(path).unwrap_or_else(|_| path.clone()));
                 let name = path
                     .file_name()
                     .map(|n| n.to_string_lossy().into_owned())

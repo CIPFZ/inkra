@@ -47,6 +47,18 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         "same winit as eframe; raw key hook for clipboard formats egui drops (ED-016)",
     ),
     (
+        "syntect",
+        Scope::Only(&["inkra-highlight"]),
+        "MIT",
+        "code highlighting (SPEC 2.1), pure-Rust fancy-regex",
+    ),
+    (
+        "rfd",
+        Scope::Only(&["inkra-ui"]),
+        "MIT",
+        "native file dialogs (SPEC 2.1)",
+    ),
+    (
         "arboard",
         Scope::Only(&["inkra-ui"]),
         "MIT OR Apache-2.0",

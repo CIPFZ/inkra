@@ -7,3 +7,7 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | Key | Type | Default | Req | Description |
 |---|---|---|---|---|
 | `general.language` | string | `"system"` | PR-018 | UI language: `system` to follow the OS, or a tag such as `zh-CN` / `en-US`. |
+| `markdown.strongMarker` | `**` / `__` | `"**"` | MD-075 | Marker used when commands create bold text. |
+| `markdown.emphasisMarker` | `*` / `_` | `"*"` | MD-075 | Marker used when commands create italic text. |
+| `markdown.bulletMarker` | `-` / `*` / `+` | `"-"` | MD-075 | Marker used when commands create bullet lists. |
+| `markdown.codeDefaultLanguage` | string | `""` | MD-073 | Language pre-filled in new code blocks. |
