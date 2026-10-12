@@ -166,8 +166,11 @@ pub fn type_text(doc: &Doc, sel: Selection, input: &str, p: &EditPrefs) -> Trans
                     .is_none_or(|n| n.is_whitespace() || ")]}>,.;:!?".contains(n) || n == close);
                 let symmetric = c == close;
                 let prev_word = prev.is_some_and(|ch| ch.is_alphanumeric());
+                // A run of identical symmetric markers is being typed (```, ***):
+                // the run itself is the syntax, so it is not paired again.
+                let continues_run = symmetric && prev == Some(c);
                 // Do not pair quotes inside words ("don't") or before word chars.
-                if next_ok && !(symmetric && prev_word) {
+                if next_ok && !(symmetric && prev_word) && !continues_run {
                     let new = format!("{c}{close}");
                     let a = pos + c.len_utf8();
                     return replace(pos..pos, &new, sel, Selection::caret(a));
@@ -324,12 +327,7 @@ pub fn newline(doc: &Doc, sel: Selection, kind: Break) -> Transaction {
 
     // The caret after `- ` lies past the (empty) item's span: probe the last
     // non-blank character of the line before the caret too.
-    let probe = ls + s[ls..pos].trim_end().len();
-    let item = context::list_item(doc, pos).or_else(|| {
-        (probe > ls)
-            .then(|| context::list_item(doc, probe))
-            .flatten()
-    });
+    let item = context::list_item_near(doc, pos);
     if let Some(info) = item {
         let marker_ls = line_start(&s, info.marker.start);
         let prefix = &s[marker_ls..info.marker.start];
@@ -433,13 +431,7 @@ pub fn tab(doc: &Doc, sel: Selection, outdent: bool, p: &EditPrefs) -> Option<Tr
     } else {
         "\t".to_owned()
     };
-    let ls0 = line_start(&s, pos);
-    let probe = ls0 + s[ls0..pos].trim_end().len();
-    let item = context::list_item(doc, pos).or_else(|| {
-        (probe > ls0)
-            .then(|| context::list_item(doc, probe))
-            .flatten()
-    });
+    let item = context::list_item_near(doc, pos);
     if let Some(info) = item {
         let item_lines = lines_in(&s, info.span.clone());
         if outdent {

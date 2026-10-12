@@ -140,6 +140,20 @@ pub fn code_block(doc: &Doc, pos: usize) -> Option<Range<usize>> {
         .find_map(|n| matches!(n.block.kind, BlockKind::CodeBlock { .. }).then(|| n.span()))
 }
 
+/// The list item containing `pos`, or the one whose (empty) content `pos` sits
+/// in: a caret after `- ` lies past the item's span, so the last non-blank
+/// character of the line before the caret is probed too.
+pub fn list_item_near(doc: &Doc, pos: usize) -> Option<ItemInfo> {
+    if let Some(i) = list_item(doc, pos) {
+        return Some(i);
+    }
+    let t = doc.text();
+    let ls = t.line_to_byte(t.byte_to_line(pos));
+    let before = t.slice(ls..pos);
+    let probe = ls + before.trim_end().len();
+    (probe > ls).then(|| list_item(doc, probe)).flatten()
+}
+
 /// Whether the list item whose marker starts at `marker_start` ends with a
 /// nested list (so an indented next sibling joins it).
 pub fn item_ends_with_list(doc: &Doc, marker_start: usize) -> bool {

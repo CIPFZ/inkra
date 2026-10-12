@@ -180,7 +180,7 @@ pub fn newline(doc: &Doc, sel: Selection, kind: Break) -> Transaction {
         return replace(pos..pos, nl, sel, Selection::caret(pos + nl.len()));
     }
     // Code, math, front matter, HTML: plain line breaks (code keeps indentation).
-    if context::in_code_content(doc, pos) || context::list_item(doc, pos).is_some() {
+    if context::in_code_content(doc, pos) || context::list_item_near(doc, pos).is_some() {
         return ops::newline(doc, sel, kind);
     }
     if let Some(l) = leaf(doc, pos)

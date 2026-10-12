@@ -370,3 +370,22 @@ fn typing_after_block_on_blank_line_starts_new_paragraph() {
     typed(&mut e, "x");
     assert_eq!(e.text(), "beta\nx");
 }
+
+#[test]
+fn typing_a_fence_does_not_double_backticks() {
+    let mut e = Editor::default();
+    typed(&mut e, "```rust");
+    assert_eq!(e.text(), "```rust");
+    let mut e = Editor::default();
+    typed(&mut e, "`x");
+    assert_eq!(e.text(), "`x`", "inline code still pairs");
+}
+
+#[test]
+fn live_enter_on_empty_nested_item_outdents() {
+    let mut e = live("- a\n  - b\n  - ");
+    e.newline_live(Break::Enter);
+    assert_eq!(e.text(), "- a\n  - b\n- ");
+    e.newline_live(Break::Enter);
+    assert_eq!(e.text(), "- a\n  - b\n\n");
+}
