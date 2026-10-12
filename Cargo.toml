@@ -1,0 +1,63 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/*", "xtask"]
+default-members = ["crates/*", "apps/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/inkra-app/inkra"
+authors = ["Inkra contributors"]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+
+[workspace.dependencies]
+# internal
+inkra-text = { path = "crates/inkra-text" }
+inkra-markdown = { path = "crates/inkra-markdown" }
+inkra-doc = { path = "crates/inkra-doc" }
+inkra-highlight = { path = "crates/inkra-highlight" }
+inkra-math = { path = "crates/inkra-math" }
+inkra-diagram = { path = "crates/inkra-diagram" }
+inkra-html = { path = "crates/inkra-html" }
+inkra-layout = { path = "crates/inkra-layout" }
+inkra-render = { path = "crates/inkra-render" }
+inkra-export = { path = "crates/inkra-export" }
+inkra-workspace = { path = "crates/inkra-workspace" }
+inkra-engine = { path = "crates/inkra-engine" }
+inkra-ui = { path = "crates/inkra-ui" }
+inkra-i18n = { path = "crates/inkra-i18n" }
+
+# third party (see xtask/src/deps.rs for the reviewed allowlist)
+egui = "0.36"
+eframe = { version = "0.36", default-features = false }
+egui_kittest = "0.36"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+log = "0.4"
+fern = "0.7"
+fluent-bundle = "0.16"
+unic-langid = "0.9"
+sys-locale = "0.3"
+thiserror = "2"
+anyhow = "1"
+tempfile = "3"
+image = { version = "0.25", default-features = false, features = ["png"] }
+muda = { version = "0.21", default-features = false }
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+strip = "debuginfo"
+
+[profile.dev.package."*"]
+opt-level = 2

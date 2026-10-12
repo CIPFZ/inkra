@@ -1,0 +1,15 @@
+[package]
+name = "inkra-text"
+description = "Text foundation: rope wrapper, char/line/byte offset conversion, Unicode segmentation, encoding detection and line endings."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+

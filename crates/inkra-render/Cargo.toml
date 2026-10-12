@@ -1,0 +1,15 @@
+[package]
+name = "inkra-render"
+description = "Painting: layout tree -> egui shapes; offscreen rendering to bitmaps."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+inkra-layout.workspace = true

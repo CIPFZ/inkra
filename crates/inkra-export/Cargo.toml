@@ -1,0 +1,19 @@
+[package]
+name = "inkra-export"
+description = "Export and import: PDF (krilla), HTML, images; Pandoc bridge."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+inkra-markdown.workspace = true
+inkra-doc.workspace = true
+inkra-html.workspace = true
+inkra-layout.workspace = true
+inkra-render.workspace = true

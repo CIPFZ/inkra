@@ -1,0 +1,15 @@
+[package]
+name = "inkra-highlight"
+description = "Code highlighting: syntect wrapper, language alias table, lazy syntax loading."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+inkra-text.workspace = true
