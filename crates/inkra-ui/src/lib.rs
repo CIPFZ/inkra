@@ -6,11 +6,15 @@
 //! status bar. The UI renders engine state and turns user input into command
 //! invocations; it never edits documents directly.
 
-pub mod fonts;
+pub mod clipboard;
+pub mod editor;
+pub mod find_bar;
 pub mod keys;
 pub mod menubar;
 #[cfg(target_os = "macos")]
 pub mod native_menu;
+pub mod perf;
+pub mod status_bar;
 
 use std::time::Duration;
 
@@ -45,6 +49,13 @@ pub struct Shell {
     toasts: Vec<Toast>,
     icon: Option<egui::TextureHandle>,
     quit_requested: bool,
+    /// The editing canvas.
+    pub editor: editor::EditorView,
+    clipboard: clipboard::Clipboard,
+    find_focus: bool,
+    status: status_bar::StatusCache,
+    setup_done: bool,
+    perf: perf::Perf,
     #[cfg(target_os = "macos")]
     native_menu: Option<native_menu::NativeMenu>,
 }
@@ -68,6 +79,12 @@ impl Shell {
             toasts: Vec::new(),
             icon: None,
             quit_requested: false,
+            editor: editor::EditorView::new(),
+            clipboard: clipboard::Clipboard::default(),
+            find_focus: false,
+            status: Default::default(),
+            setup_done: false,
+            perf: perf::Perf::default(),
             #[cfg(target_os = "macos")]
             native_menu: None,
         }
@@ -75,7 +92,17 @@ impl Shell {
 
     /// One-time setup of fonts, style and (on macOS) the native menu.
     pub fn setup(&mut self, ctx: &egui::Context) {
-        fonts::install(ctx);
+        if self.setup_done {
+            return;
+        }
+        self.setup_done = true;
+        let t0 = std::time::Instant::now();
+        ctx.set_fonts(inkra_layout::fonts::definitions());
+        log::info!(
+            "fonts installed in {:.1} ms",
+            t0.elapsed().as_secs_f64() * 1e3
+        );
+        apply_visuals(ctx, &self.editor.style);
         self.os = keys::os_of(ctx.os());
         #[cfg(target_os = "macos")]
         {
@@ -84,6 +111,11 @@ impl Shell {
                 &self.i18n,
             ));
         }
+    }
+
+    /// Records the CPU time of the previous frame (from the platform integration).
+    pub fn record_frame_cpu(&mut self, ms: f32) {
+        self.perf.record(ms);
     }
 
     /// Whether `app.quit` was executed.
@@ -112,6 +144,27 @@ impl Shell {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
                 Effect::ShowAbout => self.about_open = true,
+                Effect::SetClipboard { text, html } => self.clipboard.set(&text, html.as_deref()),
+                Effect::RequestPaste { plain } => {
+                    let c = self.clipboard.read(None);
+                    let params = serde_json::json!({
+                        "text": c.text,
+                        "html": c.html,
+                        "files": c.files.iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>(),
+                        "fromInkra": c.from_inkra,
+                    });
+                    let id = if plain {
+                        "edit.pastePlain"
+                    } else {
+                        "edit.paste"
+                    };
+                    if let Err(e) = self.engine.execute(id, &params) {
+                        log::debug!("{e}");
+                    }
+                    self.editor.reveal_caret();
+                }
+                Effect::ScrollToCaret => self.editor.reveal_caret(),
+                Effect::FocusFind => self.find_focus = true,
                 Effect::Notify(Notice::OperationFailed { command }) => {
                     let text = self
                         .i18n
@@ -164,6 +217,24 @@ impl Shell {
     /// Draws the whole window.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
+        if !self.setup_done {
+            // Fonts installed now take effect on the next pass.
+            self.setup(&ctx);
+            ctx.request_repaint();
+            return;
+        }
+        let had_input = ctx.input(|i| {
+            i.events.iter().any(|e| {
+                matches!(
+                    e,
+                    egui::Event::Text(_)
+                        | egui::Event::Key { pressed: true, .. }
+                        | egui::Event::Ime(_)
+                        | egui::Event::Paste(_)
+                )
+            })
+        });
+        self.perf.begin(had_input);
         self.handle_shortcuts(&ctx);
 
         #[cfg(target_os = "macos")]
@@ -197,8 +268,48 @@ impl Shell {
                 });
         }
 
-        egui::CentralPanel::default().show(ui, |_ui| {});
+        egui::Panel::bottom("inkra-status")
+            .frame(
+                egui::Frame::new()
+                    .fill(self.editor.style.bg)
+                    .inner_margin(egui::Margin::symmetric(10, 3)),
+            )
+            .show(ui, |ui| {
+                if let Some(id) = status_bar::show(
+                    ui,
+                    &mut self.status,
+                    &self.engine,
+                    &self.i18n,
+                    &self.editor.style,
+                ) {
+                    self.invoke(&ctx, &id, &Value::Null);
+                }
+            });
 
+        egui::CentralPanel::default()
+            .frame(egui::Frame::new())
+            .show(ui, |ui| {
+                if self.engine.state.editor.find.open {
+                    let cmds = find_bar::show(
+                        ui,
+                        &mut self.engine,
+                        &self.i18n,
+                        &mut self.find_focus,
+                        self.editor.id(),
+                    );
+                    for id in cmds {
+                        self.invoke(&ctx, &id, &Value::Null);
+                    }
+                }
+                let out = self.editor.show(ui, &mut self.engine, &mut self.clipboard);
+                for (id, params) in out.commands {
+                    self.invoke(&ctx, &id, &params);
+                }
+            });
+
+        if self.engine.state.view.debug_overlay {
+            self.perf.overlay(&ctx, self.editor.last_ms);
+        }
         self.about_dialog(&ctx);
         self.prefs_problem_dialog(&ctx);
         self.toasts(&ctx);
@@ -299,6 +410,26 @@ impl Shell {
             .fold(f64::INFINITY, f64::min);
         ctx.request_repaint_after(Duration::from_secs_f64((next - now).max(0.0)));
     }
+}
+
+/// Applies egui visuals matching the document style.
+pub fn apply_visuals(ctx: &egui::Context, style: &inkra_layout::Style) {
+    let mut v = if style.dark {
+        egui::Visuals::dark()
+    } else {
+        egui::Visuals::light()
+    };
+    v.panel_fill = style.bg;
+    v.window_fill = style.bg;
+    v.extreme_bg_color = if style.dark {
+        style.bg.gamma_multiply(0.8)
+    } else {
+        egui::Color32::WHITE
+    };
+    v.selection.bg_fill = style.selection;
+    v.hyperlink_color = style.accent;
+    v.text_cursor.stroke.color = style.cursor;
+    ctx.set_visuals(v);
 }
 
 #[cfg(test)]

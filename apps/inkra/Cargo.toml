@@ -26,6 +26,7 @@ inkra-i18n.workspace = true
 inkra-workspace.workspace = true
 inkra-engine.workspace = true
 inkra-ui.workspace = true
+inkra-doc.workspace = true
 eframe = { workspace = true, features = ["wgpu", "accesskit", "x11", "wayland", "persistence", "default_fonts"] }
 log.workspace = true
 fern.workspace = true

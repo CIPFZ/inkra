@@ -27,8 +27,11 @@ struct App {
 }
 
 impl eframe::App for App {
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.frames += 1;
+        if let Some(cpu) = frame.info().cpu_usage {
+            self.shell.record_frame_cpu(cpu * 1000.0);
+        }
         if self.frames == 2 {
             // The second frame starts after the first one was presented.
             let ms = self.started.elapsed().as_secs_f64() * 1000.0;
@@ -132,8 +135,25 @@ fn main() -> std::process::ExitCode {
         other => other.to_owned(),
     };
     let i18n = I18n::new(&lang);
-    let engine = Engine::new(prefs);
-    let title = format!("{} - Inkra", i18n.tr("untitled"));
+    let mut engine = Engine::new(prefs);
+    let mut title = format!("{} - Inkra", i18n.tr("untitled"));
+    if let Some(path) = args.paths.iter().find(|p| p.is_file()) {
+        match std::fs::read(path) {
+            Ok(bytes) => {
+                let doc = inkra_doc::Doc::from_bytes(&bytes, None, Default::default());
+                engine.state.editor = inkra_engine::editor::Editor::new(doc);
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                title = format!("{name} - Inkra");
+            }
+            Err(e) => log::error!("cannot open {}: {e}", path.display()),
+        }
+    }
+    if args.source_mode {
+        engine.state.editor.mode = inkra_engine::editor::ViewMode::Source;
+    }
 
     let mut viewport = egui::ViewportBuilder::default()
         .with_title(title)

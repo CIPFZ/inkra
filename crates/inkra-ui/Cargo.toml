@@ -18,6 +18,9 @@ inkra-layout.workspace = true
 inkra-render.workspace = true
 egui.workspace = true
 image.workspace = true
+arboard.workspace = true
+inkra-doc.workspace = true
+inkra-text.workspace = true
 serde_json.workspace = true
 log.workspace = true
 
