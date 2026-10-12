@@ -19,3 +19,8 @@ inkra-highlight.workspace = true
 inkra-math.workspace = true
 inkra-diagram.workspace = true
 inkra-html.workspace = true
+epaint.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
