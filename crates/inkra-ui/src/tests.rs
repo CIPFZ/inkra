@@ -237,3 +237,197 @@ fn typing_latency_100k_chars() {
         assert!(p95 < 16.0, "p95 {p95} ms");
     }
 }
+
+// ---- M3 acceptance cases (SPEC 13, docs/acceptance/m3.md) ----
+
+fn live_harness(content: &str) -> Harness<'static, Shell> {
+    let mut h = editor_harness(content);
+    h.state_mut().engine.state.editor.mode = inkra_engine::editor::ViewMode::Live;
+    h.run();
+    h
+}
+
+fn key(h: &mut Harness<'_, Shell>, k: egui::Key) {
+    h.key_press(k);
+    h.step();
+}
+
+fn rendered(h: &Harness<'_, Shell>) -> Vec<String> {
+    h.state()
+        .editor_view()
+        .map(|v| v.rendered_text())
+        .unwrap_or_default()
+}
+
+#[test]
+fn m3_case1_heading_marker_shows_only_in_active_heading() {
+    let mut h = live_harness("");
+    type_str(&mut h, "# Hello");
+    key(&mut h, egui::Key::Enter);
+    type_str(&mut h, "World");
+    h.run();
+    assert_eq!(text(&h), "# Hello\n\nWorld");
+    let blocks = h.state().engine.state.editor.doc.ast().to_blocks();
+    assert!(matches!(
+        blocks[0].kind,
+        inkra_markdown::BlockKind::Heading { level: 1, .. }
+    ));
+    assert!(matches!(
+        blocks[1].kind,
+        inkra_markdown::BlockKind::Paragraph
+    ));
+    let r = rendered(&h);
+    assert!(
+        r.iter().any(|t| t == "Hello"),
+        "marker hidden while the caret is in the paragraph: {r:?}"
+    );
+    // back into the heading
+    h.state_mut().engine.state.editor.sel = inkra_doc::Selection::caret(4);
+    h.run();
+    let r = rendered(&h);
+    assert!(
+        r.iter().any(|t| t == "# Hello"),
+        "marker shown in the active heading: {r:?}"
+    );
+}
+
+#[test]
+fn m3_case2_bold_markers_follow_the_caret() {
+    let mut h = live_harness("");
+    type_str(&mut h, "**bold** text");
+    h.run();
+    // caret at the end, outside the bold node
+    let r = rendered(&h);
+    assert!(r.iter().any(|t| t == "bold text"), "{r:?}");
+    h.state_mut().engine.state.editor.sel = inkra_doc::Selection::caret(4);
+    h.run();
+    let r = rendered(&h);
+    assert!(r.iter().any(|t| t == "**bold** text"), "{r:?}");
+}
+
+#[test]
+fn m3_case3_nested_list_then_paragraph() {
+    let mut h = live_harness("");
+    type_str(&mut h, "- a");
+    key(&mut h, egui::Key::Enter);
+    type_str(&mut h, "b");
+    key(&mut h, egui::Key::Tab);
+    type_str(&mut h, "c");
+    key(&mut h, egui::Key::Enter);
+    key(&mut h, egui::Key::Enter);
+    key(&mut h, egui::Key::Enter);
+    type_str(&mut h, "para");
+    h.run();
+    assert_eq!(text(&h), "- a\n  - bc\n\npara");
+    let blocks = h.state().engine.state.editor.doc.ast().to_blocks();
+    assert_eq!(blocks.len(), 2);
+    assert!(matches!(
+        blocks[1].kind,
+        inkra_markdown::BlockKind::Paragraph
+    ));
+}
+
+#[test]
+fn m3_case4_code_block_highlight_and_leaving_with_down() {
+    inkra_highlight::load_now();
+    let mut h = live_harness("");
+    type_str(&mut h, "```rust");
+    key(&mut h, egui::Key::Enter);
+    let code: String = (0..50).map(|i| format!("let x{i} = {i}; // n\n")).collect();
+    h.event(egui::Event::Paste(code.trim_end().to_owned()));
+    h.run();
+    let t = text(&h);
+    assert!(t.starts_with("```rust\nlet x0 = 0;"), "{t:?}");
+    assert!(t.ends_with("// n\n```"), "{t:?}");
+    let pos = 10;
+    h.state_mut().engine.state.editor.sel = inkra_doc::Selection::caret(pos);
+    h.run();
+    assert!(
+        h.state().editor_view().unwrap().colors_at(pos) >= 3,
+        "highlighted"
+    );
+    // to the last code line, then Down leaves the block (a paragraph is created)
+    let last = t.len() - 4;
+    h.state_mut().engine.state.editor.sel = inkra_doc::Selection::caret(last);
+    h.run();
+    key(&mut h, egui::Key::ArrowDown);
+    h.run();
+    let head = h.state().engine.state.editor.sel.head;
+    assert!(
+        head >= t.len(),
+        "caret left the code block: {head} vs {}",
+        t.len()
+    );
+}
+
+#[test]
+fn m3_case7_save_changes_only_the_edited_bytes() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("doc.md");
+    let original = "# Title\r\n\r\nSome  text with trailing spaces   \r\n\r\n- item\r\n\r\n```\r\ncode\r\n```\r\n";
+    std::fs::write(&p, original).unwrap();
+    let mut h = live_harness("");
+    h.state_mut()
+        .engine
+        .execute("file.open", &serde_json::json!({ "path": p }))
+        .unwrap();
+    h.state_mut().engine.take_effects();
+    h.run();
+    let at = original.find("item").unwrap() + 4;
+    h.state_mut().engine.state.editor.sel = inkra_doc::Selection::caret(at);
+    type_str(&mut h, "!");
+    h.state_mut()
+        .engine
+        .execute("file.save", &serde_json::Value::Null)
+        .unwrap();
+    let saved = std::fs::read_to_string(&p).unwrap();
+    let mut expected = original.to_owned();
+    expected.insert(at, '!');
+    assert_eq!(saved, expected, "only the edit differs");
+}
+
+#[test]
+fn m3_case9_closing_a_modified_window_asks() {
+    let mut h = live_harness("");
+    type_str(&mut h, "unsaved");
+    h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::W);
+    h.run();
+    assert!(h.state().confirm_pending());
+    h.get_by_label("Save");
+    h.get_by_label("Don’t Save");
+    h.get_by_label("Cancel").click();
+    h.run();
+    assert!(!h.state().confirm_pending());
+    assert_eq!(text(&h), "unsaved");
+}
+
+#[test]
+fn m3_case6_scrolling_a_large_document_is_cheap() {
+    let unit = "## 标题\n\n这是一段用于性能测试的中文段落，包含 **粗体**、*斜体* 和 `code`。Some English words too.\n\n- 列表项一\n- 列表项二\n\n";
+    let mut doc = String::new();
+    while doc.chars().count() < 100_000 {
+        doc.push_str(unit);
+    }
+    let mut h = live_harness(&doc);
+    let mut times = Vec::new();
+    for _ in 0..60 {
+        h.event(egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Point,
+            delta: egui::vec2(0.0, -120.0),
+            modifiers: Default::default(),
+            phase: egui::TouchPhase::Move,
+        });
+        let t = std::time::Instant::now();
+        h.step();
+        times.push(t.elapsed().as_secs_f64() * 1000.0);
+    }
+    times.sort_by(f64::total_cmp);
+    let p95 = times[times.len() * 95 / 100 - 1];
+    eprintln!(
+        "scroll frame (CPU, headless): p50 {:.2} ms, p95 {p95:.2} ms",
+        times[times.len() / 2]
+    );
+    if !cfg!(debug_assertions) {
+        assert!(p95 < 16.0, "p95 {p95}");
+    }
+}

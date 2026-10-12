@@ -33,3 +33,4 @@ muda.workspace = true
 
 [dev-dependencies]
 egui_kittest.workspace = true
+tempfile.workspace = true

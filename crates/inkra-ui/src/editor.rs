@@ -99,6 +99,36 @@ impl EditorView {
         self.base_style = s;
     }
 
+    /// Text of every item laid out in the last frame, one line per item (tests).
+    pub fn rendered_text(&self) -> Vec<String> {
+        (0..self.view.items().len())
+            .filter_map(|i| self.view.layout(i))
+            .map(|l| {
+                l.runs
+                    .iter()
+                    .map(|r| r.job.text.clone())
+                    .collect::<Vec<_>>()
+                    .join("|")
+            })
+            .collect()
+    }
+
+    /// Distinct text colors used by the item containing `pos` (tests: syntax
+    /// highlighting).
+    pub fn colors_at(&self, pos: usize) -> usize {
+        let i = self.view.item_of(pos);
+        let Some(l) = self.view.layout(i) else {
+            return 0;
+        };
+        let mut set = std::collections::HashSet::new();
+        for r in &l.runs {
+            for s in &r.job.sections {
+                set.insert(s.format.color);
+            }
+        }
+        set.len()
+    }
+
     /// Version of the theme style this view uses.
     pub fn base_version(&self) -> u64 {
         self.base_style.version
@@ -922,7 +952,42 @@ impl EditorView {
                     if page {
                         self.scroll += if down { viewport_h } else { -viewport_h };
                     }
-                    moved = Some(new);
+                    // ED-005/ED-006: Down on the last line of a document that ends in
+                    // a block the caret cannot leave (code, math, table) adds a
+                    // paragraph below it.
+                    let at_end_block = live
+                        && down
+                        && !page
+                        && !shift
+                        && (new == head
+                            || inkra_engine::editor::context::in_code_content(&e.doc, new))
+                        && e.doc
+                            .ast()
+                            .index_at(head)
+                            .is_some_and(|i| i + 1 == e.doc.ast().len())
+                        && {
+                            let ast = e.doc.ast();
+                            ast.get(ast.len() - 1).is_some_and(|b| {
+                                matches!(
+                                    b.block.kind,
+                                    inkra_markdown::BlockKind::CodeBlock { .. }
+                                        | inkra_markdown::BlockKind::MathBlock { .. }
+                                        | inkra_markdown::BlockKind::Table { .. }
+                                        | inkra_markdown::BlockKind::HtmlBlock { .. }
+                                )
+                            })
+                        }
+                        && {
+                            let t = e.doc.text();
+                            t.byte_to_line(head) + 2 >= t.len_lines()
+                        };
+                    if at_end_block {
+                        out.commands
+                            .push(("paragraph.ensureTrailing".into(), Value::Null));
+                        moved = None;
+                    } else {
+                        moved = Some(new);
+                    }
                 }
                 Key::Home | Key::End if !m.command => {
                     forward = key == Key::End;

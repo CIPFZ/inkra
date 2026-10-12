@@ -252,6 +252,18 @@ impl Shell {
         });
     }
 
+    /// The active window's editor view (tests).
+    pub fn editor_view(&self) -> Option<&editor::EditorView> {
+        self.windows
+            .get(&self.engine.state.active())
+            .map(|w| &w.editor)
+    }
+
+    /// Whether a close confirmation is pending (tests).
+    pub fn confirm_pending(&self) -> bool {
+        self.confirm.is_some()
+    }
+
     /// Number of windows.
     pub fn window_count(&self) -> usize {
         self.windows.len()
