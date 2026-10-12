@@ -27,6 +27,7 @@ inkra-workspace.workspace = true
 inkra-engine.workspace = true
 inkra-ui.workspace = true
 inkra-doc.workspace = true
+serde_json.workspace = true
 eframe = { workspace = true, features = ["wgpu", "accesskit", "x11", "wayland", "persistence", "default_fonts"] }
 log.workspace = true
 winit.workspace = true

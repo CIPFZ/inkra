@@ -53,6 +53,18 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         "code highlighting (SPEC 2.1), pure-Rust fancy-regex",
     ),
     (
+        "notify",
+        Scope::Only(&["inkra-workspace"]),
+        "CC0-1.0 OR Artistic-2.0",
+        "file watching (SPEC 2.1, FS-007)",
+    ),
+    (
+        "notify-debouncer-mini",
+        Scope::Only(&["inkra-workspace"]),
+        "MIT OR Apache-2.0",
+        "debounced watching (SPEC 2.1)",
+    ),
+    (
         "rfd",
         Scope::Only(&["inkra-ui"]),
         "MIT",

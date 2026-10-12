@@ -13,18 +13,21 @@ pub mod find_bar;
 pub mod images;
 pub mod keys;
 pub mod menubar;
+mod modals;
 #[cfg(target_os = "macos")]
 pub mod native_menu;
 pub mod perf;
 pub mod status_bar;
 
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use inkra_engine::keymap::Os;
 use inkra_engine::prefs::LoadProblem;
 use inkra_engine::{Effect, Engine, Notice};
 use inkra_i18n::I18n;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 pub use menubar::Invocation;
 
@@ -44,13 +47,49 @@ pub struct RawKeys {
 
 /// How long a toast stays visible (UI-041).
 const TOAST_SECS: f64 = 3.0;
+/// Recovery data is written this often (FS-004).
+const RECOVERY_SECS: f64 = 5.0;
+/// Autosave debounce (FS-004).
+const AUTOSAVE_SECS: f64 = 3.0;
 
 struct Toast {
     text: String,
     until: f64,
 }
 
-/// The application shell of one window.
+/// UI state of one window.
+struct WinUi {
+    editor: editor::EditorView,
+    find_focus: bool,
+    status: status_bar::StatusCache,
+    title: String,
+    last_version: u64,
+    last_edit: f64,
+    was_focused: bool,
+}
+
+impl WinUi {
+    fn new() -> Self {
+        Self {
+            editor: editor::EditorView::new(),
+            find_focus: false,
+            status: Default::default(),
+            title: String::new(),
+            last_version: 0,
+            last_edit: 0.0,
+            was_focused: true,
+        }
+    }
+}
+
+/// A pending close / quit confirmation (FS-005).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Confirm {
+    id: u64,
+    quit: bool,
+}
+
+/// The application shell (all windows).
 pub struct Shell {
     /// The engine.
     pub engine: Engine,
@@ -62,18 +101,23 @@ pub struct Shell {
     toasts: Vec<Toast>,
     icon: Option<egui::TextureHandle>,
     quit_requested: bool,
-    /// The editing canvas.
-    pub editor: editor::EditorView,
     clipboard: clipboard::Clipboard,
-    find_focus: bool,
-    status: status_bar::StatusCache,
     setup_done: bool,
     perf: perf::Perf,
-    engine_effects_override: Option<Vec<Effect>>,
-    dialogs: dialogs::Dialogs,
-    table_dialog: Option<(u32, u32)>,
     /// Raw key signals (set by the platform event loop).
     pub raw_keys: std::sync::Arc<RawKeys>,
+    dialogs: dialogs::Dialogs,
+    table_dialog: Option<(u32, u32)>,
+    windows: BTreeMap<u64, WinUi>,
+    root: u64,
+    confirm: Option<Confirm>,
+    quitting: bool,
+    recovery_offer: Vec<inkra_workspace::recovery::RecoveryMeta>,
+    watcher: Option<inkra_workspace::watch::Watcher>,
+    last_recovery: f64,
+    /// The root window should close (exit) at the end of this frame.
+    close_root: bool,
+    focus_request: Option<u64>,
     #[cfg(target_os = "macos")]
     native_menu: Option<native_menu::NativeMenu>,
 }
@@ -88,6 +132,9 @@ impl Shell {
             ),
             LoadProblem::Unreadable { error } => error,
         });
+        let root = engine.state.active();
+        let mut windows = BTreeMap::new();
+        windows.insert(root, WinUi::new());
         Self {
             engine,
             i18n,
@@ -97,16 +144,21 @@ impl Shell {
             toasts: Vec::new(),
             icon: None,
             quit_requested: false,
-            editor: editor::EditorView::new(),
             clipboard: clipboard::Clipboard::default(),
-            find_focus: false,
-            status: Default::default(),
             setup_done: false,
             perf: perf::Perf::default(),
             raw_keys: Default::default(),
-            engine_effects_override: None,
             dialogs: Default::default(),
             table_dialog: None,
+            windows,
+            root,
+            confirm: None,
+            quitting: false,
+            recovery_offer: Vec::new(),
+            watcher: None,
+            last_recovery: 0.0,
+            close_root: false,
+            focus_request: None,
             #[cfg(target_os = "macos")]
             native_menu: None,
         }
@@ -124,11 +176,24 @@ impl Shell {
             "fonts installed in {:.1} ms",
             t0.elapsed().as_secs_f64() * 1e3
         );
-        apply_visuals(ctx, &self.editor.style);
+        let style = self
+            .windows
+            .values()
+            .next()
+            .map(|w| w.editor.style.clone())
+            .unwrap_or_default();
+        apply_visuals(ctx, &style);
         // Syntax definitions load in the background (AD-5).
         let c = ctx.clone();
         inkra_highlight::on_ready(move || c.request_repaint());
         inkra_highlight::preload();
+        let c = ctx.clone();
+        self.watcher = Some(inkra_workspace::watch::Watcher::new(move || {
+            c.request_repaint()
+        }));
+        if let Some(p) = &self.engine.state.paths {
+            self.recovery_offer = inkra_workspace::recovery::Recovery::new(p.recovery_dir()).list();
+        }
         self.os = keys::os_of(ctx.os());
         #[cfg(target_os = "macos")]
         {
@@ -144,7 +209,7 @@ impl Shell {
         self.perf.record(ms);
     }
 
-    /// Whether `app.quit` was executed.
+    /// Whether `app.quit` completed.
     pub fn quit_requested(&self) -> bool {
         self.quit_requested
     }
@@ -154,30 +219,129 @@ impl Shell {
         self.about_open
     }
 
-    /// Runs a command and applies its effects.
+    /// Caret rectangle (screen) of the active window's editor (tests, IME).
+    pub fn caret_screen(&self) -> Option<egui::Rect> {
+        self.windows
+            .get(&self.engine.state.active())
+            .and_then(|w| w.editor.caret_screen)
+    }
+
+    /// Number of windows.
+    pub fn window_count(&self) -> usize {
+        self.windows.len()
+    }
+
+    /// Restores windows of the last session (FS-006); the first goes into the
+    /// root window. Returns how many files were opened.
+    pub fn restore_session(&mut self, session: &inkra_workspace::session::Session) -> usize {
+        let mut n = 0;
+        for w in &session.windows {
+            let Some(path) = &w.path else { continue };
+            if !path.exists() {
+                continue;
+            }
+            if self
+                .engine
+                .execute("file.open", &json!({ "path": path }))
+                .is_err()
+            {
+                continue;
+            }
+            let effects = self.engine.take_effects();
+            let mut target = self.engine.state.active();
+            for e in effects {
+                if let Effect::NewWindow(id) = e {
+                    self.windows.insert(id, WinUi::new());
+                    target = id;
+                }
+            }
+            self.engine.state.activate(target);
+            let ed = &mut self.engine.state.editor;
+            let len = ed.doc.text().len();
+            ed.sel = inkra_doc::Selection::caret(ed.doc.text().snap(w.caret.min(len)));
+            if w.source_mode {
+                ed.mode = inkra_engine::editor::ViewMode::Source;
+            }
+            self.engine.state.view.sidebar_visible = w.sidebar;
+            if let Some(ui) = self.windows.get_mut(&target) {
+                ui.editor.reveal_caret();
+            }
+            n += 1;
+        }
+        self.engine.state.activate(self.root);
+        n
+    }
+
+    /// Applies effects produced before the first frame (opening files at startup).
+    pub fn apply_startup_effects(&mut self, effects: Vec<Effect>) {
+        for e in effects {
+            match e {
+                Effect::NewWindow(id) => {
+                    self.windows.insert(id, WinUi::new());
+                }
+                Effect::FocusWindow(id) => self.focus_request = Some(id),
+                _ => {}
+            }
+        }
+    }
+
+    /// The current session (FS-006).
+    pub fn session(&self) -> inkra_workspace::session::Session {
+        let mut s = self.engine.state.session.clone();
+        s.windows = self
+            .engine
+            .state
+            .editors()
+            .map(|(meta, e)| inkra_workspace::session::WindowSession {
+                path: e.path.clone(),
+                caret: e.sel.head,
+                scroll: self
+                    .windows
+                    .get(&meta.id)
+                    .map_or(0.0, |w| w.editor.scroll()),
+                source_mode: e.mode == inkra_engine::editor::ViewMode::Source,
+                sidebar: false,
+                rect: None,
+                maximized: false,
+            })
+            .collect();
+        s
+    }
+
+    /// Runs a command in the active window and applies its effects.
     pub fn invoke(&mut self, ctx: &egui::Context, id: &str, params: &Value) {
         if let Err(e) = self.engine.execute(id, params) {
             log::debug!("{e}");
+            if let inkra_engine::CommandError::Failed { msg, .. } = &e {
+                self.toast(ctx, format!("✕ {msg}"));
+            }
         }
-        self.apply_effects(ctx);
+        self.apply_effects(ctx, None);
     }
 
-    fn apply_effects(&mut self, ctx: &egui::Context) {
-        let effects = match self.engine_effects_override.take() {
-            Some(e) => e,
-            None => self.engine.take_effects(),
-        };
+    fn toast(&mut self, ctx: &egui::Context, text: String) {
+        let now = ctx.input(|i| i.time);
+        self.toasts.push(Toast {
+            text,
+            until: now + TOAST_SECS,
+        });
+    }
+
+    fn win(&mut self) -> &mut WinUi {
+        let id = self.engine.state.active();
+        self.windows.entry(id).or_insert_with(WinUi::new)
+    }
+
+    fn apply_effects(&mut self, ctx: &egui::Context, list: Option<Vec<Effect>>) {
+        let effects = list.unwrap_or_else(|| self.engine.take_effects());
         for effect in effects {
             match effect {
-                Effect::Quit => {
-                    self.quit_requested = true;
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                }
+                Effect::Quit => self.begin_quit(),
                 Effect::ShowAbout => self.about_open = true,
                 Effect::SetClipboard { text, html } => self.clipboard.set(&text, html.as_deref()),
                 Effect::RequestPaste { plain } => {
                     let c = self.clipboard.read(None);
-                    let params = serde_json::json!({
+                    let params = json!({
                         "text": c.text,
                         "html": c.html,
                         "files": c.files.iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>(),
@@ -191,9 +355,12 @@ impl Shell {
                     if let Err(e) = self.engine.execute(id, &params) {
                         log::debug!("{e}");
                     }
-                    self.editor.reveal_caret();
+                    self.win().editor.reveal_caret();
+                    let more = self.engine.take_effects();
+                    self.apply_effects(ctx, Some(more));
                 }
-                Effect::ScrollToCaret => self.editor.reveal_caret(),
+                Effect::ScrollToCaret => self.win().editor.reveal_caret(),
+                Effect::FocusFind => self.win().find_focus = true,
                 Effect::PickImage => {
                     let dir = self
                         .engine
@@ -201,23 +368,130 @@ impl Shell {
                         .editor
                         .path
                         .as_ref()
-                        .and_then(|p| p.parent().map(|d| d.to_owned()));
+                        .and_then(|p| p.parent().map(Path::to_owned));
                     self.dialogs
                         .open(ctx, dialogs::Purpose::InsertImage, dir, None);
                 }
                 Effect::ShowTableDialog => self.table_dialog = Some((3, 3)),
                 Effect::OpenUrl(url) => self.open_url(ctx, &url),
-                Effect::FocusFind => self.find_focus = true,
+                Effect::NewWindow(id) => {
+                    self.windows.insert(id, WinUi::new());
+                    self.focus_request = Some(id);
+                }
+                Effect::FocusWindow(id) => self.focus_request = Some(id),
+                Effect::CloseWindow(id) => self.close_window(ctx, id),
+                Effect::ConfirmClose { id, quit } => self.confirm = Some(Confirm { id, quit }),
+                Effect::OpenDialog => {
+                    let dir = self
+                        .engine
+                        .state
+                        .editor
+                        .path
+                        .as_ref()
+                        .and_then(|p| p.parent().map(Path::to_owned));
+                    self.dialogs.open(ctx, dialogs::Purpose::Open, dir, None);
+                }
+                Effect::OpenFolderDialog => {
+                    self.dialogs
+                        .open(ctx, dialogs::Purpose::OpenFolder, None, None)
+                }
+                Effect::SaveAsDialog { close_after, quit } => {
+                    let e = &self.engine.state.editor;
+                    let dir = e.path.as_ref().and_then(|p| p.parent().map(Path::to_owned));
+                    let name = e
+                        .path
+                        .as_ref()
+                        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+                        .unwrap_or_else(|| {
+                            inkra_workspace::files::suggested_name(
+                                &e.doc,
+                                &self.i18n.tr("untitled"),
+                                "md",
+                            )
+                        });
+                    let id = self.engine.state.active();
+                    self.dialogs.open(
+                        ctx,
+                        dialogs::Purpose::SaveAs {
+                            close_after,
+                            quit,
+                            window: id,
+                        },
+                        dir,
+                        Some(name),
+                    );
+                }
+                Effect::Reveal(path) => reveal(&path),
+                Effect::Error(msg) => self.toast(ctx, format!("✕ {msg}")),
                 Effect::Notify(Notice::OperationFailed { command }) => {
                     let text = self
                         .i18n
                         .tr_args("notice-operation-failed", &[("command", command.into())]);
-                    let now = ctx.input(|i| i.time);
-                    self.toasts.push(Toast {
-                        text,
-                        until: now + TOAST_SECS,
-                    });
+                    self.toast(ctx, text);
                 }
+            }
+        }
+    }
+
+    /// Closes window `id` without asking (FS-005).
+    fn close_window(&mut self, ctx: &egui::Context, id: u64) {
+        if let Some(p) = &self.engine.state.paths {
+            for (meta, _) in self.engine.state.editors() {
+                if meta.id == id {
+                    inkra_workspace::recovery::Recovery::new(p.recovery_dir())
+                        .remove(&meta.recovery_id);
+                }
+            }
+        }
+        if self.windows.len() <= 1 {
+            // Last window: the application exits (Windows/Linux, FS-005).
+            self.remember_session();
+            self.quit_requested = true;
+            self.close_root = true;
+            return;
+        }
+        if id == self.root {
+            // The root OS window stays; it now shows another document.
+            self.engine.state.remove_window(id);
+            self.windows.remove(&id);
+            if let Some(&next) = self.windows.keys().next() {
+                self.root = next;
+                self.engine.state.activate(next);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Title(String::new()));
+            }
+        } else {
+            self.engine.state.remove_window(id);
+            self.windows.remove(&id);
+        }
+        if self.quitting {
+            self.continue_quit();
+        }
+    }
+
+    fn remember_session(&mut self) {
+        let s = self.session();
+        self.engine.state.session = s;
+    }
+
+    /// Starts quitting: asks about every modified window in turn (FS-005).
+    fn begin_quit(&mut self) {
+        self.quitting = true;
+        self.remember_session();
+        self.continue_quit();
+    }
+
+    fn continue_quit(&mut self) {
+        let dirty = self
+            .engine
+            .state
+            .editors()
+            .find(|(_, e)| e.doc.is_dirty())
+            .map(|(m, _)| m.id);
+        match dirty {
+            Some(id) => self.confirm = Some(Confirm { id, quit: true }),
+            None => {
+                self.quit_requested = true;
+                self.close_root = true;
             }
         }
     }
@@ -231,21 +505,16 @@ impl Shell {
         }
         let plain = self.raw_keys.paste_plain.swap(false, Ordering::SeqCst);
         ctx.input_mut(|i| i.events.retain(|e| !matches!(e, egui::Event::Paste(_))));
-        // Only when the editor (not a text field) has focus.
+        let editor_id = self.win().editor.id();
         let focus = ctx.memory(|m| m.focused());
-        if focus.is_some() && focus != Some(self.editor.id()) {
+        if focus.is_some() && focus != Some(editor_id) {
             return;
         }
-        self.apply_effect_list(ctx, vec![Effect::RequestPaste { plain }]);
+        self.apply_effects(ctx, Some(vec![Effect::RequestPaste { plain }]));
     }
 
-    fn apply_effect_list(&mut self, ctx: &egui::Context, effects: Vec<Effect>) {
-        self.engine_effects_override = Some(effects);
-        self.apply_effects(ctx);
-    }
-
-    /// Follows a link: `#anchor` jumps to the heading (MD-033), other targets open
-    /// with the system handler.
+    /// Follows a link: `#anchor` jumps to the heading (MD-033), Markdown files
+    /// open in Inkra, other targets open with the system handler.
     fn open_url(&mut self, ctx: &egui::Context, url: &str) {
         if let Some(anchor) = url.strip_prefix('#') {
             let e = &mut self.engine.state.editor;
@@ -253,91 +522,80 @@ impl Shell {
             let headings = inkra_markdown::walk::headings(e.doc.text(), &blocks);
             if let Some(h) = headings.iter().find(|h| h.anchor == anchor) {
                 e.sel = inkra_doc::Selection::caret(h.span.end);
-                self.editor.reveal_caret();
+                self.win().editor.reveal_caret();
             }
             return;
         }
+        let is_web = url.contains("://") || url.starts_with("mailto:");
+        if !is_web {
+            let (file, _anchor) = url.split_once('#').unwrap_or((url, ""));
+            let base = self
+                .engine
+                .state
+                .editor
+                .path
+                .as_ref()
+                .and_then(|p| p.parent().map(Path::to_owned));
+            if let Some(path) = images::resolve(base.as_deref(), file) {
+                let is_md = path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+                    dialogs::MARKDOWN_EXTS.contains(&e.to_ascii_lowercase().as_str())
+                });
+                if is_md && path.exists() {
+                    self.invoke(ctx, "file.open", &json!({ "path": path }));
+                    return;
+                }
+                if path.exists() {
+                    dialogs::open_external(&path.to_string_lossy());
+                    return;
+                }
+            }
+        }
         if !dialogs::open_external(url) {
-            let now = ctx.input(|i| i.time);
-            self.toasts.push(Toast {
-                text: format!("✕ {url}"),
-                until: now + TOAST_SECS,
-            });
+            self.toast(ctx, format!("✕ {url}"));
         }
     }
 
     fn handle_dialogs(&mut self, ctx: &egui::Context) {
         for (purpose, path) in self.dialogs.poll() {
-            let Some(path) = path else { continue };
-            match purpose {
-                dialogs::Purpose::InsertImage => {
+            match (purpose, path) {
+                (dialogs::Purpose::InsertImage, Some(path)) => {
                     let src = relative_src(self.engine.state.editor.path.as_deref(), &path);
                     let alt = path
                         .file_stem()
                         .map(|s| s.to_string_lossy().into_owned())
                         .unwrap_or_default();
-                    self.invoke(
-                        ctx,
-                        "format.image",
-                        &serde_json::json!({ "src": src, "alt": alt }),
-                    );
+                    self.invoke(ctx, "format.image", &json!({ "src": src, "alt": alt }));
                 }
-                other => self.file_dialog_result(ctx, other, path),
+                (dialogs::Purpose::Open, Some(path)) => {
+                    self.invoke(ctx, "file.open", &json!({ "path": path }))
+                }
+                (dialogs::Purpose::OpenFolder, Some(path)) => {
+                    let s = &mut self.engine.state.session;
+                    s.touch_folder(&path);
+                    s.root = Some(path);
+                    self.engine.state.view.sidebar_visible = true;
+                }
+                (
+                    dialogs::Purpose::SaveAs {
+                        close_after,
+                        quit,
+                        window,
+                    },
+                    Some(path),
+                ) => {
+                    self.engine.state.activate(window);
+                    let path = with_default_extension(path);
+                    self.invoke(ctx, "file.saveAs", &json!({ "path": path }));
+                    if close_after && !self.engine.state.editor.doc.is_dirty() {
+                        self.close_window(ctx, window);
+                    }
+                    if quit && !self.engine.state.editor.doc.is_dirty() {
+                        self.continue_quit();
+                    }
+                }
+                (dialogs::Purpose::SaveAs { quit: true, .. }, None) => self.quitting = false,
+                _ => {}
             }
-        }
-    }
-
-    fn file_dialog_result(
-        &mut self,
-        _ctx: &egui::Context,
-        _purpose: dialogs::Purpose,
-        _path: std::path::PathBuf,
-    ) {
-    }
-
-    fn table_dialog(&mut self, ctx: &egui::Context) {
-        let Some((mut rows, mut cols)) = self.table_dialog else {
-            return;
-        };
-        let mut done = None;
-        let i18n = &self.i18n;
-        let resp = egui::Modal::new(egui::Id::new("inkra-table-dialog")).show(ctx, |ui| {
-            ui.heading(i18n.tr("cmd-paragraph-table"));
-            egui::Grid::new("table-grid").show(ui, |ui| {
-                ui.label(i18n.tr("table-rows"));
-                ui.add(egui::DragValue::new(&mut rows).range(1..=200));
-                ui.end_row();
-                ui.label(i18n.tr("table-cols"));
-                ui.add(egui::DragValue::new(&mut cols).range(1..=30));
-                ui.end_row();
-            });
-            ui.add_space(6.0);
-            ui.horizontal(|ui| {
-                if ui.button(i18n.tr("dialog-ok")).clicked()
-                    || ui.input(|i| i.key_pressed(egui::Key::Enter))
-                {
-                    done = Some(true);
-                }
-                if ui.button(i18n.tr("dialog-cancel")).clicked() {
-                    done = Some(false);
-                }
-            });
-        });
-        self.table_dialog = Some((rows, cols));
-        if resp.should_close() {
-            done = Some(false);
-        }
-        match done {
-            Some(true) => {
-                self.table_dialog = None;
-                self.invoke(
-                    ctx,
-                    "paragraph.table",
-                    &serde_json::json!({ "rows": rows, "cols": cols }),
-                );
-            }
-            Some(false) => self.table_dialog = None,
-            None => {}
         }
     }
 
@@ -376,7 +634,118 @@ impl Shell {
         }
     }
 
-    /// Draws the whole window.
+    fn menu_data(&self) -> menubar::MenuData {
+        let recent = self
+            .engine
+            .state
+            .session
+            .recent
+            .iter()
+            .take(20)
+            .map(|p| {
+                (
+                    p.file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                    p.to_string_lossy().into_owned(),
+                )
+            })
+            .collect();
+        let active = self.engine.state.active();
+        let windows = self
+            .engine
+            .state
+            .editors()
+            .map(|(m, e)| (self.title_of(e), m.id, m.id == active))
+            .collect();
+        menubar::MenuData {
+            recent,
+            windows,
+            themes: Vec::new(),
+        }
+    }
+
+    /// Window title (FS-008): `● name - folder`.
+    fn title_of(&self, e: &inkra_engine::editor::Editor) -> String {
+        let dirty = if e.doc.is_dirty() { "● " } else { "" };
+        match &e.path {
+            Some(p) => {
+                let name = p
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let folder = p
+                    .parent()
+                    .and_then(|d| d.file_name())
+                    .map(|n| n.to_string_lossy().into_owned());
+                match folder {
+                    Some(f) => format!("{dirty}{name} - {f}"),
+                    None => format!("{dirty}{name}"),
+                }
+            }
+            None => format!("{dirty}{}", self.i18n.tr("untitled")),
+        }
+    }
+
+    /// Frame-level work shared by all windows.
+    fn frame_tasks(&mut self, ctx: &egui::Context) {
+        let now = ctx.input(|i| i.time);
+        // Recovery (FS-004).
+        if now - self.last_recovery > RECOVERY_SECS {
+            self.last_recovery = now;
+            inkra_engine::files::write_recovery(&self.engine.state);
+        }
+        ctx.request_repaint_after(Duration::from_secs_f64(RECOVERY_SECS));
+        // External changes (FS-007).
+        let mut changed_ids = Vec::new();
+        if let Some(w) = &mut self.watcher {
+            let files: Vec<PathBuf> = self
+                .engine
+                .state
+                .editors()
+                .filter_map(|(_, e)| e.path.clone())
+                .collect();
+            w.set_files(files.iter().map(PathBuf::as_path));
+            let changed = w.changed();
+            if !changed.is_empty() {
+                for (meta, e) in self.engine.state.editors() {
+                    if e.path.as_ref().is_some_and(|p| changed.contains(p)) {
+                        changed_ids.push(meta.id);
+                    }
+                }
+            }
+        }
+        for id in changed_ids {
+            inkra_engine::files::external_change(&mut self.engine.state, id);
+        }
+        // Autosave (PR-012).
+        if self.engine.state.prefs.bool("general.autoSave") {
+            let ids: Vec<u64> = self.windows.keys().copied().collect();
+            for id in ids {
+                self.engine.state.activate(id);
+                let version = self.engine.state.editor.doc.version();
+                let w = self.windows.get_mut(&id).unwrap_or_else(|| unreachable!());
+                if version != w.last_version {
+                    w.last_version = version;
+                    w.last_edit = now;
+                }
+                let due = now - w.last_edit > AUTOSAVE_SECS;
+                let (dirty, has_path) = {
+                    let e = &self.engine.state.editor;
+                    (e.doc.is_dirty(), e.path.is_some())
+                };
+                if due && dirty && has_path {
+                    let _ = self.engine.execute("file.save", &Value::Null);
+                    self.engine.take_effects();
+                }
+                if !due && dirty {
+                    ctx.request_repaint_after(Duration::from_secs_f64(AUTOSAVE_SECS));
+                }
+            }
+        }
+    }
+
+    /// Draws the root window; other windows are drawn as immediate viewports.
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         let ctx = ui.ctx().clone();
         if !self.setup_done {
@@ -384,6 +753,93 @@ impl Shell {
             self.setup(&ctx);
             ctx.request_repaint();
             return;
+        }
+        self.handle_dialogs(&ctx);
+        self.frame_tasks(&ctx);
+
+        // Secondary windows.
+        let others: Vec<u64> = self
+            .windows
+            .keys()
+            .copied()
+            .filter(|&id| id != self.root)
+            .collect();
+        for id in others {
+            self.engine.state.activate(id);
+            let title = format!("{} - Inkra", self.title_of(&self.engine.state.editor));
+            let mut builder = egui::ViewportBuilder::default()
+                .with_title(title)
+                .with_inner_size([1000.0, 720.0])
+                .with_app_id("io.inkra.Inkra");
+            if let Ok(icon) = eframe_icon() {
+                builder = builder.with_icon(icon);
+            }
+            let vid = egui::ViewportId::from_hash_of(("inkra-window", id));
+            if self.focus_request == Some(id) {
+                ctx.send_viewport_cmd_to(vid, egui::ViewportCommand::Focus);
+                self.focus_request = None;
+            }
+            ctx.show_viewport_immediate(vid, builder, |vui, _class| {
+                self.engine.state.activate(id);
+                self.window_ui(vui, id);
+            });
+        }
+
+        // Root window.
+        let root = self.root;
+        self.engine.state.activate(root);
+        if self.focus_request == Some(root) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            self.focus_request = None;
+        }
+        let title = format!("{} - Inkra", self.title_of(&self.engine.state.editor));
+        if self.windows.get(&root).is_some_and(|w| w.title != title) {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(title.clone()));
+            if let Some(w) = self.windows.get_mut(&root) {
+                w.title = title;
+            }
+        }
+        self.window_ui(ui, root);
+        modals::recovery_offer(self, &ctx);
+        if self.close_root {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
+    }
+
+    /// The UI of one window (`id` is active).
+    fn window_ui(&mut self, ui: &mut egui::Ui, id: u64) {
+        let ctx = ui.ctx().clone();
+        // Close requests from the OS (FS-005).
+        if ctx.input(|i| i.viewport().close_requested()) && !self.close_root {
+            if self.engine.state.editor.doc.is_dirty() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                self.confirm = Some(Confirm { id, quit: false });
+            } else if self.windows.len() > 1 && id == self.root {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                self.close_window(&ctx, id);
+                return;
+            } else if id != self.root {
+                self.close_window(&ctx, id);
+                return;
+            } else {
+                self.remember_session();
+                self.quit_requested = true;
+            }
+        }
+        let focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
+        if let Some(w) = self.windows.get_mut(&id) {
+            // Autosave on focus loss (FS-004).
+            if w.was_focused && !focused && self.engine.state.prefs.bool("general.autoSave") {
+                let e = &self.engine.state.editor;
+                let should = e.doc.is_dirty() && e.path.is_some();
+                if should {
+                    let _ = self.engine.execute("file.save", &Value::Null);
+                    self.engine.take_effects();
+                }
+            }
+            if let Some(w) = self.windows.get_mut(&id) {
+                w.was_focused = focused;
+            }
         }
         let had_input = ctx.input(|i| {
             i.events.iter().any(|e| {
@@ -396,9 +852,12 @@ impl Shell {
                 )
             })
         });
-        self.perf.begin(had_input);
-        self.handle_raw_paste(&ctx);
-        self.handle_dialogs(&ctx);
+        if id == self.root {
+            self.perf.begin(had_input);
+        }
+        if focused {
+            self.handle_raw_paste(&ctx);
+        }
         self.handle_shortcuts(&ctx);
 
         #[cfg(target_os = "macos")]
@@ -414,8 +873,9 @@ impl Shell {
 
         if !self.uses_native_menu() {
             let mut invocation = None;
+            let data = self.menu_data();
             egui::Panel::top("inkra-menubar").show(ui, |ui| {
-                invocation = menubar::show(ui, &mut self.engine, &self.i18n, self.os);
+                invocation = menubar::show(ui, &mut self.engine, &self.i18n, self.os, &data);
             });
             if let Some(inv) = invocation {
                 self.invoke(&ctx, &inv.id, &inv.params);
@@ -432,52 +892,53 @@ impl Shell {
                 });
         }
 
+        let style_bg = self.win().editor.style.bg;
+        let style = self.win().editor.style.clone();
         egui::Panel::bottom("inkra-status")
             .frame(
                 egui::Frame::new()
-                    .fill(self.editor.style.bg)
+                    .fill(style_bg)
                     .inner_margin(egui::Margin::symmetric(10, 3)),
             )
             .show(ui, |ui| {
-                if let Some(id) = status_bar::show(
-                    ui,
-                    &mut self.status,
-                    &self.engine,
-                    &self.i18n,
-                    &self.editor.style,
-                ) {
-                    self.invoke(&ctx, &id, &Value::Null);
+                let w = self.windows.entry(id).or_insert_with(WinUi::new);
+                if let Some(cmd) =
+                    status_bar::show(ui, &mut w.status, &self.engine, &self.i18n, &style)
+                {
+                    self.invoke(&ctx, &cmd, &Value::Null);
                 }
             });
 
         egui::CentralPanel::default()
             .frame(egui::Frame::new())
             .show(ui, |ui| {
+                modals::external_banner(self, ui);
                 if self.engine.state.editor.find.open {
-                    let cmds = find_bar::show(
-                        ui,
-                        &mut self.engine,
-                        &self.i18n,
-                        &mut self.find_focus,
-                        self.editor.id(),
-                    );
-                    for id in cmds {
-                        self.invoke(&ctx, &id, &Value::Null);
+                    let editor_id = self.win().editor.id();
+                    let mut focus = self.win().find_focus;
+                    let cmds =
+                        find_bar::show(ui, &mut self.engine, &self.i18n, &mut focus, editor_id);
+                    self.win().find_focus = focus;
+                    for c in cmds {
+                        self.invoke(&ctx, &c, &Value::Null);
                     }
                 }
-                let out = self.editor.show(ui, &mut self.engine, &mut self.clipboard);
-                for (id, params) in out.commands {
-                    self.invoke(&ctx, &id, &params);
+                let w = self.windows.entry(id).or_insert_with(WinUi::new);
+                let out = w.editor.show(ui, &mut self.engine, &mut self.clipboard);
+                for (cmd, params) in out.commands {
+                    self.invoke(&ctx, &cmd, &params);
                 }
             });
 
-        if self.engine.state.view.debug_overlay {
-            self.perf.overlay(&ctx, self.editor.last_ms);
+        if self.engine.state.view.debug_overlay && id == self.root {
+            let ms = self.win().editor.last_ms;
+            self.perf.overlay(&ctx, ms);
         }
-        self.table_dialog(&ctx);
-        self.about_dialog(&ctx);
-        self.prefs_problem_dialog(&ctx);
-        self.toasts(&ctx);
+        modals::table_dialog(self, &ctx);
+        modals::confirm_close(self, &ctx, id);
+        modals::about_dialog(self, &ctx);
+        modals::prefs_problem_dialog(self, &ctx);
+        modals::toasts(self, &ctx);
     }
 
     fn uses_native_menu(&self) -> bool {
@@ -490,95 +951,54 @@ impl Shell {
             false
         }
     }
+}
 
-    fn icon(&mut self, ctx: &egui::Context) -> Option<egui::TextureHandle> {
-        if self.icon.is_none() {
-            match image::load_from_memory(ICON_PNG) {
-                Ok(img) => {
-                    let rgba = img.to_rgba8();
-                    let size = [rgba.width() as usize, rgba.height() as usize];
-                    let color = egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
-                    self.icon = Some(ctx.load_texture("inkra-icon", color, Default::default()));
-                }
-                Err(e) => log::warn!("cannot decode icon: {e}"),
-            }
-        }
-        self.icon.clone()
+fn inkra_engine_files_blank(app: &inkra_engine::AppState) -> bool {
+    inkra_engine::files::active_is_blank(app)
+}
+
+fn eframe_icon() -> Result<egui::IconData, ()> {
+    let img = image::load_from_memory(ICON_PNG)
+        .map_err(|_| ())?
+        .to_rgba8();
+    Ok(egui::IconData {
+        width: img.width(),
+        height: img.height(),
+        rgba: img.into_raw(),
+    })
+}
+
+fn with_default_extension(path: PathBuf) -> PathBuf {
+    if path.extension().is_some() {
+        path
+    } else {
+        path.with_extension("md")
     }
+}
 
-    fn about_dialog(&mut self, ctx: &egui::Context) {
-        if !self.about_open {
-            return;
-        }
-        let icon = self.icon(ctx);
-        let i18n = &self.i18n;
-        let response = egui::Modal::new(egui::Id::new("inkra-about")).show(ctx, |ui| {
-            ui.set_width(320.0);
-            ui.vertical_centered(|ui| {
-                if let Some(icon) = &icon {
-                    ui.add(egui::Image::new(icon).fit_to_exact_size(egui::vec2(128.0, 128.0)));
-                }
-                ui.heading(i18n.tr("app-name"));
-                ui.label(i18n.tr("app-name-zh"));
-                ui.label(i18n.tr_args(
-                    "about-version",
-                    &[("version", env!("CARGO_PKG_VERSION").into())],
-                ));
-                ui.weak(i18n.tr("app-tagline"));
-                ui.weak(i18n.tr("about-license"));
-                ui.add_space(8.0);
-                ui.button(i18n.tr("dialog-ok")).clicked()
-            })
-            .inner
-        });
-        if response.inner || response.should_close() {
-            self.about_open = false;
-        }
-    }
-
-    fn prefs_problem_dialog(&mut self, ctx: &egui::Context) {
-        let Some(text) = &self.prefs_problem else {
-            return;
-        };
-        let ok = self.i18n.tr("dialog-ok");
-        let response = egui::Modal::new(egui::Id::new("inkra-prefs-problem")).show(ctx, |ui| {
-            ui.set_max_width(420.0);
-            ui.label(text.as_str());
-            ui.add_space(8.0);
-            ui.vertical_centered(|ui| ui.button(ok).clicked()).inner
-        });
-        if response.inner || response.should_close() {
-            self.prefs_problem = None;
-        }
-    }
-
-    fn toasts(&mut self, ctx: &egui::Context) {
-        let now = ctx.input(|i| i.time);
-        self.toasts.retain(|t| t.until > now);
-        if self.toasts.is_empty() {
-            return;
-        }
-        egui::Area::new(egui::Id::new("inkra-toasts"))
-            .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -16.0))
-            .show(ctx, |ui| {
-                for t in &self.toasts {
-                    egui::Frame::popup(ui.style()).show(ui, |ui| {
-                        ui.set_max_width(360.0);
-                        ui.label(&t.text);
-                    });
-                }
-            });
-        let next = self
-            .toasts
-            .iter()
-            .map(|t| t.until)
-            .fold(f64::INFINITY, f64::min);
-        ctx.request_repaint_after(Duration::from_secs_f64((next - now).max(0.0)));
+/// Shows `path` in the system file manager (FS-010).
+fn reveal(path: &Path) {
+    let r = if cfg!(windows) {
+        std::process::Command::new("explorer")
+            .arg(format!("/select,{}", path.display()))
+            .spawn()
+    } else if cfg!(target_os = "macos") {
+        std::process::Command::new("open")
+            .arg("-R")
+            .arg(path)
+            .spawn()
+    } else {
+        std::process::Command::new("xdg-open")
+            .arg(path.parent().unwrap_or(path))
+            .spawn()
+    };
+    if let Err(e) = r {
+        log::warn!("cannot reveal {}: {e}", path.display());
     }
 }
 
 /// Image source for `path` relative to the document (ED-092 "prefer relative paths").
-pub fn relative_src(doc: Option<&std::path::Path>, path: &std::path::Path) -> String {
+pub fn relative_src(doc: Option<&Path>, path: &Path) -> String {
     let rel = doc
         .and_then(|d| d.parent())
         .and_then(|dir| path.strip_prefix(dir).ok())

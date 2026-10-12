@@ -24,6 +24,8 @@ struct App {
     started: Instant,
     frames: u64,
     measure_startup: bool,
+    session_file: std::path::PathBuf,
+    save_session: bool,
 }
 
 impl eframe::App for App {
@@ -45,6 +47,18 @@ impl eframe::App for App {
             ui.ctx().request_repaint();
         }
         self.shell.ui(ui);
+    }
+
+    fn on_exit(&mut self) {
+        if self.save_session && !self.measure_startup {
+            let s = self.shell.session();
+            if let Err(e) = s.save(&self.session_file) {
+                log::warn!("cannot save session: {e}");
+            }
+        }
+        // Clean exit: recovery entries of unmodified windows are removed, modified
+        // ones were confirmed by the user (FS-005) or are kept for recovery.
+        inkra_engine::files::write_recovery(&self.shell.engine.state);
     }
 }
 
@@ -225,27 +239,27 @@ fn main() -> std::process::ExitCode {
     };
     let i18n = I18n::new(&lang);
     let mut engine = Engine::new(prefs);
-    let mut title = format!("{} - Inkra", i18n.tr("untitled"));
-    if let Some(path) = args.paths.iter().find(|p| p.is_file()) {
-        match std::fs::read(path) {
-            Ok(bytes) => {
-                let doc = inkra_doc::Doc::from_bytes(&bytes, None, Default::default());
-                engine.state.editor = inkra_engine::editor::Editor::new(doc);
-                engine.state.editor.path =
-                    Some(std::fs::canonicalize(path).unwrap_or_else(|_| path.clone()));
-                let name = path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                title = format!("{name} - Inkra");
-            }
-            Err(e) => log::error!("cannot open {}: {e}", path.display()),
-        }
-    }
-    if args.source_mode {
-        engine.state.editor.mode = inkra_engine::editor::ViewMode::Source;
-    }
-
+    engine.state.paths = Some(paths.clone());
+    let session_file = paths.session_file();
+    let session = if args.no_session {
+        Default::default()
+    } else {
+        inkra_workspace::session::Session::load(&session_file)
+    };
+    engine.state.session = session.clone();
+    engine.state.session.windows.clear();
+    let title = format!("{} - Inkra", i18n.tr("untitled"));
+    // Files and folders from the command line (CM-004, FS-002); otherwise the
+    // last session (FS-006, PR-010).
+    let files: Vec<std::path::PathBuf> =
+        args.paths.iter().filter(|p| p.is_file()).cloned().collect();
+    let folder = args.paths.iter().find(|p| p.is_dir()).cloned();
+    let restore = files.is_empty()
+        && folder.is_none()
+        && !args.new
+        && !args.no_session
+        && engine.state.prefs.string("general.startup") == "restore";
+    let source_mode = args.source_mode;
     let mut viewport = egui::ViewportBuilder::default()
         .with_title(title)
         .with_app_id(APP_ID)
@@ -283,6 +297,29 @@ fn main() -> std::process::ExitCode {
             let mut shell = Shell::new(engine, i18n, problem);
             shell.raw_keys = raw_for_app;
             shell.setup(&cc.egui_ctx);
+            if let Some(dir) = &folder {
+                let s = &mut shell.engine.state.session;
+                s.touch_folder(dir);
+                s.root = Some(dir.clone());
+                shell.engine.state.view.sidebar_visible = true;
+            }
+            if restore {
+                let n = shell.restore_session(&session);
+                log::info!("restored {n} window(s) from the last session");
+            }
+            for f in &files {
+                if let Err(e) = shell
+                    .engine
+                    .execute("file.open", &serde_json::json!({ "path": f }))
+                {
+                    log::error!("{e}");
+                }
+                let effects = shell.engine.take_effects();
+                shell.apply_startup_effects(effects);
+            }
+            if source_mode {
+                shell.engine.state.editor.mode = inkra_engine::editor::ViewMode::Source;
+            }
             log::info!(
                 "startup: UI set up after {:.1} ms",
                 started.elapsed().as_secs_f64() * 1e3
@@ -292,6 +329,8 @@ fn main() -> std::process::ExitCode {
                 started,
                 frames: 0,
                 measure_startup,
+                session_file,
+                save_session: !args.no_session,
             }))
         }),
         &event_loop,

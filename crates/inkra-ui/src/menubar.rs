@@ -4,7 +4,7 @@ use inkra_engine::Engine;
 use inkra_engine::keymap::Os;
 use inkra_engine::menu::{Dynamic, MENU_BAR, MenuItem};
 use inkra_i18n::I18n;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 /// A command activation requested from a menu.
 #[derive(Debug, Clone, PartialEq)]
@@ -13,6 +13,17 @@ pub struct Invocation {
     pub id: String,
     /// Parameters.
     pub params: Value,
+}
+
+/// Runtime menu contents (UI-001 dynamic items).
+#[derive(Debug, Clone, Default)]
+pub struct MenuData {
+    /// Recent files: `(label, path)`.
+    pub recent: Vec<(String, String)>,
+    /// Open windows: `(label, id, is_current)`.
+    pub windows: Vec<(String, u64, bool)>,
+    /// Installed themes: `(name, is_current)`.
+    pub themes: Vec<(String, bool)>,
 }
 
 /// Label of a command leaf.
@@ -24,12 +35,18 @@ pub fn item_label(i18n: &I18n, id: &str, label: Option<&str>) -> String {
 }
 
 /// Shows the menu bar and returns the activated command, if any.
-pub fn show(ui: &mut egui::Ui, engine: &mut Engine, i18n: &I18n, os: Os) -> Option<Invocation> {
+pub fn show(
+    ui: &mut egui::Ui,
+    engine: &mut Engine,
+    i18n: &I18n,
+    os: Os,
+    data: &MenuData,
+) -> Option<Invocation> {
     let mut out = None;
     egui::MenuBar::new().ui(ui, |ui| {
         for menu in MENU_BAR {
             ui.menu_button(i18n.tr(menu.label), |ui| {
-                items(ui, menu.items, engine, i18n, os, &mut out);
+                items(ui, menu.items, engine, i18n, os, data, &mut out);
             });
         }
     });
@@ -42,6 +59,7 @@ fn items(
     engine: &mut Engine,
     i18n: &I18n,
     os: Os,
+    data: &MenuData,
     out: &mut Option<Invocation>,
 ) {
     let mut last_was_separator = true;
@@ -91,16 +109,67 @@ fn items(
                 items: children,
             } => {
                 ui.menu_button(i18n.tr(label), |ui| {
-                    items(ui, children, engine, i18n, os, out)
+                    items(ui, children, engine, i18n, os, data, out)
                 });
             }
             MenuItem::Dynamic(kind) => {
-                let empty = match kind {
-                    Dynamic::RecentFiles => "menu-recent-empty",
-                    Dynamic::Themes => "menu-themes-empty",
-                    Dynamic::Windows => "menu-windows-empty",
-                };
-                ui.add_enabled(false, egui::Button::new(i18n.tr(empty)));
+                let mut any = false;
+                match kind {
+                    Dynamic::RecentFiles => {
+                        for (label, path) in &data.recent {
+                            any = true;
+                            if ui.button(label).on_hover_text(path).clicked() {
+                                *out = Some(Invocation {
+                                    id: "file.openRecent".into(),
+                                    params: json!({ "path": path }),
+                                });
+                                ui.close();
+                            }
+                        }
+                    }
+                    Dynamic::Windows => {
+                        for (label, id, current) in &data.windows {
+                            any = true;
+                            let text = if *current {
+                                format!("✔ {label}")
+                            } else {
+                                format!("    {label}")
+                            };
+                            if ui.button(text).clicked() {
+                                *out = Some(Invocation {
+                                    id: "view.switchWindow".into(),
+                                    params: json!({ "window": id }),
+                                });
+                                ui.close();
+                            }
+                        }
+                    }
+                    Dynamic::Themes => {
+                        for (name, current) in &data.themes {
+                            any = true;
+                            let text = if *current {
+                                format!("✔ {name}")
+                            } else {
+                                format!("    {name}")
+                            };
+                            if ui.button(text).clicked() {
+                                *out = Some(Invocation {
+                                    id: "theme.select".into(),
+                                    params: json!({ "name": name }),
+                                });
+                                ui.close();
+                            }
+                        }
+                    }
+                }
+                if !any {
+                    let empty = match kind {
+                        Dynamic::RecentFiles => "menu-recent-empty",
+                        Dynamic::Themes => "menu-themes-empty",
+                        Dynamic::Windows => "menu-windows-empty",
+                    };
+                    ui.add_enabled(false, egui::Button::new(i18n.tr(empty)));
+                }
             }
         }
         last_was_separator = false;

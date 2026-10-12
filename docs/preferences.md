@@ -7,6 +7,19 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | Key | Type | Default | Req | Description |
 |---|---|---|---|---|
 | `general.language` | string | `"system"` | PR-018 | UI language: `system` to follow the OS, or a tag such as `zh-CN` / `en-US`. |
+| `general.openFileIn` | `reuse` / `newWindow` | `"reuse"` | PR-011 | Opening a file: reuse a blank window, or always open a new window. |
+| `general.autoSave` | bool | `false` | PR-012 | Save automatically 3 s after changes and when the window loses focus (FS-004). |
+| `general.autoReload` | bool | `true` | PR-017 | Reload files changed on disk when there are no local changes (FS-007). |
+| `general.startup` | `restore` / `new` / `folder` | `"restore"` | PR-010 | On startup: restore the last session, open a new document, or open a folder. |
+| `general.defaultEncoding` | string | `"utf-8"` | PR-016 | Encoding tried for files that are not valid UTF-8 (e.g. `gbk`). |
+| `editor.defaultMode` | `live` / `source` | `"live"` | PR-030 | Open documents in live rendering or source mode. |
+| `markdown.inlineMath` | bool | `false` | MD-060 | Inline math `$...$`. |
+| `markdown.subscript` | bool | `false` | MD-061 | Subscript `~x~`. |
+| `markdown.superscript` | bool | `false` | MD-062 | Superscript `^x^`. |
+| `markdown.highlight` | bool | `false` | MD-063 | Highlight `==x==`. |
+| `markdown.strictMode` | bool | `false` | MD-067 | Strict CommonMark headings (`# ` needs a space). |
+| `markdown.latexDelimiters` | bool | `false` | MD-069 | Math delimiters `\[ \]` and `\( \)`. |
+| `markdown.looseInlineMath` | bool | `false` | MD-070 | Allow spaces next to inline `$` delimiters. |
 | `markdown.strongMarker` | `**` / `__` | `"**"` | MD-075 | Marker used when commands create bold text. |
 | `markdown.emphasisMarker` | `*` / `_` | `"*"` | MD-075 | Marker used when commands create italic text. |
 | `markdown.bulletMarker` | `-` / `*` / `+` | `"-"` | MD-075 | Marker used when commands create bullet lists. |

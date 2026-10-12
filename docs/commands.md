@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **72**
+Registered commands: **86**
 
 
 ## App
@@ -47,6 +47,24 @@ Registered commands: **72**
 | `edit.selectWord` | Select Word | 选择当前词 | `Ctrl+D` | `⌘D` | — | ED-011 | Select the word at the caret. |
 | `edit.tab` | Tab | 制表 |  |  | `{"type":"object","properties":{"outdent":{"type":"boolean"}}}` | ED-014 | Tab / Shift+Tab: indent or outdent list items and code, or insert spaces. |
 | `edit.undo` | Undo | 撤销 | `Ctrl+Z` | `⌘Z` | — | ED-015 | Undo the last change group. |
+
+## File
+
+| Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
+|---|---|---|---|---|---|---|---|
+| `file.clearRecent` | Clear Recent Files | 清除最近文件 |  |  | — | FS-002 | Forget the recent files list. |
+| `file.close` | Close | 关闭 | `Ctrl+W` | `⌘W` | — | FS-005 | Close the window (asks to save changes). |
+| `file.keepLocal` | Keep Local Version | 保留本地版本 |  |  | — | FS-007 | Keep the local version after an external change. |
+| `file.new` | New | 新建 | `Ctrl+N` | `⌘N` | — | FS-001 | New blank document in a new window (FS-001). |
+| `file.newWindow` | New Window | 新建窗口 | `Ctrl+Shift+N` | `⇧⌘N` | — | FS-001 | New window (same as file.new). |
+| `file.open` | Open… | 打开… | `Ctrl+O` | `⌘O` | `{"type":"object","properties":{"path":{"type":"string"}}}` | FS-002 | Open a file (dialog without `path`). |
+| `file.openFolder` | Open Folder… | 打开文件夹… | `Ctrl+Shift+O` |  | — | FS-002 | Open a folder as the sidebar root. |
+| `file.openRecent` | Open Recent File | 打开最近文件 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"}}}` | FS-002 | Open a recently used file. |
+| `file.reload` | Reload from Disk | 从磁盘重新加载 |  |  | — | FS-007 | Reload the file from disk, discarding local changes. |
+| `file.revealInFolder` | Reveal in Folder | 在文件夹中显示 |  |  | — | FS-010 | Show the file in the system file manager. |
+| `file.save` | Save | 保存 | `Ctrl+S` | `⌘S` | — | FS-003 | Save (asks for a name for new documents). |
+| `file.saveAll` | Save All | 保存全部 |  |  | — | FS-003 | Save every modified document that has a file. |
+| `file.saveAs` | Save As… | 另存为… | `Ctrl+Shift+S` | `⇧⌘S` | `{"type":"object","properties":{"path":{"type":"string"}}}` | FS-003 | Save under a new name (dialog without `path`). |
 
 ## Format
 
@@ -102,6 +120,7 @@ Registered commands: **72**
 |---|---|---|---|---|---|---|---|
 | `view.debugOverlay` | Performance Overlay | 性能叠层 |  |  | — | FS-040 | Show the performance overlay (frame and input latency). |
 | `view.sourceMode` | Source Code Mode | 源代码模式 | `Ctrl+/` | `⌘/` | — | ED-120 | Toggle between live rendering and source mode. |
+| `view.switchWindow` | Switch Window | 切换窗口 |  |  | `{"type":"object","required":["window"],"properties":{"window":{"type":"integer"}}}` | FS-040 | Bring a window to the front. |
 | `view.toggleSidebar` | Sidebar | 侧边栏 | `Ctrl+Shift+L` | `⇧⌘L` | — | FS-040 | Show or hide the sidebar. |
 
 ## Reserved ids (in menus or key map, not implemented yet)
@@ -118,8 +137,6 @@ These appear greyed out in menus.
 - `edit.selectStyleScope` — Select Style Scope
 - `edit.toggleSmartPunctuation` — Use Smart Punctuation
 - `edit.toggleSpellcheck` — Check Spelling While Typing
-- `file.clearRecent` — Clear Recent Files
-- `file.close` — Close
 - `file.delete` — Delete
 - `file.exportHtml` — HTML
 - `file.exportHtmlPlain` — HTML (without styles)
@@ -128,19 +145,11 @@ These appear greyed out in menus.
 - `file.exportPdf` — PDF
 - `file.import` — Import…
 - `file.moveTo` — Move To…
-- `file.new` — New
-- `file.newWindow` — New Window
-- `file.open` — Open…
-- `file.openFolder` — Open Folder…
 - `file.pageSetup` — Page Setup…
 - `file.print` — Print…
 - `file.properties` — Properties
 - `file.quickOpen` — Quick Open…
 - `file.rename` — Rename…
-- `file.revealInFolder` — Reveal in Folder
-- `file.save` — Save
-- `file.saveAll` — Save All
-- `file.saveAs` — Save As…
 - `format.clear` — Clear Format
 - `format.imageOps` — Image Operations…
 - `help.changelog` — Changelog

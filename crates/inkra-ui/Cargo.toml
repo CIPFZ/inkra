@@ -24,6 +24,7 @@ inkra-doc.workspace = true
 inkra-text.workspace = true
 inkra-markdown.workspace = true
 inkra-highlight.workspace = true
+inkra-workspace.workspace = true
 serde_json.workspace = true
 log.workspace = true
 

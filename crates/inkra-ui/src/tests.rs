@@ -78,8 +78,8 @@ fn unimplemented_items_are_disabled_and_about_opens() {
 
     h.get_by_label("File").click();
     h.run();
-    let save = h.get_by_label_contains("Save All");
-    assert!(save.accesskit_node().is_disabled());
+    let setup = h.get_by_label_contains("Page Setup");
+    assert!(setup.accesskit_node().is_disabled());
 }
 
 #[test]
@@ -88,7 +88,8 @@ fn quit_closes_viewport() {
     h.get_by_label("File").click();
     h.run();
     h.get_by_label_contains("Quit").click();
-    h.run();
+    // The harness has no OS window to close, so the close request repeats.
+    h.run_steps(3);
     assert!(h.state().quit_requested());
 }
 
@@ -190,7 +191,7 @@ fn editor_ime_preedit_and_commit() {
     h.step();
     assert_eq!(text(&h), "中文");
     assert!(h.state().engine.state.editor.preedit.is_none());
-    assert!(h.state().editor.caret_screen.is_some());
+    assert!(h.state().caret_screen().is_some());
 }
 
 #[test]

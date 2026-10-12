@@ -17,6 +17,10 @@ pub enum Purpose {
     SaveAs {
         /// Close after saving.
         close_after: bool,
+        /// Then continue quitting.
+        quit: bool,
+        /// Window being saved.
+        window: u64,
     },
 }
 
