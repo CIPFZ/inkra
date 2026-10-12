@@ -13,3 +13,5 @@ workspace = true
 
 [dependencies]
 inkra-text.workspace = true
+syntect.workspace = true
+log.workspace = true
