@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  ci:
+    name: cargo xtask ci (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
+            libxrandr-dev libxi-dev libgl1-mesa-dev mesa-vulkan-drivers xvfb
+      - name: cargo xtask ci
+        run: cargo xtask ci
+      - name: Release build and smoke test
+        shell: bash
+        run: |
+          cargo build --release -p inkra -p inkra-cli --locked
+          ./target/release/inkra --version
+          ./target/release/inkra-cli --version
+      - name: Startup measurement (Linux, Xvfb + lavapipe)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ./target/release/inkra --measure-startup --config "$RUNNER_TEMP/inkra"
+      - name: Bundle macOS app
+        if: runner.os == 'macOS'
+        run: cargo xtask bundle-macos --release
