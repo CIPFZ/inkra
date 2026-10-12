@@ -14,3 +14,6 @@ workspace = true
 [dependencies]
 inkra-text.workspace = true
 inkra-markdown.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
