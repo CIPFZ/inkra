@@ -4,12 +4,42 @@ use crate::editor::Editor;
 use crate::prefs::Preferences;
 
 /// View flags of a window.
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ViewState {
     /// Whether the sidebar is shown (`view.toggleSidebar`).
     pub sidebar_visible: bool,
     /// Performance overlay (`view.debugOverlay`, FS-040).
     pub debug_overlay: bool,
+    /// Status bar shown (PR-043).
+    pub status_bar: bool,
+    /// Menu bar shown (TH-008, Windows/Linux).
+    pub menu_bar: bool,
+    /// Focus mode (WM-001).
+    pub focus: bool,
+    /// Typewriter mode (WM-002).
+    pub typewriter: bool,
+    /// Editor zoom factor (FS-040), 0.5 ..= 3.0.
+    pub zoom: f32,
+    /// Fullscreen (WM-003).
+    pub fullscreen: bool,
+    /// Always on top.
+    pub always_on_top: bool,
+}
+
+impl Default for ViewState {
+    fn default() -> Self {
+        Self {
+            sidebar_visible: false,
+            debug_overlay: false,
+            status_bar: true,
+            menu_bar: true,
+            focus: false,
+            typewriter: false,
+            zoom: 1.0,
+            fullscreen: false,
+            always_on_top: false,
+        }
+    }
 }
 
 /// An external change to the open file (FS-007).
@@ -269,6 +299,8 @@ pub enum Effect {
     Reveal(std::path::PathBuf),
     /// Show an error message.
     Error(String),
+    /// Apply window flags (fullscreen, always on top) of the active window.
+    WindowFlags,
 }
 
 /// Context passed to every command.

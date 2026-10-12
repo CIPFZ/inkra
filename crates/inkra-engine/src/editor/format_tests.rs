@@ -146,3 +146,12 @@ fn code_fences_rule_table_paragraphs() {
     tx(&mut e, Some(t));
     assert_eq!(e.text(), "a\n\n");
 }
+
+#[test]
+fn remove_link_keeps_text() {
+    let mut e = Editor::from_text("see [docs](https://x.io) now");
+    e.sel = Selection::caret(6);
+    let t = remove_link(&e.doc, e.sel);
+    tx(&mut e, t);
+    assert_eq!(e.text(), "see docs now");
+}

@@ -18,6 +18,7 @@ pub mod prefs;
 pub mod state;
 pub mod theme;
 pub mod theming;
+pub mod viewing;
 
 use serde_json::Value;
 
@@ -110,6 +111,7 @@ pub fn builtin_registry() -> CommandRegistry {
     formatting::register(&mut r);
     files::register(&mut r);
     theming::register(&mut r);
+    viewing::register(&mut r);
     r
 }
 

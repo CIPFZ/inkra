@@ -775,3 +775,45 @@ pub fn insert_rule(doc: &Doc, sel: Selection) -> Transaction {
     }
     t
 }
+
+/// Absolute ranges `(whole link, link text)` of the link at `pos`.
+pub fn link_ranges(
+    doc: &Doc,
+    pos: usize,
+) -> Option<(std::ops::Range<usize>, std::ops::Range<usize>)> {
+    let p = context::path(doc, pos);
+    let leaf = p.last()?;
+    let rel = (pos as isize - leaf.delta) as usize;
+    let mut found = None;
+    for i in &leaf.block.inlines {
+        i.walk(&mut |n| {
+            if let InlineKind::Link { text, .. } = &n.kind
+                && n.span.start <= rel
+                && rel <= n.span.end
+            {
+                found = Some((leaf.abs_range(&n.span), leaf.abs_range(text)));
+            }
+        });
+    }
+    found
+}
+
+/// Replaces the link at the caret by its text (ED-130 "移除链接").
+pub fn remove_link(doc: &Doc, sel: Selection) -> Option<Transaction> {
+    let (whole, text) = link_ranges(doc, sel.head)?;
+    let s = doc.text().slice(text.clone()).into_owned();
+    let s = if text.is_empty() {
+        doc.text()
+            .slice(whole.clone())
+            .trim_matches(['<', '>'])
+            .to_owned()
+    } else {
+        s
+    };
+    let end = whole.start + s.len();
+    Some(
+        Transaction::single(whole, &s)
+            .with_selection_before(sel)
+            .with_selection_after(Selection::caret(end)),
+    )
+}

@@ -178,6 +178,39 @@ pub fn register(r: &mut CommandRegistry) {
             }
         },
     ));
+    r.register(
+        FnCommand::new(
+            edits(spec(
+                "format.removeLink",
+                Format,
+                "ED-130",
+                "Turn the link at the caret back into plain text.",
+            )),
+            |cx, _| {
+                let e = &cx.app.editor;
+                let tx = f::remove_link(&e.doc, e.sel);
+                apply(cx, tx)
+            },
+        )
+        .enabled(|cx| f::link_ranges(&cx.app.editor.doc, cx.app.editor.sel.head).is_some()),
+    );
+    r.register(FnCommand::new(
+        edits(params(
+            spec("format.insertImageFile", Format, "ED-092", "Insert an image file, copying it per the image preferences (`pasted`: a saved clipboard bitmap)."),
+            r#"{"type":"object","required":["path"],"properties":{"path":{"type":"string"},"pasted":{"type":"boolean"}}}"#,
+        )),
+        |cx, p| {
+            let src = std::path::PathBuf::from(p.get("path").and_then(Value::as_str).unwrap_or_default());
+            let pasted = p.get("pasted").and_then(Value::as_bool).unwrap_or(false);
+            let path = place_image(cx, &src, pasted).map_err(|e| crate::command::CommandError::Failed { id: "format.insertImageFile".into(), msg: e.to_string() })?;
+            let prefer_rel = cx.app.prefs.bool("image.preferRelative");
+            let md = inkra_workspace::assets::markdown_src(cx.app.editor.path.as_deref(), &path, prefer_rel);
+            let alt = if pasted { String::new() } else { src.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default() };
+            let e = &cx.app.editor;
+            let tx = f::insert_image(&e.doc, e.sel, &md, &alt);
+            apply(cx, Some(tx))
+        },
+    ));
     r.register(FnCommand::new(
         edits(spec(
             "format.imageLocal",
@@ -541,4 +574,44 @@ fn list(cx: &mut CommandContext<'_>, style: ListStyle) -> CommandResult {
     let e = &cx.app.editor;
     let tx = f::toggle_list(&e.doc, e.sel, style, b);
     apply(cx, tx)
+}
+
+/// Where an inserted image ends up (ED-092): pasted bitmaps live in a temporary
+/// file and are always moved to the target folder; local files only when
+/// `image.applyToLocal` is set.
+fn place_image(
+    cx: &mut CommandContext<'_>,
+    src: &std::path::Path,
+    pasted: bool,
+) -> std::io::Result<std::path::PathBuf> {
+    use inkra_workspace::assets::{self, InsertAction};
+    let prefs = &cx.app.prefs;
+    let action = InsertAction::from_pref(
+        &prefs.string("image.insertAction"),
+        &prefs.string("image.copyFolder"),
+    );
+    if !pasted && !prefs.bool("image.applyToLocal") {
+        return Ok(src.to_owned());
+    }
+    let fallback = cx
+        .app
+        .paths
+        .as_ref()
+        .map(|p| p.data.join("images"))
+        .unwrap_or_else(std::env::temp_dir);
+    let action = if pasted && action == InsertAction::None {
+        InsertAction::CopyToAssets
+    } else {
+        action
+    };
+    match assets::target_dir(cx.app.editor.path.as_deref(), &action, &fallback) {
+        Some(dir) => {
+            let placed = assets::copy_in(&dir, src)?;
+            if pasted && placed != src {
+                let _ = std::fs::remove_file(src);
+            }
+            Ok(placed)
+        }
+        None => Ok(src.to_owned()),
+    }
 }
