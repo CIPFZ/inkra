@@ -1,0 +1,68 @@
+# Paper — Inkra's default theme. Brand colors: Paper background, Ink accent,
+# Coral caret (SPEC appendix C.3).
+[meta]
+name = "Paper"
+author = "Inkra"
+version = "1.0"
+dark = false
+
+[fonts]
+body = ["Inter", "system-ui"]
+mono = ["JetBrains Mono", "monospace"]
+heading = []
+size = 16.0
+line_height = 1.6
+paragraph_spacing = 0.8
+
+[colors]
+bg = "#FAF8F3"
+fg = "#24292e"
+fg_muted = "#6a737d"
+accent = "#2E2A5A"
+selection = "#2E2A5A33"
+cursor = "#FF6B57"
+code_bg = "#f3f1ec"
+code_border = "#e5e2da"
+quote_border = "#dcd8cd"
+quote_fg = "#5f6670"
+hr = "#e1ddd3"
+table_border = "#dcd8cd"
+table_header_bg = "#f1eee6"
+table_row_alt_bg = "#f7f5ef"
+highlight_bg = "#fff1a8"
+mark_fg = "#a0a4a8"
+sidebar_bg = "#f3f1ec"
+sidebar_fg = "#333333"
+sidebar_active_bg = "#e4e1d8"
+toolbar_bg = "#f3f1ec"
+statusbar_fg = "#9a9a9a"
+search_match_bg = "#ffeb3b80"
+search_current_bg = "#ff980080"
+spell_error = "#d73a49"
+alert_note = "#0969da"
+alert_tip = "#1a7f37"
+alert_important = "#8250df"
+alert_warning = "#9a6700"
+alert_caution = "#cf222e"
+
+[headings]
+h1 = { size = 2.0, weight = "bold", margin_top = 1.2, margin_bottom = 0.6, border_bottom = true }
+h2 = { size = 1.5, weight = "bold", margin_top = 1.0, margin_bottom = 0.5, border_bottom = true }
+h3 = { size = 1.25, weight = "bold" }
+h4 = { size = 1.0, weight = "bold" }
+h5 = { size = 0.875, weight = "bold" }
+h6 = { size = 0.85, weight = "bold", color = "fg_muted" }
+
+[code]
+syntax_theme = "InspiredGitHub"
+radius = 6.0
+padding = 12.0
+line_numbers_fg = "#999999"
+
+[layout]
+max_width = 860.0
+padding_x = 30.0
+padding_y = 40.0
+list_indent = 2.0
+quote_indent = 1.0
+focus_dim_opacity = 0.3

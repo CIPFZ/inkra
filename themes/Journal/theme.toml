@@ -1,0 +1,42 @@
+# Journal — serif type on warm beige paper, for long-form writing.
+[meta]
+name = "Journal"
+author = "Inkra"
+version = "1.0"
+dark = false
+base = "Paper"
+
+[fonts]
+body = ["Source Serif 4", "Georgia", "serif"]
+heading = ["Source Serif 4", "serif"]
+size = 17.0
+line_height = 1.7
+paragraph_spacing = 0.9
+
+[colors]
+bg = "#F4EEDF"
+fg = "#3b3227"
+fg_muted = "#80725f"
+accent = "#8a4b2a"
+selection = "#8a4b2a30"
+cursor = "#c0472b"
+code_bg = "#ece4d0"
+code_border = "#dcd0b6"
+quote_border = "#c9b996"
+quote_fg = "#6e604c"
+hr = "#d8cbb0"
+table_border = "#d3c5a8"
+table_header_bg = "#ebe2cc"
+mark_fg = "#b0a184"
+sidebar_bg = "#ede5d2"
+sidebar_active_bg = "#e0d5bb"
+
+[headings]
+h1 = { size = 2.1, weight = "bold", margin_top = 1.3, margin_bottom = 0.6, border_bottom = false }
+h2 = { size = 1.55, weight = "bold", margin_top = 1.1, margin_bottom = 0.5, border_bottom = false }
+
+[code]
+syntax_theme = "Solarized (light)"
+
+[layout]
+max_width = 760.0

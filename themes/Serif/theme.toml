@@ -1,0 +1,35 @@
+# Serif — classic black on white serif typography.
+[meta]
+name = "Serif"
+author = "Inkra"
+version = "1.0"
+dark = false
+base = "Paper"
+
+[fonts]
+body = ["Source Serif 4", "Times New Roman", "serif"]
+heading = ["Source Serif 4", "serif"]
+size = 17.0
+line_height = 1.6
+
+[colors]
+bg = "#ffffff"
+fg = "#111111"
+fg_muted = "#666666"
+accent = "#1a1a1a"
+selection = "#00000022"
+cursor = "#FF6B57"
+code_bg = "#f5f5f5"
+code_border = "#e5e5e5"
+quote_border = "#d0d0d0"
+quote_fg = "#555555"
+hr = "#d8d8d8"
+table_border = "#d0d0d0"
+table_header_bg = "#f5f5f5"
+mark_fg = "#a8a8a8"
+sidebar_bg = "#f6f6f6"
+sidebar_active_bg = "#e8e8e8"
+
+[headings]
+h1 = { size = 2.0, weight = "bold", margin_top = 1.2, margin_bottom = 0.6, border_bottom = false }
+h2 = { size = 1.5, weight = "bold", margin_top = 1.0, margin_bottom = 0.5, border_bottom = false }

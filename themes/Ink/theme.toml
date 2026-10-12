@@ -1,0 +1,42 @@
+# Ink — dark theme on the brand Paper Dark background (SPEC appendix C.3).
+[meta]
+name = "Ink"
+author = "Inkra"
+version = "1.0"
+dark = true
+base = "Paper"
+
+[colors]
+bg = "#1E1B33"
+fg = "#e6e3f0"
+fg_muted = "#9b97b3"
+accent = "#b9b2ff"
+selection = "#7a72d955"
+cursor = "#FF6B57"
+code_bg = "#272341"
+code_border = "#353057"
+quote_border = "#4a4470"
+quote_fg = "#aaa6c2"
+hr = "#3a355c"
+table_border = "#3a355c"
+table_header_bg = "#272341"
+table_row_alt_bg = "#221f3a"
+highlight_bg = "#6b5b1e"
+mark_fg = "#6f6a8f"
+sidebar_bg = "#191629"
+sidebar_fg = "#d0cce0"
+sidebar_active_bg = "#2d2950"
+toolbar_bg = "#191629"
+statusbar_fg = "#7d7899"
+search_match_bg = "#c9a22780"
+search_current_bg = "#ff7a4580"
+spell_error = "#ff6b6b"
+alert_note = "#58a6ff"
+alert_tip = "#3fb950"
+alert_important = "#a371f7"
+alert_warning = "#d29922"
+alert_caution = "#f85149"
+
+[code]
+syntax_theme = "base16-ocean.dark"
+line_numbers_fg = "#5d5880"

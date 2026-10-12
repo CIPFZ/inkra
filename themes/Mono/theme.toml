@@ -1,0 +1,39 @@
+# Mono — monospace and minimal: a typewriter page.
+[meta]
+name = "Mono"
+author = "Inkra"
+version = "1.0"
+dark = false
+base = "Paper"
+
+[fonts]
+body = ["JetBrains Mono", "monospace"]
+heading = ["JetBrains Mono", "monospace"]
+size = 15.0
+line_height = 1.65
+
+[colors]
+bg = "#fbfbfa"
+fg = "#202020"
+fg_muted = "#7a7a7a"
+accent = "#202020"
+selection = "#20202026"
+cursor = "#FF6B57"
+code_bg = "#f0f0ee"
+code_border = "#e2e2e0"
+quote_border = "#cfcfcd"
+quote_fg = "#666666"
+hr = "#dddddb"
+table_border = "#d6d6d4"
+table_header_bg = "#f0f0ee"
+mark_fg = "#b0b0b0"
+sidebar_bg = "#f3f3f2"
+sidebar_active_bg = "#e6e6e4"
+
+[headings]
+h1 = { size = 1.5, weight = "bold", margin_top = 1.2, margin_bottom = 0.6, border_bottom = false }
+h2 = { size = 1.3, weight = "bold", margin_top = 1.0, margin_bottom = 0.5, border_bottom = false }
+h3 = { size = 1.15, weight = "bold" }
+
+[layout]
+max_width = 780.0

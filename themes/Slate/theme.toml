@@ -1,0 +1,28 @@
+# Slate — dark blue-grey.
+[meta]
+name = "Slate"
+author = "Inkra"
+version = "1.0"
+dark = true
+base = "Ink"
+
+[colors]
+bg = "#1f2630"
+fg = "#d9dee6"
+fg_muted = "#8b96a5"
+accent = "#7cb7ff"
+selection = "#4c8be855"
+cursor = "#FF6B57"
+code_bg = "#27303c"
+code_border = "#34404f"
+quote_border = "#46566a"
+quote_fg = "#a2adbb"
+hr = "#36414f"
+table_border = "#36414f"
+table_header_bg = "#27303c"
+mark_fg = "#66727f"
+sidebar_bg = "#1a2029"
+sidebar_active_bg = "#2a3441"
+
+[code]
+syntax_theme = "base16-eighties.dark"
