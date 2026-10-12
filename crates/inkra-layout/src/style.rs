@@ -98,6 +98,8 @@ pub struct Style {
     pub table_border: Color32,
     /// Table header background.
     pub table_header_bg: Color32,
+    /// Background of every other body row.
+    pub table_row_alt_bg: Color32,
     /// Highlight (`==x==`) background.
     pub highlight_bg: Color32,
     /// Visible Markdown markers.
@@ -180,6 +182,7 @@ impl Default for Style {
             hr: rgb(0xe1, 0xe4, 0xe8),
             table_border: rgb(0xdf, 0xe2, 0xe5),
             table_header_bg: rgb(0xf3, 0xf1, 0xec),
+            table_row_alt_bg: rgb(0xf7, 0xf5, 0xef),
             highlight_bg: rgb(0xff, 0xf5, 0xb1),
             mark_fg: rgb(0x9a, 0xa0, 0xa6),
             search_match_bg: Color32::from_rgba_unmultiplied(0xff, 0xeb, 0x3b, 0x80),

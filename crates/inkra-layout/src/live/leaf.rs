@@ -394,6 +394,18 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                 }
                 BlockKind::Table { aligns, .. } => {
                     let (h, fr) = table(cx, b, delta, aligns, x, y, w, base, fonts, &mut out);
+                    let grid_w = out
+                        .decos
+                        .iter()
+                        .filter_map(|d| match d {
+                            Deco::Rect { rect, .. } => Some(rect.max.x),
+                            _ => None,
+                        })
+                        .fold(x, f32::max);
+                    out.overlays.push(Overlay::Table {
+                        rect: Rect::from_min_max(pos2(x, y), pos2(grid_w, y + h)),
+                        span: item.src.clone(),
+                    });
                     content_h = h;
                     first_row_h = fr;
                 }
@@ -727,18 +739,36 @@ fn table(
         }
         cells.push(out_row);
     }
-    // Shrink proportionally when wider than the column.
-    let total: f32 = col_w.iter().sum();
-    if total > w {
-        let k = w / total;
-        for c in &mut col_w {
-            *c = (*c * k).max(40.0);
+    // ED-080: a column is at most as wide as the editor column (its cells wrap);
+    // a table wider than the column scrolls horizontally in the view.
+    for c in &mut col_w {
+        *c = c.min(w.max(60.0));
+    }
+    // Wrapped cells are taller: measure them at their column width.
+    for row in &mut cells {
+        for (ci, cell) in row.iter_mut().enumerate() {
+            let inner = col_w[ci] - 2.0 * pad_x;
+            if cell.2 > inner + 0.5 {
+                let mut job = cell.0.clone();
+                job.wrap.max_width = inner;
+                let g = fonts.layout_job(job);
+                cell.2 = g.size().x;
+                cell.3 = g.size().y;
+            }
         }
     }
     let mut ty = y;
     let mut first_row = 0.0;
     for (ri, row) in cells.into_iter().enumerate() {
         let row_h = row.iter().map(|c| c.3).fold(fmt.line_height, f32::max) + 2.0 * pad_y;
+        if ri > 0 && ri % 2 == 0 {
+            out.decos.push(Deco::Rect {
+                rect: Rect::from_min_size(pos2(x, ty), vec2(col_w.iter().sum(), row_h)),
+                fill: style.table_row_alt_bg,
+                stroke: Stroke::NONE,
+                radius: 0.0,
+            });
+        }
         if ri == 0 {
             first_row = row_h;
             out.decos.push(Deco::Rect {

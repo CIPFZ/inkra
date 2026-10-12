@@ -82,6 +82,13 @@ pub enum Overlay {
         /// Absolute range of the code content.
         body: Range<usize>,
     },
+    /// A table: its grid (block-local) and source range.
+    Table {
+        /// Grid.
+        rect: Rect,
+        /// Absolute source range.
+        span: Range<usize>,
+    },
 }
 
 /// Layout of one item.
