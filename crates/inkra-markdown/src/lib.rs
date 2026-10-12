@@ -22,6 +22,7 @@ pub mod options;
 pub mod refs;
 pub mod scan;
 mod source;
+pub mod tokens;
 pub mod walk;
 
 pub use ast::{Block, BlockKind, Inline, InlineKind, Span};
