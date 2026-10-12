@@ -13,6 +13,14 @@ pub const BODY_BOLD: &str = "inkra-body-bold";
 pub const BODY_ITALIC: &str = "inkra-body-italic";
 /// Body bold italic.
 pub const BODY_BOLD_ITALIC: &str = "inkra-body-bold-italic";
+/// Serif body text (Source Serif 4).
+pub const SERIF: &str = "inkra-serif";
+/// Serif bold.
+pub const SERIF_BOLD: &str = "inkra-serif-bold";
+/// Serif italic.
+pub const SERIF_ITALIC: &str = "inkra-serif-italic";
+/// Serif bold italic.
+pub const SERIF_BOLD_ITALIC: &str = "inkra-serif-bold-italic";
 /// Monospace (JetBrains Mono).
 pub const MONO: &str = "inkra-mono";
 /// Monospace bold.
@@ -23,6 +31,22 @@ pub const MONO_ITALIC: &str = "inkra-mono-italic";
 pub const MONO_BOLD_ITALIC: &str = "inkra-mono-bold-italic";
 
 const FONTS: &[(&str, &[u8])] = &[
+    (
+        SERIF,
+        include_bytes!("../../../assets/fonts/SourceSerif4-Regular.ttf"),
+    ),
+    (
+        SERIF_BOLD,
+        include_bytes!("../../../assets/fonts/SourceSerif4-Bold.ttf"),
+    ),
+    (
+        SERIF_ITALIC,
+        include_bytes!("../../../assets/fonts/SourceSerif4-It.ttf"),
+    ),
+    (
+        SERIF_BOLD_ITALIC,
+        include_bytes!("../../../assets/fonts/SourceSerif4-BoldIt.ttf"),
+    ),
     (
         BODY,
         include_bytes!("../../../assets/fonts/Inter-Regular.ttf"),
@@ -57,19 +81,97 @@ const FONTS: &[(&str, &[u8])] = &[
     ),
 ];
 
-/// The family for a combination of attributes.
-pub fn family(mono: bool, bold: bool, italic: bool) -> FontFamily {
-    let name = match (mono, bold, italic) {
-        (false, false, false) => BODY,
-        (false, true, false) => BODY_BOLD,
-        (false, false, true) => BODY_ITALIC,
-        (false, true, true) => BODY_BOLD_ITALIC,
-        (true, false, false) => MONO,
-        (true, true, false) => MONO_BOLD,
-        (true, false, true) => MONO_ITALIC,
-        (true, true, true) => MONO_BOLD_ITALIC,
+/// A bundled typeface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum FontKind {
+    /// Inter.
+    #[default]
+    Sans,
+    /// Source Serif 4.
+    Serif,
+    /// JetBrains Mono.
+    Mono,
+}
+
+impl FontKind {
+    /// Maps a font name from a theme's fallback chain to a bundled face
+    /// (TH-001); unknown names return `None` so the next entry is tried.
+    pub fn from_name(name: &str) -> Option<Self> {
+        let n = name.trim().to_ascii_lowercase();
+        let serif = [
+            "serif",
+            "source serif",
+            "georgia",
+            "times",
+            "noto serif",
+            "literata",
+            "merriweather",
+            "charter",
+            "garamond",
+            "songti",
+            "宋体",
+        ];
+        let mono = [
+            "mono",
+            "monospace",
+            "code",
+            "consolas",
+            "menlo",
+            "courier",
+            "sarasa",
+            "iosevka",
+            "fira code",
+        ];
+        let sans = [
+            "sans",
+            "inter",
+            "system-ui",
+            "helvetica",
+            "arial",
+            "segoe",
+            "noto sans",
+            "pingfang",
+            "roboto",
+            "-apple-system",
+        ];
+        if mono.iter().any(|m| n.contains(m)) {
+            Some(Self::Mono)
+        } else if serif.iter().any(|m| n.contains(m)) && !n.contains("sans") {
+            Some(Self::Serif)
+        } else if sans.iter().any(|m| n.contains(m)) {
+            Some(Self::Sans)
+        } else {
+            None
+        }
+    }
+}
+
+/// The family for a typeface and style.
+pub fn family_of(kind: FontKind, bold: bool, italic: bool) -> FontFamily {
+    let name = match (kind, bold, italic) {
+        (FontKind::Sans, false, false) => BODY,
+        (FontKind::Sans, true, false) => BODY_BOLD,
+        (FontKind::Sans, false, true) => BODY_ITALIC,
+        (FontKind::Sans, true, true) => BODY_BOLD_ITALIC,
+        (FontKind::Serif, false, false) => SERIF,
+        (FontKind::Serif, true, false) => SERIF_BOLD,
+        (FontKind::Serif, false, true) => SERIF_ITALIC,
+        (FontKind::Serif, true, true) => SERIF_BOLD_ITALIC,
+        (FontKind::Mono, false, false) => MONO,
+        (FontKind::Mono, true, false) => MONO_BOLD,
+        (FontKind::Mono, false, true) => MONO_ITALIC,
+        (FontKind::Mono, true, true) => MONO_BOLD_ITALIC,
     };
     FontFamily::Name(name.into())
+}
+
+/// The family for a combination of attributes (sans or mono).
+pub fn family(mono: bool, bold: bool, italic: bool) -> FontFamily {
+    family_of(
+        if mono { FontKind::Mono } else { FontKind::Sans },
+        bold,
+        italic,
+    )
 }
 
 /// Well-known CJK font locations: (path, collection index). SPEC appendix D-1:
@@ -191,4 +293,33 @@ pub fn definitions() -> FontDefinitions {
     ui_mono.extend(emoji.iter().cloned());
     defs.families.insert(FontFamily::Monospace, ui_mono);
     defs
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_family_is_bound() {
+        let defs = definitions();
+        for kind in [FontKind::Sans, FontKind::Serif, FontKind::Mono] {
+            for bold in [false, true] {
+                for italic in [false, true] {
+                    let fam = family_of(kind, bold, italic);
+                    let chain = defs
+                        .families
+                        .get(&fam)
+                        .unwrap_or_else(|| panic!("{fam:?} unbound"));
+                    assert!(defs.font_data.contains_key(&chain[0]), "{fam:?}");
+                }
+            }
+        }
+        assert_eq!(FontKind::from_name("Source Serif 4"), Some(FontKind::Serif));
+        assert_eq!(
+            FontKind::from_name("Noto Sans CJK SC"),
+            Some(FontKind::Sans)
+        );
+        assert_eq!(FontKind::from_name("JetBrains Mono"), Some(FontKind::Mono));
+        assert_eq!(FontKind::from_name("Comic Neue"), None);
+    }
 }

@@ -11,15 +11,16 @@ use epaint::{Color32, Stroke};
 use inkra_markdown::ast::{Inline, InlineKind, LinkSyntax};
 use inkra_text::Text;
 
-use crate::fonts::family;
 use crate::run::SourceMap;
 use crate::style::Style;
 
 /// Inline text format.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Fmt {
-    /// Monospace.
+    /// Monospace (code).
     pub mono: bool,
+    /// Typeface when not monospace.
+    pub kind: crate::fonts::FontKind,
     /// Bold.
     pub bold: bool,
     /// Italic.
@@ -45,6 +46,7 @@ impl Fmt {
     pub fn body(style: &Style) -> Self {
         Self {
             mono: false,
+            kind: style.body_font,
             bold: false,
             italic: false,
             size: style.size,
@@ -59,7 +61,18 @@ impl Fmt {
 
     fn text_format(&self) -> TextFormat {
         TextFormat {
-            font_id: FontId::new(self.size, family(self.mono, self.bold, self.italic)),
+            font_id: FontId::new(
+                self.size,
+                crate::fonts::family_of(
+                    if self.mono {
+                        crate::fonts::FontKind::Mono
+                    } else {
+                        self.kind
+                    },
+                    self.bold,
+                    self.italic,
+                ),
+            ),
             color: self.color,
             background: self.bg,
             line_height: Some(self.line_height),

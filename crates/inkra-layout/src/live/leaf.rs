@@ -10,7 +10,6 @@ use inkra_markdown::ast::{Align, Block, BlockKind, InlineKind};
 use super::inline::{Builder, Fmt};
 use super::{Frame, LeafKind, LiveItem, Marker};
 use crate::block::{BlockLayout, Deco, Hit, HitAction, Overlay};
-use crate::fonts::family;
 use crate::run::{RunSpec, SourceMap};
 use crate::style::Style;
 
@@ -170,6 +169,7 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                 } => {
                     let hs = style.headings[(*level as usize).clamp(1, 6) - 1];
                     let mut hf = fmt;
+                    hf.kind = style.heading_font;
                     hf.size = (em * hs.size).round();
                     hf.bold = hs.bold;
                     hf.line_height = (hf.size * 1.3).round();
@@ -507,7 +507,10 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                     Marker::Number(n, d) => {
                         let job = LayoutJob::simple_singleline(
                             format!("{n}{d}"),
-                            FontId::new(fmt.size, family(false, false, false)),
+                            FontId::new(
+                                fmt.size,
+                                crate::fonts::family_of(style.body_font, false, false),
+                            ),
                             style.fg,
                         );
                         let g = fonts.layout_job(job.clone());
@@ -526,7 +529,10 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
             } => {
                 let job = LayoutJob::simple_singleline(
                     format!("[^{label}]"),
-                    FontId::new((fmt.size * 0.85).round(), family(false, false, false)),
+                    FontId::new(
+                        (fmt.size * 0.85).round(),
+                        crate::fonts::family_of(style.body_font, false, false),
+                    ),
                     style.fg_muted,
                 );
                 out.runs.push(RunSpec {

@@ -44,8 +44,26 @@ pub struct SourceColors {
 /// All visual parameters of the document area.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Style {
+    /// Theme name.
+    pub name: String,
     /// Dark theme.
     pub dark: bool,
+    /// Body typeface.
+    pub body_font: crate::fonts::FontKind,
+    /// Heading typeface.
+    pub heading_font: crate::fonts::FontKind,
+    /// syntect theme for code blocks.
+    pub syntax_theme: String,
+    /// UI chrome: sidebar background.
+    pub sidebar_bg: Color32,
+    /// UI chrome: sidebar text.
+    pub sidebar_fg: Color32,
+    /// UI chrome: sidebar selection.
+    pub sidebar_active_bg: Color32,
+    /// UI chrome: status bar text.
+    pub statusbar_fg: Color32,
+    /// Alert (`> [!NOTE]`) backgrounds use the alert colors at this opacity.
+    pub alert_bg_alpha: f32,
     /// Body font size in points.
     pub size: f32,
     /// Monospace font size in points.
@@ -135,7 +153,16 @@ impl Default for Style {
             color: None,
         };
         Self {
+            name: "Paper".to_owned(),
             dark: false,
+            body_font: crate::fonts::FontKind::Sans,
+            heading_font: crate::fonts::FontKind::Sans,
+            syntax_theme: "InspiredGitHub".to_owned(),
+            sidebar_bg: rgb(0xf3, 0xf1, 0xec),
+            sidebar_fg: rgb(0x33, 0x33, 0x33),
+            sidebar_active_bg: rgb(0xe4, 0xe1, 0xd8),
+            statusbar_fg: rgb(0x99, 0x99, 0x99),
+            alert_bg_alpha: 0.08,
             size: 16.0,
             mono_size: 14.0,
             line_height: 1.6,
