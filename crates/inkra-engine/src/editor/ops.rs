@@ -25,6 +25,8 @@ pub struct EditPrefs {
     pub renumber: bool,
     /// Ordered lists always start at 1 (ED-101); otherwise the start number is kept.
     pub list_from_one: bool,
+    /// Align table pipes when tables are rewritten (ED-085).
+    pub table_align: bool,
 }
 
 impl Default for EditPrefs {
@@ -37,6 +39,7 @@ impl Default for EditPrefs {
             use_spaces: true,
             renumber: true,
             list_from_one: false,
+            table_align: true,
         }
     }
 }

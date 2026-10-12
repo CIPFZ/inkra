@@ -285,6 +285,7 @@ pub fn load(name: &str, user_dir: Option<&Path>) -> Result<Style, String> {
         hr,
         table_border,
         table_header_bg,
+        table_row_alt_bg,
         highlight_bg,
         mark_fg,
         search_match_bg,

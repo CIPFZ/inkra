@@ -150,6 +150,13 @@ pub const PREFS: &[PrefSpec] = &[
         doc: "Insert image paths relative to the document.",
     },
     PrefSpec {
+        key: "markdown.tableAlign",
+        default: "true",
+        kind: PrefKind::Bool,
+        req: "ED-085",
+        doc: "Align table pipes with spaces when tables are rewritten.",
+    },
+    PrefSpec {
         key: "markdown.inlineMath",
         default: "false",
         kind: PrefKind::Bool,

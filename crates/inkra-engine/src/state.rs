@@ -301,6 +301,8 @@ pub enum Effect {
     Error(String),
     /// Apply window flags (fullscreen, always on top) of the active window.
     WindowFlags,
+    /// Show the table resize dialog (ED-083).
+    ShowTableResize,
 }
 
 /// Context passed to every command.

@@ -16,6 +16,7 @@ pub mod keymap;
 pub mod menu;
 pub mod prefs;
 pub mod state;
+pub mod tables;
 pub mod theme;
 pub mod theming;
 pub mod viewing;
@@ -112,6 +113,7 @@ pub fn builtin_registry() -> CommandRegistry {
     files::register(&mut r);
     theming::register(&mut r);
     viewing::register(&mut r);
+    tables::register(&mut r);
     r
 }
 
@@ -162,5 +164,64 @@ mod tests {
                 }
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod table_command_tests {
+    use super::*;
+
+    fn engine(src: &str, caret: usize) -> Engine {
+        let mut e = Engine::new(Preferences::new());
+        e.state.editor = editor::Editor::from_text(src);
+        e.state.editor.sel = inkra_doc::Selection::caret(caret);
+        e
+    }
+
+    #[test]
+    fn structural_commands_rewrite_aligned_tables() {
+        let src = "| a | b |\n|---|---|\n| 2 | x |\n| 10 | y |\n| 1 | z |";
+        let mut e = engine(src, 2);
+        e.execute("table.insertColRight", &Value::Null).unwrap();
+        assert_eq!(
+            e.state.editor.text(),
+            "| a   |     | b   |\n| --- | --- | --- |\n| 2   |     | x   |\n| 10  |     | y   |\n| 1   |     | z   |"
+        );
+        e.execute("table.deleteCol", &Value::Null).unwrap();
+        eprintln!("after deleteCol:\n{}", e.state.editor.text());
+        e.state.editor.sel = inkra_doc::Selection::caret(2);
+        e.execute("table.sortByColumnAsc", &Value::Null).unwrap();
+        let t = e.state.editor.text();
+        let rows: Vec<&str> = t
+            .lines()
+            .skip(2)
+            .map(|l| l.split('|').nth(1).unwrap().trim())
+            .collect();
+        assert_eq!(rows, ["1", "2", "10"], "numeric sort");
+        e.execute("table.alignCenter", &Value::Null).unwrap();
+        assert!(
+            e.state
+                .editor
+                .text()
+                .lines()
+                .nth(1)
+                .unwrap()
+                .starts_with("| :-:")
+        );
+        e.execute("table.resize", &serde_json::json!({ "rows": 1, "cols": 3 }))
+            .unwrap();
+        assert_eq!(e.state.editor.text().lines().count(), 3);
+        e.execute("table.copyAsCsv", &Value::Null).unwrap();
+        let eff = e.take_effects();
+        assert!(
+            eff.iter()
+                .any(|x| matches!(x, Effect::SetClipboard { text, .. } if text.starts_with("a,b"))),
+            "{eff:?}"
+        );
+        e.execute("table.deleteTable", &Value::Null).unwrap();
+        assert_eq!(e.state.editor.text(), "");
+        // undo restores
+        while e.state.editor.undo() {}
+        assert_eq!(e.state.editor.text(), src);
     }
 }

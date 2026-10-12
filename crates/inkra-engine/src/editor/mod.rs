@@ -7,6 +7,7 @@ pub mod find;
 pub mod format_ops;
 pub mod live_ops;
 pub mod ops;
+pub mod table;
 
 use inkra_doc::{Doc, Selection, Transaction, UndoPolicy};
 use inkra_markdown::ParseOptions;
@@ -111,6 +112,20 @@ impl Editor {
             self.apply(tx, UndoPolicy::Typing);
             return;
         }
+        // `|` typed into a table cell is escaped (ED-081).
+        if self.mode == ViewMode::Live
+            && s.contains('|')
+            && table::in_table(&self.doc, self.sel.head)
+        {
+            let esc = table::escape_cell_text(s);
+            let r = self.sel.range();
+            let end = r.start + esc.len();
+            let tx = Transaction::single(r, &esc)
+                .with_selection_before(self.sel)
+                .with_selection_after(Selection::caret(end));
+            self.apply(tx, UndoPolicy::Typing);
+            return;
+        }
         let tx = ops::type_text(&self.doc, self.sel, s, &self.prefs);
         if tx.edits.is_empty() {
             self.sel = tx.selection_after.unwrap_or(self.sel);
@@ -148,6 +163,15 @@ impl Editor {
 
     /// Enter / Shift+Enter in live mode (ED-013).
     pub fn newline_live(&mut self, kind: Break) {
+        if let Some(a) = table::enter(
+            &self.doc,
+            self.sel,
+            kind == Break::Soft,
+            self.prefs.table_align,
+        ) {
+            self.table_action(a);
+            return;
+        }
         let tx = live_ops::newline(&self.doc, self.sel, kind);
         self.doc.break_undo_group();
         if tx.edits.is_empty() {
@@ -158,6 +182,10 @@ impl Editor {
 
     /// Backspace in live mode (ED-012).
     pub fn delete_backward_live(&mut self, unit: Unit) {
+        if let Some(a) = table::delete(&self.doc, self.sel, false) {
+            self.table_action(a);
+            return;
+        }
         if let Some(tx) = live_ops::delete_backward(&self.doc, self.sel, unit, &self.prefs) {
             if tx.edits.is_empty() {
                 self.sel = tx.selection_after.unwrap_or(self.sel);
@@ -178,6 +206,10 @@ impl Editor {
 
     /// Delete in live mode (ED-012).
     pub fn delete_forward_live(&mut self, unit: Unit) {
+        if let Some(a) = table::delete(&self.doc, self.sel, true) {
+            self.table_action(a);
+            return;
+        }
         if let Some(tx) = live_ops::delete_forward(&self.doc, self.sel, unit) {
             if tx.edits.is_empty() {
                 self.sel = tx.selection_after.unwrap_or(self.sel);
@@ -187,8 +219,28 @@ impl Editor {
         }
     }
 
+    fn table_action(&mut self, a: table::TableAction) {
+        match a {
+            table::TableAction::Edit(tx) => {
+                self.doc.break_undo_group();
+                self.apply(tx, UndoPolicy::NewGroup);
+            }
+            table::TableAction::Select(s) => {
+                self.sel = s;
+                self.doc.break_undo_group();
+            }
+            table::TableAction::Nothing => {}
+        }
+    }
+
     /// Tab / Shift+Tab.
     pub fn tab(&mut self, outdent: bool) {
+        if self.mode == ViewMode::Live
+            && let Some(a) = table::tab(&self.doc, self.sel, outdent, self.prefs.table_align)
+        {
+            self.table_action(a);
+            return;
+        }
         if let Some(tx) = ops::tab(&self.doc, self.sel, outdent, &self.prefs) {
             self.apply_with_renumber(tx, UndoPolicy::NewGroup);
         }

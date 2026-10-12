@@ -389,3 +389,71 @@ fn live_enter_on_empty_nested_item_outdents() {
     e.newline_live(Break::Enter);
     assert_eq!(e.text(), "- a\n  - b\n\n");
 }
+
+#[test]
+fn table_editing() {
+    let src = "| a | b |\n| --- | --- |\n| 1 | 2 |";
+    let mut e = live(src);
+    e.sel = Selection::caret(2); // in "a"
+    e.tab(false);
+    assert_eq!(&e.text()[e.sel.range()], "b", "Tab selects the next cell");
+    e.tab(false);
+    assert_eq!(&e.text()[e.sel.range()], "1");
+    e.tab(false);
+    e.tab(false);
+    // last cell: Tab adds a row
+    assert_eq!(
+        e.text(),
+        "| a   | b   |\n| --- | --- |\n| 1   | 2   |\n|     |     |"
+    );
+    typed(&mut e, "x|y");
+    assert!(e.text().contains("x\\|y"), "pipe escaped: {}", e.text());
+    // Enter never inserts a line break inside a table
+    let before = e.text();
+    e.newline_live(Break::Enter);
+    assert!(
+        e.text().lines().count() > before.lines().count(),
+        "Enter on the last row adds a row"
+    );
+    // Backspace at a cell start does not eat the pipe
+    let t = e.text();
+    let at = t.find("| 1").unwrap() + 2;
+    e.sel = Selection::caret(at);
+    e.delete_backward_live(Unit::Char);
+    assert_eq!(e.text(), t);
+    // Shift+Enter inserts <br>
+    e.newline_live(Break::Soft);
+    assert!(e.text().contains("<br>"));
+}
+
+#[test]
+fn table_tab_walks_cells_in_order() {
+    let cols = 12;
+    let hdr = format!(
+        "| {} |",
+        (0..cols)
+            .map(|i| format!("h{i}"))
+            .collect::<Vec<_>>()
+            .join(" | ")
+    );
+    let dl = format!("|{}|", vec!["---"; cols].join("|"));
+    let rows: Vec<String> = (0..3)
+        .map(|r| {
+            format!(
+                "| {} |",
+                (0..cols)
+                    .map(|c| format!("v{r}-{c}"))
+                    .collect::<Vec<_>>()
+                    .join(" | ")
+            )
+        })
+        .collect();
+    let src = format!("{hdr}\n{dl}\n{}", rows.join("\n"));
+    let mut e = live(&src);
+    let at = src.find("v0-11").unwrap() + 5;
+    e.sel = Selection::caret(at);
+    for _ in 0..11 {
+        e.tab(false);
+    }
+    assert_eq!(&e.text()[e.sel.range()], "v1-10");
+}
