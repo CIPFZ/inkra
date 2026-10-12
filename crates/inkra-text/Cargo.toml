@@ -1,6 +1,6 @@
 [package]
 name = "inkra-text"
-description = "Text foundation: rope wrapper, char/line/byte offset conversion, Unicode segmentation, encoding detection and line endings."
+description = "Text foundation: rope wrapper, offset conversion, Unicode segmentation, encoding detection, line endings."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,4 +12,10 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+ropey.workspace = true
+unicode-segmentation.workspace = true
+unicode-width.workspace = true
+encoding_rs.workspace = true
 
+[dev-dependencies]
+proptest.workspace = true

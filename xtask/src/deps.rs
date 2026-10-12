@@ -107,6 +107,37 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         "MIT OR Apache-2.0",
         "AttachConsole, AppUserModelID",
     ),
+    ("ropey", Scope::Any, "MIT", "document rope (SPEC 2.1)"),
+    (
+        "unicode-segmentation",
+        Scope::Any,
+        "MIT OR Apache-2.0",
+        "grapheme/word boundaries (ED-011)",
+    ),
+    (
+        "unicode-width",
+        Scope::Any,
+        "MIT OR Apache-2.0",
+        "CJK display width for table alignment (ED-085)",
+    ),
+    (
+        "encoding_rs",
+        Scope::Only(&["inkra-text"]),
+        "(Apache-2.0 OR MIT) AND BSD-3-Clause",
+        "UTF-16/GBK/GB18030 (ED-106)",
+    ),
+    (
+        "proptest",
+        Scope::Any,
+        "MIT OR Apache-2.0",
+        "property tests (SPEC 2.1, TS-003)",
+    ),
+    (
+        "criterion",
+        Scope::Any,
+        "Apache-2.0 OR MIT",
+        "benchmarks (SPEC 2.1, TS-006)",
+    ),
 ];
 
 /// Whether `member` may depend on `dep`.

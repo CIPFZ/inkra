@@ -51,6 +51,12 @@ sys-locale = "0.3"
 thiserror = "2"
 anyhow = "1"
 tempfile = "3"
+ropey = { version = "1.6", default-features = false, features = ["simd", "cr_lines"] }
+unicode-segmentation = "1.12"
+unicode-width = "0.2"
+encoding_rs = "0.8"
+proptest = "1"
+criterion = { version = "0.8", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png"] }
 muda = { version = "0.21", default-features = false }
 
