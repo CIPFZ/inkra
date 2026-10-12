@@ -251,5 +251,6 @@ pub fn layout_line(
         decos: Vec::new(),
         hits: Vec::new(),
         caret_range: Some(0..text.len()),
+        overlays: Vec::new(),
     }
 }

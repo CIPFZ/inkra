@@ -11,14 +11,15 @@
 pub mod block;
 pub mod fonts;
 pub mod hash;
+pub mod live;
 pub mod run;
 pub mod source;
 pub mod style;
 pub mod view;
 
-pub use block::{BlockLayout, Deco, Hit, HitAction};
+pub use block::{BlockLayout, Deco, Hit, HitAction, Overlay};
 pub use run::{Run, RunSpec, Seg, SourceMap};
 pub use style::Style;
-pub use view::{Item, Mode, ViewLayout, ViewState};
+pub use view::{Ctx, Item, Mode, ViewLayout};
 
 pub use epaint;

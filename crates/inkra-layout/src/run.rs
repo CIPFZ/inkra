@@ -101,6 +101,35 @@ impl SourceMap {
         best.unwrap_or(0)
     }
 
+    /// Text byte of the first displayed position at or after `src`.
+    pub fn to_text_ge(&self, src: usize) -> Option<usize> {
+        if let Some(t) = self.to_text(src, true) {
+            return Some(t);
+        }
+        self.segs
+            .iter()
+            .filter(|s| s.src.start >= src)
+            .min_by_key(|s| s.src.start)
+            .map(|s| s.text.start)
+    }
+
+    /// Text byte of the last displayed position at or before `src`.
+    pub fn to_text_le(&self, src: usize) -> Option<usize> {
+        if let Some(t) = self.to_text(src, false) {
+            return Some(t);
+        }
+        self.segs
+            .iter()
+            .filter(|s| s.src.end <= src)
+            .max_by_key(|s| s.src.end)
+            .map(|s| s.text.end)
+    }
+
+    /// Whether relative source offset `src` is displayed (a caret can sit there).
+    pub fn shows(&self, src: usize) -> bool {
+        self.to_text(src, false).is_some()
+    }
+
     /// Smallest and largest mapped relative source offsets.
     pub fn src_bounds(&self) -> Option<Range<usize>> {
         let a = self.segs.iter().map(|s| s.src.start).min()?;

@@ -21,7 +21,7 @@ proptest! {
         let mode = Mode::Source { wrap: true };
         let mut doc = Doc::from_str(&seed, Default::default());
         let mut inc = ViewLayout::new();
-        inc.sync(&doc, mode, 500.0, &style);
+        inc.sync(&doc, mode, 500.0, &style, 0);
         for batch in edits {
             // several transactions between syncs
             for (pos, del, ins) in batch {
@@ -30,17 +30,17 @@ proptest! {
                 let end = doc.text().snap((start + del).min(len));
                 doc.apply(Transaction::single(start..end, &ins), UndoPolicy::NewGroup);
             }
-            inc.sync(&doc, mode, 500.0, &style);
+            inc.sync(&doc, mode, 500.0, &style, 0);
             let mut full = ViewLayout::new();
-            full.sync(&doc, mode, 500.0, &style);
+            full.sync(&doc, mode, 500.0, &style, 0);
             prop_assert_eq!(ranges(&inc), ranges(&full), "text {:?}", doc.text().to_string());
         }
         // undo everything too
         while doc.undo().is_some() {
-            inc.sync(&doc, mode, 500.0, &style);
+            inc.sync(&doc, mode, 500.0, &style, 0);
         }
         let mut full = ViewLayout::new();
-        full.sync(&doc, mode, 500.0, &style);
+        full.sync(&doc, mode, 500.0, &style, 0);
         prop_assert_eq!(ranges(&inc), ranges(&full));
     }
 }

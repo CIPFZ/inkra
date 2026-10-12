@@ -36,7 +36,7 @@ pub enum Align {
 }
 
 /// GitHub alert type (MD-004).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AlertKind {
     /// `[!NOTE]`.
     Note,

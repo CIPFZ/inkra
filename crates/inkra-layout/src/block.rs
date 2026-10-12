@@ -30,6 +30,13 @@ pub enum Deco {
         /// Stroke.
         stroke: Stroke,
     },
+    /// An image (painted by the host, which owns textures).
+    Image {
+        /// Rectangle (block-local).
+        rect: Rect,
+        /// Image source as written in the document.
+        src: String,
+    },
     /// A circle.
     Circle {
         /// Center (block-local).
@@ -61,6 +68,22 @@ pub struct Hit {
     pub action: HitAction,
 }
 
+/// Host-drawn widgets over a block (e.g. code block tools, ED-002).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Overlay {
+    /// A code block: its box (block-local), language and code range.
+    Code {
+        /// Box.
+        rect: Rect,
+        /// Language word of the info string.
+        lang: String,
+        /// Absolute range of the info string, if any.
+        info: Option<Range<usize>>,
+        /// Absolute range of the code content.
+        body: Range<usize>,
+    },
+}
+
 /// Layout of one item.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct BlockLayout {
@@ -75,4 +98,6 @@ pub struct BlockLayout {
     /// Relative source range the caret may occupy in this item (used to snap
     /// positions that fall on hidden markers).
     pub caret_range: Option<Range<usize>>,
+    /// Host-drawn overlays.
+    pub overlays: Vec<Overlay>,
 }
