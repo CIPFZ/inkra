@@ -743,3 +743,38 @@ pub fn next_pos(doc: &Doc, pos: usize, word: bool) -> usize {
     };
     pos + rel.max(1).min(s.len())
 }
+
+/// Destination of the link (or autolink) at `pos`, if any.
+pub fn link_at(doc: &Doc, pos: usize) -> Option<String> {
+    let p = context::path(doc, pos);
+    let leaf = p.last()?;
+    let rel = (pos as isize - leaf.delta) as usize;
+    let mut found = None;
+    for i in &leaf.block.inlines {
+        i.walk(&mut |n| {
+            if let inkra_markdown::InlineKind::Link { dest, .. } = &n.kind
+                && n.span.start <= rel
+                && rel <= n.span.end
+            {
+                found = Some(dest.clone());
+            }
+        });
+    }
+    found
+}
+
+/// Toggles the task checkbox of the item at `pos` (or whose `[ ]` starts at `at`).
+pub fn toggle_task(doc: &Doc, sel: Selection, at: Option<usize>) -> Option<Transaction> {
+    let s = text(doc);
+    let pos = at.unwrap_or(sel.head);
+    let probe = if at.is_some() { pos + 1 } else { pos };
+    let info = context::list_item(doc, probe).or_else(|| context::list_item(doc, pos))?;
+    let (span, checked) = info.task?;
+    let _ = &s;
+    let new = if checked { "[ ]" } else { "[x]" };
+    Some(
+        Transaction::single(span, new)
+            .with_selection_before(sel)
+            .with_selection_after(sel),
+    )
+}

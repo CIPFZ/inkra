@@ -180,7 +180,12 @@ pub fn in_code_content(doc: &Doc, pos: usize) -> bool {
             Some(f) => {
                 let open = n.abs_range(&f.open);
                 let after_open = pos > open.end;
-                let before_close = f.close.as_ref().is_none_or(|c| pos < n.abs(c.start));
+                // An empty block's only caret position is the start of its closing fence.
+                let empty = n.block.lines.is_empty();
+                let before_close = f
+                    .close
+                    .as_ref()
+                    .is_none_or(|c| pos < n.abs(c.start) || empty && pos == n.abs(c.start));
                 after_open && before_close
             }
             None => true,
@@ -219,4 +224,12 @@ pub fn in_inline_code(doc: &Doc, pos: usize) -> bool {
         });
     }
     hit
+}
+
+/// Whether `pos` is at the end of the opening fence line of a code block.
+pub fn at_fence_open_end(doc: &Doc, pos: usize) -> bool {
+    path(doc, pos).iter().rev().any(|n| match &n.block.kind {
+        BlockKind::CodeBlock { fence: Some(f) } => n.abs(f.open.end) == pos,
+        _ => false,
+    })
 }

@@ -43,13 +43,43 @@ pub struct PrefSpec {
 
 /// All known preference keys. `cargo xtask prefs` renders this table to
 /// `docs/preferences.md`.
-pub const PREFS: &[PrefSpec] = &[PrefSpec {
-    key: "general.language",
-    default: r#""system""#,
-    kind: PrefKind::String,
-    req: "PR-018",
-    doc: "UI language: `system` to follow the OS, or a tag such as `zh-CN` / `en-US`.",
-}];
+pub const PREFS: &[PrefSpec] = &[
+    PrefSpec {
+        key: "general.language",
+        default: r#""system""#,
+        kind: PrefKind::String,
+        req: "PR-018",
+        doc: "UI language: `system` to follow the OS, or a tag such as `zh-CN` / `en-US`.",
+    },
+    PrefSpec {
+        key: "markdown.strongMarker",
+        default: r#""**""#,
+        kind: PrefKind::Enum(&["**", "__"]),
+        req: "MD-075",
+        doc: "Marker used when commands create bold text.",
+    },
+    PrefSpec {
+        key: "markdown.emphasisMarker",
+        default: r#""*""#,
+        kind: PrefKind::Enum(&["*", "_"]),
+        req: "MD-075",
+        doc: "Marker used when commands create italic text.",
+    },
+    PrefSpec {
+        key: "markdown.bulletMarker",
+        default: r#""-""#,
+        kind: PrefKind::Enum(&["-", "*", "+"]),
+        req: "MD-075",
+        doc: "Marker used when commands create bullet lists.",
+    },
+    PrefSpec {
+        key: "markdown.codeDefaultLanguage",
+        default: r#""""#,
+        kind: PrefKind::String,
+        req: "MD-073",
+        doc: "Language pre-filled in new code blocks.",
+    },
+];
 
 /// Looks up the spec of `key`.
 pub fn spec(key: &str) -> Option<&'static PrefSpec> {

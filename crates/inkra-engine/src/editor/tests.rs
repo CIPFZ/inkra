@@ -241,3 +241,111 @@ fn paste_rules() {
     );
     assert_eq!(e.text(), "```\n# not a heading");
 }
+
+fn live(s: &str) -> Editor {
+    let mut e = at_end(s);
+    e.mode = ViewMode::Live;
+    e
+}
+
+#[test]
+fn live_enter_semantics() {
+    // paragraph → new paragraph (blank line)
+    let mut e = live("Hello");
+    e.newline_live(Break::Enter);
+    assert_eq!(e.text(), "Hello\n\n");
+    // heading split: the remainder becomes a paragraph
+    let mut e = live("# Title here");
+    e.sel = Selection::caret(7);
+    e.newline_live(Break::Enter);
+    assert_eq!(e.text(), "# Title\n\n here");
+    // quote: new paragraph inside, empty one leaves the quote
+    let mut e = live("> q");
+    e.newline_live(Break::Enter);
+    assert_eq!(e.text(), "> q\n>\n> ");
+    e.newline_live(Break::Enter);
+    assert_eq!(e.text(), "> q\n\n");
+    // list continuation still applies
+    let mut e = live("- a");
+    e.newline_live(Break::Enter);
+    assert_eq!(e.text(), "- a\n- ");
+    // soft break
+    let mut e = live("a");
+    e.newline_live(Break::Soft);
+    assert_eq!(e.text(), "a\n");
+}
+
+#[test]
+fn live_enter_expands_syntax() {
+    let mut e = live("```rust");
+    e.newline_live(Break::Enter);
+    assert_eq!((e.text().as_str(), e.sel.head), ("```rust\n\n```", 8));
+    let mut e = live("$$");
+    e.newline_live(Break::Enter);
+    assert_eq!(e.text(), "$$\n\n$$");
+    let mut e = live("|a|b|");
+    e.newline_live(Break::Enter);
+    assert_eq!(e.text(), "|a|b|\n| --- | --- |\n|   |   |");
+    let blocks = e.doc.ast().to_blocks();
+    assert!(matches!(
+        blocks[0].kind,
+        inkra_markdown::BlockKind::Table { .. }
+    ));
+    // a closed fence is not extended
+    let mut e = ed("```\nx\n```", 3);
+    e.mode = ViewMode::Live;
+    e.newline_live(Break::Enter);
+    assert_eq!(e.text(), "```\n\nx\n```");
+}
+
+#[test]
+fn live_backspace_semantics() {
+    // heading → paragraph
+    let mut e = live("# Title");
+    e.sel = Selection::caret(2);
+    e.delete_backward_live(Unit::Char);
+    assert_eq!(e.text(), "Title");
+    // paragraph merges with the previous paragraph
+    let mut e = live("a\n\nb");
+    e.sel = Selection::caret(3);
+    e.delete_backward_live(Unit::Char);
+    assert_eq!(e.text(), "ab");
+    // list item → paragraph after the list
+    let mut e = live("- a\n- b");
+    e.sel = Selection::caret(6);
+    e.delete_backward_live(Unit::Char);
+    assert_eq!(e.text(), "- a\n\nb");
+    // nested item outdents
+    let mut e = live("- a\n  - b");
+    e.sel = Selection::caret(8);
+    e.delete_backward_live(Unit::Char);
+    assert_eq!(e.text(), "- a\n- b");
+    // quote paragraph unquotes
+    let mut e = live("> q");
+    e.sel = Selection::caret(2);
+    e.delete_backward_live(Unit::Char);
+    assert_eq!(e.text(), "q");
+    // before a code block: caret moves into it, no merge
+    let mut e = live("```\ncode\n```\n\npara");
+    e.sel = Selection::caret(14);
+    e.delete_backward_live(Unit::Char);
+    assert_eq!(e.text(), "```\ncode\n```\n\npara");
+    assert_eq!(e.sel.head, 8);
+    // empty code block is deleted
+    let mut e = live("```\n```");
+    e.sel = Selection::caret(4);
+    e.delete_backward_live(Unit::Char);
+    assert_eq!(e.text(), "");
+}
+
+#[test]
+fn live_delete_forward_merges() {
+    let mut e = live("a\n\nb");
+    e.sel = Selection::caret(1);
+    e.delete_forward_live(Unit::Char);
+    assert_eq!(e.text(), "ab");
+    let mut e = live("a\n\n# H");
+    e.sel = Selection::caret(1);
+    e.delete_forward_live(Unit::Char);
+    assert_eq!(e.text(), "aH");
+}

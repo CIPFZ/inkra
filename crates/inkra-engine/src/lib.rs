@@ -10,6 +10,7 @@ pub mod builtin;
 pub mod command;
 pub mod editing;
 pub mod editor;
+pub mod formatting;
 pub mod keymap;
 pub mod menu;
 pub mod prefs;
@@ -77,6 +78,7 @@ pub fn builtin_registry() -> CommandRegistry {
     let mut r = CommandRegistry::new();
     builtin::register_all(&mut r);
     editing::register(&mut r);
+    formatting::register(&mut r);
     r
 }
 

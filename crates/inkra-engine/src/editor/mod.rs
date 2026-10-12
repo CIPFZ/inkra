@@ -4,6 +4,8 @@
 pub mod clipboard;
 pub mod context;
 pub mod find;
+pub mod format_ops;
+pub mod live_ops;
 pub mod ops;
 
 use inkra_doc::{Doc, Selection, Transaction, UndoPolicy};
@@ -38,6 +40,8 @@ pub struct Editor {
     pub prefs: EditPrefs,
     /// IME pre-edit text shown at the caret (not part of the document).
     pub preedit: Option<String>,
+    /// File on disk, if any.
+    pub path: Option<std::path::PathBuf>,
 }
 
 impl Default for Editor {
@@ -56,6 +60,7 @@ impl Editor {
             find: FindState::default(),
             prefs: EditPrefs::default(),
             preedit: None,
+            path: None,
         }
     }
 
@@ -134,6 +139,47 @@ impl Editor {
         self.apply_with_renumber(tx, UndoPolicy::NewGroup);
     }
 
+    /// Enter / Shift+Enter in live mode (ED-013).
+    pub fn newline_live(&mut self, kind: Break) {
+        let tx = live_ops::newline(&self.doc, self.sel, kind);
+        self.doc.break_undo_group();
+        if tx.edits.is_empty() {
+            return;
+        }
+        self.apply_with_renumber(tx, UndoPolicy::NewGroup);
+    }
+
+    /// Backspace in live mode (ED-012).
+    pub fn delete_backward_live(&mut self, unit: Unit) {
+        if let Some(tx) = live_ops::delete_backward(&self.doc, self.sel, unit, &self.prefs) {
+            if tx.edits.is_empty() {
+                self.sel = tx.selection_after.unwrap_or(self.sel);
+                return;
+            }
+            let policy = if unit == Unit::Char
+                && self.sel.is_empty()
+                && tx.edits.len() == 1
+                && tx.edits[0].range.len() <= 4
+            {
+                UndoPolicy::Typing
+            } else {
+                UndoPolicy::NewGroup
+            };
+            self.apply_with_renumber(tx, policy);
+        }
+    }
+
+    /// Delete in live mode (ED-012).
+    pub fn delete_forward_live(&mut self, unit: Unit) {
+        if let Some(tx) = live_ops::delete_forward(&self.doc, self.sel, unit) {
+            if tx.edits.is_empty() {
+                self.sel = tx.selection_after.unwrap_or(self.sel);
+                return;
+            }
+            self.apply_with_renumber(tx, UndoPolicy::NewGroup);
+        }
+    }
+
     /// Tab / Shift+Tab.
     pub fn tab(&mut self, outdent: bool) {
         if let Some(tx) = ops::tab(&self.doc, self.sel, outdent, &self.prefs) {
@@ -185,5 +231,7 @@ impl Editor {
     }
 }
 
+#[cfg(test)]
+mod format_tests;
 #[cfg(test)]
 mod tests;

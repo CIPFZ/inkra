@@ -58,6 +58,12 @@ pub enum Effect {
     ScrollToCaret,
     /// Move keyboard focus to the find bar.
     FocusFind,
+    /// Ask the user for an image file to insert (ED-040).
+    PickImage,
+    /// Show the insert-table dialog (ED-053).
+    ShowTableDialog,
+    /// Open a link target.
+    OpenUrl(String),
 }
 
 /// Context passed to every command.

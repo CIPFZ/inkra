@@ -1,0 +1,148 @@
+use super::format_ops::*;
+use super::*;
+
+fn tx(e: &mut Editor, t: Option<inkra_doc::Transaction>) {
+    if let Some(t) = t {
+        e.apply(t, UndoPolicy::NewGroup);
+    }
+}
+
+#[test]
+fn bold_toggles() {
+    let mut e = Editor::from_text("hello world");
+    e.sel = Selection::new(0, 5);
+    let t = toggle_inline(&e.doc, e.sel, InlineFormat::Bold, "**", "*");
+    tx(&mut e, Some(t));
+    assert_eq!(e.text(), "**hello** world");
+    assert_eq!(e.sel, Selection::new(2, 7));
+    let t = toggle_inline(&e.doc, e.sel, InlineFormat::Bold, "**", "*");
+    tx(&mut e, Some(t));
+    assert_eq!(e.text(), "hello world");
+    // no selection: empty pair, caret inside
+    let mut e = Editor::from_text("x ");
+    e.sel = Selection::caret(2);
+    let t = toggle_inline(&e.doc, e.sel, InlineFormat::Bold, "**", "*");
+    tx(&mut e, Some(t));
+    assert_eq!((e.text().as_str(), e.sel.head), ("x ****", 4));
+    // caret inside bold: remove markers
+    let mut e = Editor::from_text("a **bc** d");
+    e.sel = Selection::caret(5);
+    let t = toggle_inline(&e.doc, e.sel, InlineFormat::Bold, "**", "*");
+    tx(&mut e, Some(t));
+    assert_eq!((e.text().as_str(), e.sel.head), ("a bc d", 3));
+    // code with backticks inside uses double backticks
+    let mut e = Editor::from_text("a`b");
+    e.sel = Selection::new(0, 3);
+    let t = toggle_inline(&e.doc, e.sel, InlineFormat::Code, "**", "*");
+    tx(&mut e, Some(t));
+    assert_eq!(e.text(), "`` a`b ``");
+}
+
+#[test]
+fn headings_and_paragraph() {
+    let mut e = Editor::from_text("Title\n\npara");
+    e.sel = Selection::caret(2);
+    {
+        let t = set_heading(&e.doc, e.sel, 2);
+        tx(&mut e, t);
+    }
+    assert_eq!(e.text(), "## Title\n\npara");
+    {
+        let t = set_heading(&e.doc, e.sel, 1);
+        tx(&mut e, t);
+    }
+    assert_eq!(e.text(), "# Title\n\npara");
+    {
+        let t = set_heading(&e.doc, e.sel, 1);
+        tx(&mut e, t);
+    }
+    assert_eq!(e.text(), "Title\n\npara", "same level toggles back");
+    let mut e = Editor::from_text("Setext\n===");
+    e.sel = Selection::caret(1);
+    {
+        let t = set_heading(&e.doc, e.sel, 2);
+        tx(&mut e, t);
+    }
+    assert_eq!(e.text(), "## Setext");
+    let mut e = Editor::from_text("## H");
+    e.sel = Selection::caret(3);
+    {
+        let t = shift_heading(&e.doc, e.sel, true);
+        tx(&mut e, t);
+    }
+    assert_eq!(e.text(), "# H");
+    assert!(shift_heading(&e.doc, e.sel, true).is_none());
+}
+
+#[test]
+fn quotes_and_lists() {
+    let mut e = Editor::from_text("a\nb");
+    e.sel = Selection::caret(0);
+    {
+        let t = toggle_quote(&e.doc, e.sel);
+        tx(&mut e, t);
+    }
+    assert_eq!(e.text(), "> a\n> b");
+    {
+        let t = toggle_quote(&e.doc, e.sel);
+        tx(&mut e, t);
+    }
+    assert_eq!(e.text(), "a\nb");
+    let mut e = Editor::from_text("one\n\ntwo");
+    e.sel = Selection::new(0, 8);
+    {
+        let t = toggle_list(&e.doc, e.sel, ListStyle::Bullet, '-');
+        tx(&mut e, t);
+    }
+    assert_eq!(e.text(), "- one\n- two");
+    e.sel = Selection::caret(3);
+    {
+        let t = toggle_list(&e.doc, e.sel, ListStyle::Ordered, '-');
+        tx(&mut e, t);
+    }
+    assert_eq!(e.text(), "1. one\n- two");
+    let mut e = Editor::from_text("- a");
+    e.sel = Selection::caret(3);
+    {
+        let t = toggle_list(&e.doc, e.sel, ListStyle::Bullet, '-');
+        tx(&mut e, t);
+    }
+    assert_eq!(e.text(), "a");
+    let mut e = Editor::from_text("- [ ] t");
+    e.sel = Selection::caret(7);
+    {
+        let t = ops::toggle_task(&e.doc, e.sel, None);
+        tx(&mut e, t);
+    }
+    assert_eq!(e.text(), "- [x] t");
+}
+
+#[test]
+fn code_fences_rule_table_paragraphs() {
+    let mut e = Editor::from_text("let x");
+    e.sel = Selection::caret(2);
+    {
+        let t = code_fences(&e.doc, e.sel, "rust");
+        tx(&mut e, t);
+    }
+    assert_eq!(e.text(), "```rust\nlet x\n```");
+    let mut e = Editor::from_text("para");
+    e.sel = Selection::caret(4);
+    let t = insert_rule(&e.doc, e.sel);
+    tx(&mut e, Some(t));
+    assert_eq!(e.text(), "para\n\n---\n\n");
+    assert_eq!(
+        table_source(1, 2, "\n"),
+        "| Column 1 | Column 2 |\n| --- | --- |\n|   |   |"
+    );
+    let mut e = Editor::from_text("```\nx\n```");
+    e.sel = Selection::caret(5);
+    let t = exit_block(&e.doc, e.sel);
+    tx(&mut e, Some(t));
+    assert_eq!((e.text().as_str(), e.sel.head), ("```\nx\n```\n\n", 11));
+    let mut e = Editor::from_text("a");
+    e.sel = Selection::caret(1);
+    let t = ensure_trailing(&e.doc, e.sel);
+    tx(&mut e, Some(t));
+    assert_eq!(e.text(), "a\n\n");
+}
