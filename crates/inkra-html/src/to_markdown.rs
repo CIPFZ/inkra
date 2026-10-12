@@ -10,6 +10,7 @@ use markup5ever_rcdom::{Handle, NodeData, RcDom};
 /// lists, tables, links, images, emphasis, code and quotes are converted;
 /// unsupported tags contribute their text; scripts and styles are dropped.
 pub fn html_to_markdown(html: &str) -> String {
+    let html = strip_cf_html(html);
     let dom = parse_document(RcDom::default(), ParseOpts::default())
         .from_utf8()
         .read_from(&mut html.as_bytes());
@@ -24,6 +25,29 @@ pub fn html_to_markdown(html: &str) -> String {
         out.pop();
     }
     out
+}
+
+/// Windows `CF_HTML` clipboard data starts with a `Version:…StartFragment:…`
+/// header; keep only the fragment (or, failing that, everything from the first
+/// tag).
+pub fn strip_cf_html(s: &str) -> &str {
+    if !s.starts_with("Version:") {
+        return s;
+    }
+    let offset = |key: &str| -> Option<usize> {
+        let i = s.find(key)? + key.len();
+        let digits: String = s[i..].chars().take_while(char::is_ascii_digit).collect();
+        digits.parse().ok()
+    };
+    if let (Some(a), Some(b)) = (offset("StartFragment:"), offset("EndFragment:"))
+        && a <= b
+        && b <= s.len()
+        && s.is_char_boundary(a)
+        && s.is_char_boundary(b)
+    {
+        return &s[a..b];
+    }
+    s.find('<').map_or(s, |i| &s[i..])
 }
 
 #[derive(Default)]
@@ -603,6 +627,21 @@ mod tests {
         let katex = r#"<p>E = <span class="katex"><math><semantics><annotation encoding="application/x-tex">mc^2</annotation></semantics></math></span></p>"#;
         assert_eq!(html_to_markdown(katex), "E = $mc^2$");
         assert_eq!(html_to_markdown("plain <b>text</b>"), "plain **text**");
+    }
+
+    #[test]
+    fn windows_cf_html_header() {
+        let frag = "<b>x</b>";
+        let head = "Version:0.9\r\nStartHTML:000000097\r\nEndHTML:000000140\r\nStartFragment:000000131\r\nEndFragment:000000139\r\n";
+        let body =
+            format!("<html><body><!--StartFragment-->{frag}<!--EndFragment--></body></html>");
+        let s = format!("{head}{body}");
+        let a = s.find(frag).unwrap();
+        let s = s
+            .replace("000000131", &format!("{a:09}"))
+            .replace("000000139", &format!("{:09}", a + frag.len()));
+        assert_eq!(html_to_markdown(&s), "**x**");
+        assert_eq!(html_to_markdown("Version:0.9 junk <p>y</p>"), "y");
     }
 
     #[test]
