@@ -66,9 +66,62 @@ pub struct AppState {
     pub paths: Option<inkra_workspace::Paths>,
     /// Next window id.
     pub next_window: u64,
+    /// The resolved theme.
+    pub style: inkra_layout::Style,
+    /// The system uses a dark appearance (for the Auto theme).
+    pub system_dark: bool,
 }
 
 impl AppState {
+    /// Saves the preferences file (atomic, PR-001).
+    pub fn save_prefs(&self) {
+        if let Some(p) = &self.paths
+            && let Err(e) = self.prefs.save(&p.preferences_file())
+        {
+            log::warn!("cannot save preferences: {e}");
+        }
+    }
+
+    /// Sets a preference and saves the file.
+    pub fn set_pref(&mut self, key: &str, value: serde_json::Value) -> bool {
+        let ok = self.prefs.set(key, value);
+        if ok {
+            self.save_prefs();
+        }
+        ok
+    }
+
+    /// The theme that should be active now (Auto picks by system brightness).
+    pub fn wanted_theme(&self) -> String {
+        if self.prefs.bool("appearance.themeAuto") {
+            let key = if self.system_dark {
+                "appearance.darkTheme"
+            } else {
+                "appearance.lightTheme"
+            };
+            self.prefs.string(key)
+        } else {
+            self.prefs.string("appearance.theme")
+        }
+    }
+
+    /// (Re)loads the wanted theme into `style`; on failure keeps the current one
+    /// and returns the error.
+    pub fn reload_theme(&mut self) -> Result<(), String> {
+        let name = self.wanted_theme();
+        let dir = self.paths.as_ref().map(|p| p.themes_dir());
+        match crate::theme::load(&name, dir.as_deref()) {
+            Ok(s) => {
+                self.style = s;
+                Ok(())
+            }
+            Err(e) => {
+                log::warn!("theme {name}: {e}");
+                Err(e)
+            }
+        }
+    }
+
     /// Id of the active window.
     pub fn active(&self) -> u64 {
         self.meta.id

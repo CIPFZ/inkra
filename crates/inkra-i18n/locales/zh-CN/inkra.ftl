@@ -249,3 +249,4 @@ recovery-discard = 丢弃
 dialog-close = 关闭
 external-modified = 文件已在磁盘上修改。
 external-deleted = 文件已被删除或移动。
+cmd-theme-reload = 重新加载主题

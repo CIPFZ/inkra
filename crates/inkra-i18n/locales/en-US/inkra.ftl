@@ -249,3 +249,4 @@ recovery-discard = Discard
 dialog-close = Close
 external-modified = The file has been changed on disk.
 external-deleted = The file has been deleted or moved.
+cmd-theme-reload = Reload Theme

@@ -16,6 +16,8 @@ pub mod keymap;
 pub mod menu;
 pub mod prefs;
 pub mod state;
+pub mod theme;
+pub mod theming;
 
 use serde_json::Value;
 
@@ -47,6 +49,7 @@ impl Engine {
         state.next_window = 1;
         state.meta.recovery_id = state::recovery_id(1);
         state.editor.doc.set_options(markdown_options(&state.prefs));
+        let _ = state.reload_theme();
         Self {
             registry: builtin_registry(),
             keymap: Keymap::defaults(Os::current()),
@@ -106,6 +109,7 @@ pub fn builtin_registry() -> CommandRegistry {
     editing::register(&mut r);
     formatting::register(&mut r);
     files::register(&mut r);
+    theming::register(&mut r);
     r
 }
 
