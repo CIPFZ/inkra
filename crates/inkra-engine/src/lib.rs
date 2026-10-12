@@ -10,6 +10,7 @@ pub mod builtin;
 pub mod command;
 pub mod editing;
 pub mod editor;
+pub mod files;
 pub mod formatting;
 pub mod keymap;
 pub mod menu;
@@ -38,15 +39,26 @@ pub struct Engine {
 impl Engine {
     /// An engine with all built-in commands and the default key map.
     pub fn new(prefs: Preferences) -> Self {
+        let mut state = AppState {
+            prefs,
+            ..AppState::default()
+        };
+        state.meta.id = 1;
+        state.next_window = 1;
+        state.meta.recovery_id = state::recovery_id(1);
+        state.editor.doc.set_options(markdown_options(&state.prefs));
         Self {
             registry: builtin_registry(),
             keymap: Keymap::defaults(Os::current()),
-            state: AppState {
-                prefs,
-                ..AppState::default()
-            },
+            state,
             effects: Vec::new(),
         }
+    }
+
+    /// Runs `id` against window `window` (made active for the call).
+    pub fn execute_in(&mut self, window: u64, id: &str, params: &Value) -> CommandResult {
+        self.state.activate(window);
+        self.execute(id, params)
     }
 
     /// Runs `id` with `params`.
@@ -73,12 +85,27 @@ impl Engine {
     }
 }
 
+/// Parse options from the Markdown preferences (SPEC 4.3).
+pub fn markdown_options(prefs: &Preferences) -> inkra_markdown::ParseOptions {
+    inkra_markdown::ParseOptions {
+        inline_math: prefs.bool("markdown.inlineMath"),
+        subscript: prefs.bool("markdown.subscript"),
+        superscript: prefs.bool("markdown.superscript"),
+        highlight: prefs.bool("markdown.highlight"),
+        strict_atx: prefs.bool("markdown.strictMode"),
+        latex_delimiters: prefs.bool("markdown.latexDelimiters"),
+        loose_inline_math: prefs.bool("markdown.looseInlineMath"),
+        ..Default::default()
+    }
+}
+
 /// A registry with every built-in command (used by the app, CLI and `xtask commands`).
 pub fn builtin_registry() -> CommandRegistry {
     let mut r = CommandRegistry::new();
     builtin::register_all(&mut r);
     editing::register(&mut r);
     formatting::register(&mut r);
+    files::register(&mut r);
     r
 }
 
@@ -91,7 +118,7 @@ mod tests {
         let mut e = Engine::new(Preferences::new());
         assert!(e.is_enabled("app.quit"));
         assert!(
-            !e.is_enabled("file.save"),
+            !e.is_enabled("file.exportPdf"),
             "unregistered commands are disabled"
         );
         assert_eq!(e.is_checked("view.toggleSidebar"), Some(false));

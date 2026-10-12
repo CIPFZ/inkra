@@ -520,3 +520,44 @@ pub fn delete_forward(doc: &Doc, sel: Selection, unit: Unit) -> Option<Transacti
     }
     ops::delete_forward(doc, sel, unit)
 }
+
+/// Typing on a blank line directly after a block (the caret sits on a virtual
+/// empty paragraph, ED-006): CommonMark would make the text a lazy continuation of
+/// the previous paragraph or list item, so a separating line break goes first.
+pub fn separate_before_typing(doc: &Doc, sel: Selection, input: &str) -> Option<Transaction> {
+    let s = text(doc);
+    let pos = sel.head;
+    let ls = line_start(&s, pos);
+    let le = line_end(&s, pos);
+    if !s[ls..le].trim().is_empty() || ls == 0 || context::in_code_content(doc, pos) {
+        return None;
+    }
+    // Previous line must be non-blank content.
+    let prev_ls = line_start(&s, ls - 1);
+    let prev = s[prev_ls..ls].trim_end_matches(['\n', '\r']);
+    if prev.trim().is_empty() {
+        return None;
+    }
+    // Only where the caret is not inside a block already (a blank line in a
+    // container or a code block is real content).
+    if context::path(doc, pos).iter().any(|n| {
+        let r = n.span();
+        r.start <= pos
+            && pos <= r.end
+            && !matches!(
+                n.block.kind,
+                BlockKind::Paragraph | BlockKind::Heading { .. }
+            )
+    }) && context::quote_depth(doc, pos) == 0
+        && context::list_item(doc, pos).is_none()
+    {
+        return None;
+    }
+    if context::quote_depth(doc, pos) > 0 {
+        return None;
+    }
+    let nl = doc.newline();
+    let ins = format!("{nl}{input}");
+    let end = pos + ins.len();
+    Some(replace(pos..pos, &ins, sel, Selection::caret(end)))
+}

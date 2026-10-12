@@ -114,8 +114,13 @@ impl Doc {
 
     /// Changes parse options (full re-parse; MD-080).
     pub fn set_options(&mut self, options: ParseOptions) {
+        let clean = !self.is_dirty();
         self.ast.set_options(&self.text, options);
         self.version += 1;
+        // Not a content change: a saved document stays saved.
+        if clean {
+            self.saved_version = self.version;
+        }
         // Not a text change, but layouts depend on the parse: force a full rebuild.
         self.log.clear();
     }

@@ -349,3 +349,24 @@ fn live_delete_forward_merges() {
     e.delete_forward_live(Unit::Char);
     assert_eq!(e.text(), "aH");
 }
+
+#[test]
+fn typing_after_block_on_blank_line_starts_new_paragraph() {
+    let mut e = live("beta\n");
+    typed(&mut e, "x");
+    assert_eq!(e.text(), "beta\n\nx");
+    let blocks = e.doc.ast().to_blocks();
+    assert_eq!(blocks.len(), 2);
+    let mut e = live("- a\n");
+    typed(&mut e, "y");
+    assert_eq!(e.text(), "- a\n\ny");
+    // after a blank line: nothing extra
+    let mut e = live("p\n\n");
+    typed(&mut e, "z");
+    assert_eq!(e.text(), "p\n\nz");
+    // source mode is literal
+    let mut e = at_end("beta\n");
+    e.mode = ViewMode::Source;
+    typed(&mut e, "x");
+    assert_eq!(e.text(), "beta\nx");
+}

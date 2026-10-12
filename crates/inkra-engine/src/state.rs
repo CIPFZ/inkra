@@ -12,15 +12,138 @@ pub struct ViewState {
     pub debug_overlay: bool,
 }
 
-/// State shared by all commands.
+/// An external change to the open file (FS-007).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExternalChange {
+    /// Changed on disk while there are unsaved local edits: ask the user.
+    Modified,
+    /// Deleted or moved away.
+    Deleted,
+}
+
+/// Per-window bookkeeping besides the editor.
+#[derive(Debug, Clone, Default)]
+pub struct WindowMeta {
+    /// Window id (stable for the session).
+    pub id: u64,
+    /// What the file looked like when last loaded or saved.
+    pub disk: Option<inkra_workspace::files::DiskState>,
+    /// Pending external change notice.
+    pub external: Option<ExternalChange>,
+    /// Recovery entry id.
+    pub recovery_id: String,
+}
+
+/// A window that is not currently active.
+#[derive(Debug, Clone)]
+pub struct Parked {
+    /// Its editor.
+    pub editor: Editor,
+    /// Its view flags.
+    pub view: ViewState,
+    /// Its metadata.
+    pub meta: WindowMeta,
+}
+
+/// State shared by all commands. The active window's state lives in `editor`,
+/// `view` and `meta`; other windows are parked in `others` and swapped in by
+/// [`AppState::activate`].
 #[derive(Debug, Clone, Default)]
 pub struct AppState {
     /// User preferences.
     pub prefs: Preferences,
-    /// View flags.
+    /// View flags of the active window.
     pub view: ViewState,
-    /// The document editor of the window.
+    /// The document editor of the active window.
     pub editor: Editor,
+    /// Metadata of the active window.
+    pub meta: WindowMeta,
+    /// Other windows.
+    pub others: Vec<Parked>,
+    /// Session data: recent files and folders, sidebar root.
+    pub session: inkra_workspace::session::Session,
+    /// Platform directories.
+    pub paths: Option<inkra_workspace::Paths>,
+    /// Next window id.
+    pub next_window: u64,
+}
+
+impl AppState {
+    /// Id of the active window.
+    pub fn active(&self) -> u64 {
+        self.meta.id
+    }
+
+    /// Ids of all windows (active first).
+    pub fn window_ids(&self) -> Vec<u64> {
+        std::iter::once(self.meta.id)
+            .chain(self.others.iter().map(|p| p.meta.id))
+            .collect()
+    }
+
+    /// Makes window `id` active; returns false if it does not exist.
+    pub fn activate(&mut self, id: u64) -> bool {
+        if self.meta.id == id {
+            return true;
+        }
+        let Some(i) = self.others.iter().position(|p| p.meta.id == id) else {
+            return false;
+        };
+        let parked = self.others.swap_remove(i);
+        let old = Parked {
+            editor: std::mem::replace(&mut self.editor, parked.editor),
+            view: std::mem::replace(&mut self.view, parked.view),
+            meta: std::mem::replace(&mut self.meta, parked.meta),
+        };
+        self.others.push(old);
+        true
+    }
+
+    /// Creates a window (parked) and returns its id.
+    pub fn new_window(&mut self, editor: Editor) -> u64 {
+        self.next_window = self.next_window.max(self.meta.id) + 1;
+        let id = self.next_window;
+        let meta = WindowMeta {
+            id,
+            recovery_id: recovery_id(id),
+            ..Default::default()
+        };
+        self.others.push(Parked {
+            editor,
+            view: self.view.clone(),
+            meta,
+        });
+        id
+    }
+
+    /// Removes window `id`. The active window can only be removed if another
+    /// exists (which becomes active).
+    pub fn remove_window(&mut self, id: u64) -> bool {
+        if self.meta.id == id {
+            let Some(next) = self.others.pop() else {
+                return false;
+            };
+            self.editor = next.editor;
+            self.view = next.view;
+            self.meta = next.meta;
+            return true;
+        }
+        let before = self.others.len();
+        self.others.retain(|p| p.meta.id != id);
+        self.others.len() != before
+    }
+
+    /// Visits every window's editor (active first).
+    pub fn editors(&self) -> impl Iterator<Item = (&WindowMeta, &Editor)> {
+        std::iter::once((&self.meta, &self.editor))
+            .chain(self.others.iter().map(|p| (&p.meta, &p.editor)))
+    }
+}
+
+/// Recovery entry id for a window of this process.
+pub fn recovery_id(window: u64) -> String {
+    let t = inkra_workspace::time::Utc::now().compact_millis();
+    format!("{t}-{}-{window}", std::process::id())
 }
 
 /// User-visible notices requested by the engine.
@@ -64,6 +187,35 @@ pub enum Effect {
     ShowTableDialog,
     /// Open a link target.
     OpenUrl(String),
+    /// A window was created (parked in the state); show it.
+    NewWindow(u64),
+    /// Bring a window to the front.
+    FocusWindow(u64),
+    /// Close a window (no confirmation needed).
+    CloseWindow(u64),
+    /// Ask save / don't save / cancel before closing window `id` (FS-005);
+    /// `quit` continues quitting afterwards.
+    ConfirmClose {
+        /// Window id.
+        id: u64,
+        /// Part of quitting the application.
+        quit: bool,
+    },
+    /// Ask for a file to open.
+    OpenDialog,
+    /// Ask for a folder to open.
+    OpenFolderDialog,
+    /// Ask where to save (FS-003); optionally close the window afterwards.
+    SaveAsDialog {
+        /// Close after saving.
+        close_after: bool,
+        /// Then continue quitting.
+        quit: bool,
+    },
+    /// Show a file in the system file manager.
+    Reveal(std::path::PathBuf),
+    /// Show an error message.
+    Error(String),
 }
 
 /// Context passed to every command.

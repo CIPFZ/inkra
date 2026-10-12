@@ -104,6 +104,13 @@ impl Editor {
         if s.is_empty() {
             return;
         }
+        if self.mode == ViewMode::Live
+            && self.sel.is_empty()
+            && let Some(tx) = live_ops::separate_before_typing(&self.doc, self.sel, s)
+        {
+            self.apply(tx, UndoPolicy::Typing);
+            return;
+        }
         let tx = ops::type_text(&self.doc, self.sel, s, &self.prefs);
         if tx.edits.is_empty() {
             self.sel = tx.selection_after.unwrap_or(self.sel);
