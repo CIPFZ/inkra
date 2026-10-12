@@ -92,6 +92,13 @@ pub fn show(ui: &mut egui::Ui, engine: &mut Engine, i18n: &I18n) -> Vec<(String,
         cmd_button(ui, engine, i18n, "paragraph.taskStatus", &mut out);
         ui.separator();
     }
+    if inkra_engine::editor::table::in_table(&engine.state.editor.doc, pos) {
+        ui.menu_button(i18n.tr("ctx-table"), |ui| {
+            let cmds = table_items(ui, engine, i18n);
+            out.extend(cmds);
+        });
+        ui.separator();
+    }
     if let Some(code) = code_text {
         custom(
             ui,
@@ -155,5 +162,44 @@ pub fn show(ui: &mut egui::Ui, engine: &mut Engine, i18n: &I18n) -> Vec<(String,
             cmd_button(ui, engine, i18n, id, &mut out);
         }
     });
+    out
+}
+
+/// Table entries (ED-083), used by the table toolbar's "more" menu and the
+/// right-click menu inside tables.
+pub fn table_items(ui: &mut egui::Ui, engine: &mut Engine, i18n: &I18n) -> Vec<(String, Value)> {
+    let mut out = Vec::new();
+    for group in [
+        &[
+            "table.insertRowAbove",
+            "table.insertRowBelow",
+            "table.insertColLeft",
+            "table.insertColRight",
+        ][..],
+        &["table.deleteRow", "table.deleteCol", "table.deleteTable"],
+        &[
+            "table.moveRowUp",
+            "table.moveRowDown",
+            "table.moveColLeft",
+            "table.moveColRight",
+        ],
+        &["table.alignLeft", "table.alignCenter", "table.alignRight"],
+        &[
+            "table.sortByColumnAsc",
+            "table.sortByColumnDesc",
+            "table.resize",
+            "table.format",
+        ],
+        &[
+            "table.copyAsMarkdown",
+            "table.copyAsHtml",
+            "table.copyAsCsv",
+        ],
+    ] {
+        for id in group {
+            cmd_button(ui, engine, i18n, id, &mut out);
+        }
+        ui.separator();
+    }
     out
 }

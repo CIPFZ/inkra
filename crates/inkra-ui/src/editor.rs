@@ -16,6 +16,19 @@ use serde_json::{Value, json};
 use crate::clipboard::Clipboard;
 use crate::images::Images;
 
+/// A table wider than the text column in the current frame.
+#[derive(Debug, Clone, Copy)]
+struct Wide {
+    item: usize,
+    key: usize,
+    /// Grid in document coordinates.
+    rect: Rect,
+    /// Maximum horizontal scroll.
+    max: f32,
+    /// Current horizontal scroll.
+    shift: f32,
+}
+
 /// Caret blink period (ED-020): 530 ms on, 530 ms off.
 const BLINK: f64 = 0.53;
 /// Blinking stops this long after the last input.
@@ -52,6 +65,10 @@ pub struct EditorView {
     pub images: Images,
     /// Caret blinks (PR-042).
     pub blink: bool,
+    /// Horizontal scroll of wide tables, by table source start (ED-080).
+    hscroll: std::collections::HashMap<usize, f32>,
+    wide: Vec<Wide>,
+    i18n: inkra_i18n::I18n,
     base_style: Style,
     zoom: f32,
     /// syntect theme for code blocks.
@@ -85,6 +102,9 @@ impl EditorView {
             last_ms: 0.0,
             images: Images::default(),
             blink: true,
+            hscroll: Default::default(),
+            wide: Vec::new(),
+            i18n: inkra_i18n::I18n::default(),
             base_style: Style::default(),
             zoom: 1.0,
             syntax_theme: "InspiredGitHub".to_owned(),
@@ -177,6 +197,9 @@ impl EditorView {
         clipboard: &mut Clipboard,
         i18n: &inkra_i18n::I18n,
     ) -> EditorOutput {
+        if self.i18n.language() != i18n.language() {
+            self.i18n = i18n.clone();
+        }
         let t0 = std::time::Instant::now();
         let mut out = EditorOutput::default();
         let ctx = ui.ctx().clone();
@@ -368,6 +391,37 @@ impl EditorView {
                 caret_rect = view.caret_rect(caret, &lcx, fonts);
             });
         }
+        // Wide tables scroll horizontally (shift+wheel or a horizontal wheel over
+        // the table) and follow the caret.
+        self.collect_wide_tables(visible.clone(), col_w);
+        if !self.wide.is_empty() {
+            let (hover, dx) = ctx.input(|i| (i.pointer.hover_pos(), i.smooth_scroll_delta.x));
+            let caret_doc = caret_rect;
+            for w in &mut self.wide {
+                let mut shift = w.shift;
+                if let Some(h) = hover {
+                    let y = h.y - rect.top() - pad + self.scroll;
+                    if dx != 0.0 && w.rect.min.y <= y && y <= w.rect.max.y {
+                        shift -= dx;
+                    }
+                }
+                if let Some(c) = caret_doc
+                    .filter(|c| w.rect.min.y <= c.center().y && c.center().y <= w.rect.max.y)
+                {
+                    if c.min.x - shift < 0.0 {
+                        shift = c.min.x - 8.0;
+                    } else if c.max.x - shift > col_w {
+                        shift = c.max.x - col_w + 8.0;
+                    }
+                }
+                w.shift = shift.clamp(0.0, w.max);
+                self.hscroll.insert(w.key, w.shift);
+            }
+            if let Some(c) = caret_rect {
+                let s = self.hshift_at_y(c.center().y);
+                caret_rect = Some(c.translate(vec2(-s, 0.0)));
+            }
+        }
         // Request textures for visible images.
         for i in visible.clone() {
             if let Some(l) = self.view.layout(i) {
@@ -380,6 +434,7 @@ impl EditorView {
         }
         let painter = ui.painter_at(rect);
         let mut shapes = Vec::new();
+        let mut wide_sel = Vec::new();
         let ed = &engine.state.editor;
         if ed.find.open && !ed.find.matches.is_empty() && !visible.is_empty() {
             let vis_src = self.view.items()[visible.start].src.start
@@ -394,7 +449,9 @@ impl EditorView {
                 } else {
                     self.style.search_match_bg
                 };
+                let (rects, wide) = self.split_rects(rects);
                 inkra_render::paint_selection(&mut shapes, &rects, offset, color);
+                inkra_render::paint_selection(&mut wide_sel, &wide, offset, color);
             }
         }
         // Focus mode (WM-001): items outside the current top-level block fade.
@@ -421,25 +478,82 @@ impl EditorView {
         let mut deco_shapes = Vec::new();
         let images = &self.images;
         let lookup = |src: &str| images.texture(src);
+        let clip = Rect::from_min_max(
+            pos2(text_rect.left() - 1.0, rect.top()),
+            pos2(text_rect.right() + 1.0, rect.bottom()),
+        );
+        let wide_painter = ui.painter_at(clip);
+        let mut wide_shapes = Vec::new();
         for (k, i) in visible.clone().enumerate() {
             let top = self.view.top(i);
             if let Some(l) = self.view.layout(i) {
-                inkra_render::paint_decos(&mut deco_shapes, &l, top, offset, alphas[k], &lookup);
+                match self.wide.iter().find(|w| w.item == i) {
+                    Some(w) => inkra_render::paint_decos(
+                        &mut wide_shapes,
+                        &l,
+                        top,
+                        offset - vec2(w.shift, 0.0),
+                        alphas[k],
+                        &lookup,
+                    ),
+                    None => inkra_render::paint_decos(
+                        &mut deco_shapes,
+                        &l,
+                        top,
+                        offset,
+                        alphas[k],
+                        &lookup,
+                    ),
+                }
             }
         }
         painter.extend(deco_shapes);
+        wide_painter.extend(wide_shapes);
         if !ed.sel.is_empty() {
             let rects = self.view.selection_rects(ed.sel.range(), visible.clone());
+            let (rects, wide) = self.split_rects(rects);
             let color = if focused {
                 self.style.selection
             } else {
                 self.style.selection.gamma_multiply(0.6)
             };
             inkra_render::paint_selection(&mut shapes, &rects, offset, color);
+            inkra_render::paint_selection(&mut wide_sel, &wide, offset, color);
         }
+        let mut wide_runs = wide_sel;
         for (k, i) in visible.clone().enumerate() {
             let runs = self.view.runs(i);
-            inkra_render::paint_runs(&mut shapes, &runs, offset, self.style.fg, alphas[k]);
+            match self.wide.iter().find(|w| w.item == i) {
+                Some(w) => inkra_render::paint_runs(
+                    &mut wide_runs,
+                    &runs,
+                    offset - vec2(w.shift, 0.0),
+                    self.style.fg,
+                    alphas[k],
+                ),
+                None => {
+                    inkra_render::paint_runs(&mut shapes, &runs, offset, self.style.fg, alphas[k])
+                }
+            }
+        }
+        // Horizontal scroll indicators under wide tables.
+        for w in &self.wide {
+            let r = w.rect.translate(offset);
+            let track = Rect::from_min_max(
+                pos2(text_rect.left(), r.bottom() + 2.0),
+                pos2(text_rect.right(), r.bottom() + 5.0),
+            );
+            let frac = col_w / (col_w + w.max);
+            let x0 = track.left() + track.width() * (w.shift / (col_w + w.max));
+            let thumb = Rect::from_min_max(
+                pos2(x0, track.top()),
+                pos2(x0 + track.width() * frac, track.bottom()),
+            );
+            wide_runs.push(egui::Shape::rect_filled(
+                thumb,
+                2.0,
+                self.style.fg_muted.gamma_multiply(0.35),
+            ));
         }
         // Line numbers.
         if gutter > 0.0 {
@@ -465,6 +579,7 @@ impl EditorView {
             }
         }
         painter.extend(shapes);
+        wide_painter.extend(wide_runs);
 
         // Code block tools (ED-002): language and copy button when the caret is inside.
         if !source {
@@ -535,6 +650,27 @@ impl EditorView {
         out
     }
 
+    /// Splits highlight rectangles into those outside wide tables and those inside
+    /// (shifted by the table's horizontal scroll; painted clipped).
+    fn split_rects(&self, rects: Vec<Rect>) -> (Vec<Rect>, Vec<Rect>) {
+        if self.wide.is_empty() {
+            return (rects, Vec::new());
+        }
+        let mut plain = Vec::new();
+        let mut wide = Vec::new();
+        for r in rects {
+            match self
+                .wide
+                .iter()
+                .find(|w| w.rect.min.y <= r.center().y && r.center().y <= w.rect.max.y)
+            {
+                Some(w) => wide.push(r.translate(vec2(-w.shift, 0.0))),
+                None => plain.push(r),
+            }
+        }
+        (plain, wide)
+    }
+
     fn code_tools(
         &mut self,
         ui: &mut egui::Ui,
@@ -550,9 +686,19 @@ impl EditorView {
             };
             let top = self.view.top(i);
             for o in &l.overlays {
-                let Overlay::Code {
-                    rect, lang, body, ..
-                } = o;
+                let (rect, lang, body) = match o {
+                    Overlay::Code {
+                        rect, lang, body, ..
+                    } => (rect, lang, body),
+                    Overlay::Table { rect, span } => {
+                        let active = caret >= span.start && caret <= span.end;
+                        if active {
+                            let r = rect.translate(vec2(0.0, top) + offset);
+                            self.table_toolbar(ui, engine, r, span.start, out);
+                        }
+                        continue;
+                    }
+                };
                 let r = rect.translate(vec2(0.0, top) + offset);
                 let active = caret >= body.start && caret <= body.end;
                 let label = if lang.is_empty() {
@@ -597,6 +743,45 @@ impl EditorView {
                 }
             }
         }
+    }
+
+    /// The floating table toolbar (ED-082): alignment, delete, resize and more.
+    fn table_toolbar(
+        &mut self,
+        ui: &mut egui::Ui,
+        engine: &mut Engine,
+        r: Rect,
+        key: usize,
+        out: &mut EditorOutput,
+    ) {
+        let i18n = self.i18n.clone();
+        let area = egui::Area::new(self.id.with(("table-tools", key)))
+            .fixed_pos(pos2(r.left(), r.top() - 28.0))
+            .order(egui::Order::Foreground);
+        area.show(ui.ctx(), |ui| {
+            egui::Frame::popup(ui.style())
+                .inner_margin(egui::Margin::symmetric(4, 2))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        let mut b = |ui: &mut egui::Ui, label: &str, id: &str| {
+                            let tip = i18n.tr(&inkra_engine::command::title_key(id));
+                            if ui.small_button(label).on_hover_text(tip).clicked() {
+                                out.commands.push((id.to_owned(), Value::Null));
+                            }
+                        };
+                        b(ui, "⇤", "table.alignLeft");
+                        b(ui, "↔", "table.alignCenter");
+                        b(ui, "⇥", "table.alignRight");
+                        ui.separator();
+                        b(ui, "⊞", "table.resize");
+                        b(ui, "🗑", "table.deleteTable");
+                        ui.menu_button("⋯", |ui| {
+                            let cmds = crate::context_menu::table_items(ui, engine, &i18n);
+                            out.commands.extend(cmds);
+                        });
+                    });
+                });
+        });
     }
 
     fn snap_caret(&mut self, ctx: &egui::Context, engine: &mut Engine, forward: bool) {
@@ -670,10 +855,48 @@ impl EditorView {
     }
 
     fn doc_pos(&self, p: Pos2, rect: Rect, text_rect: Rect) -> Pos2 {
-        pos2(
-            p.x - text_rect.left(),
-            p.y - rect.top() - self.style.padding_y + self.scroll,
-        )
+        let y = p.y - rect.top() - self.style.padding_y + self.scroll;
+        pos2(p.x - text_rect.left() + self.hshift_at_y(y), y)
+    }
+
+    /// Horizontal scroll of the wide table at document height `y` (ED-080).
+    fn hshift_at_y(&self, y: f32) -> f32 {
+        self.wide
+            .iter()
+            .find(|w| w.rect.min.y <= y && y <= w.rect.max.y)
+            .map_or(0.0, |w| w.shift)
+    }
+
+    /// Finds tables wider than the column among `visible` items and clamps their
+    /// horizontal scroll.
+    fn collect_wide_tables(&mut self, visible: std::ops::Range<usize>, col_w: f32) {
+        self.wide.clear();
+        for i in visible {
+            let Some(l) = self.view.layout(i) else {
+                continue;
+            };
+            let top = self.view.top(i);
+            for o in &l.overlays {
+                if let Overlay::Table { rect, span } = o {
+                    let over = rect.max.x - col_w;
+                    if over > 0.5 {
+                        let shift = self
+                            .hscroll
+                            .get(&span.start)
+                            .copied()
+                            .unwrap_or(0.0)
+                            .clamp(0.0, over);
+                        self.wide.push(Wide {
+                            item: i,
+                            key: span.start,
+                            rect: rect.translate(vec2(0.0, top)),
+                            max: over,
+                            shift,
+                        });
+                    }
+                }
+            }
+        }
     }
 
     fn hit(&mut self, ctx: &egui::Context, engine: &Engine, p: Pos2) -> usize {

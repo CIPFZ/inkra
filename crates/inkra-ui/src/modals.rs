@@ -203,8 +203,13 @@ pub(crate) fn table_dialog(shell: &mut Shell, ctx: &egui::Context) {
     };
     let mut done = None;
     let i18n = shell.i18n.clone();
+    let resize = shell.table_dialog_resize;
     let resp = egui::Modal::new(egui::Id::new("inkra-table-dialog")).show(ctx, |ui| {
-        ui.heading(i18n.tr("cmd-paragraph-table"));
+        ui.heading(i18n.tr(if resize {
+            "table-resize-title"
+        } else {
+            "cmd-paragraph-table"
+        }));
         egui::Grid::new("table-grid").show(ui, |ui| {
             ui.label(i18n.tr("table-rows"));
             ui.add(egui::DragValue::new(&mut rows).range(1..=200));
@@ -232,11 +237,12 @@ pub(crate) fn table_dialog(shell: &mut Shell, ctx: &egui::Context) {
     match done {
         Some(true) => {
             shell.table_dialog = None;
-            shell.invoke(
-                ctx,
-                "paragraph.table",
-                &json!({ "rows": rows, "cols": cols }),
-            );
+            let id = if resize {
+                "table.resize"
+            } else {
+                "paragraph.table"
+            };
+            shell.invoke(ctx, id, &json!({ "rows": rows, "cols": cols }));
         }
         Some(false) => shell.table_dialog = None,
         None => {}

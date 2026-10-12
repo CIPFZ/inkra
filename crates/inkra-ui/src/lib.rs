@@ -109,6 +109,7 @@ pub struct Shell {
     pub raw_keys: std::sync::Arc<RawKeys>,
     dialogs: dialogs::Dialogs,
     table_dialog: Option<(u32, u32)>,
+    table_dialog_resize: bool,
     windows: BTreeMap<u64, WinUi>,
     root: u64,
     confirm: Option<Confirm>,
@@ -156,6 +157,7 @@ impl Shell {
             raw_keys: Default::default(),
             dialogs: Default::default(),
             table_dialog: None,
+            table_dialog_resize: false,
             windows,
             root,
             confirm: None,
@@ -425,7 +427,20 @@ impl Shell {
                     self.dialogs
                         .open(ctx, dialogs::Purpose::InsertImage, dir, None);
                 }
-                Effect::ShowTableDialog => self.table_dialog = Some((3, 3)),
+                Effect::ShowTableDialog => {
+                    self.table_dialog = Some((3, 3));
+                    self.table_dialog_resize = false;
+                }
+                Effect::ShowTableResize => {
+                    let e = &self.engine.state.editor;
+                    if let Some(t) = inkra_engine::editor::table::table_at(&e.doc, e.sel.head) {
+                        self.table_dialog = Some((
+                            (t.rows.len().saturating_sub(1)).max(1) as u32,
+                            t.cols() as u32,
+                        ));
+                        self.table_dialog_resize = true;
+                    }
+                }
                 Effect::OpenUrl(url) => self.open_url(ctx, &url),
                 Effect::NewWindow(id) => {
                     let mut w = WinUi::new();
@@ -695,6 +710,11 @@ impl Shell {
     fn handle_shortcuts(&mut self, ctx: &egui::Context) {
         let os = self.os;
         let mut hits = Vec::new();
+        let in_table = {
+            let e = &self.engine.state.editor;
+            e.mode == inkra_engine::editor::ViewMode::Live
+                && inkra_engine::editor::table::in_table(&e.doc, e.sel.head)
+        };
         let keymap = &self.engine.keymap;
         let registry = &self.engine.registry;
         ctx.input_mut(|i| {
@@ -712,7 +732,7 @@ impl Shell {
                 let Some(chord) = keys::chord(*key, *physical_key, *modifiers, os) else {
                     return true;
                 };
-                match keymap.resolve(&chord, false) {
+                match keymap.resolve(&chord, in_table) {
                     Some(b) if registry.contains(&b.command) => {
                         hits.push((b.command.clone(), b.params.clone()));
                         false
