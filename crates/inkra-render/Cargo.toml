@@ -13,3 +13,4 @@ workspace = true
 
 [dependencies]
 inkra-layout.workspace = true
+epaint.workspace = true
