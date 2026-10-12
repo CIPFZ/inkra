@@ -14,3 +14,5 @@ workspace = true
 [dependencies]
 inkra-text.workspace = true
 inkra-markdown.workspace = true
+html5ever.workspace = true
+markup5ever_rcdom.workspace = true
