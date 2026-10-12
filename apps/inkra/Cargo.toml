@@ -1,0 +1,38 @@
+[package]
+name = "inkra"
+description = "Inkra desktop application"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+build = "build.rs"
+
+# This crate holds the only `unsafe` code in the workspace: the Windows platform
+# glue in `src/platform_windows.rs` (AttachConsole, AppUserModelID). The workspace
+# `forbid` is therefore relaxed to `deny` here and allowed in that module only.
+[lints.rust]
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+
+[dependencies]
+inkra-i18n.workspace = true
+inkra-workspace.workspace = true
+inkra-engine.workspace = true
+inkra-ui.workspace = true
+eframe = { workspace = true, features = ["wgpu", "accesskit", "x11", "wayland", "persistence", "default_fonts"] }
+log.workspace = true
+fern.workspace = true
+anyhow.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console", "Win32_UI_Shell"] }
+
+[build-dependencies]
+winresource = "0.1"

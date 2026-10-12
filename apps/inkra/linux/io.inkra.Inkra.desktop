@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Inkra
+Name[zh_CN]=墨刻
+GenericName=Markdown Editor
+GenericName[zh_CN]=Markdown 编辑器
+Comment=A native, lightweight WYSIWYM Markdown editor
+Comment[zh_CN]=原生、轻量的所见即所得 Markdown 编辑器
+Exec=inkra %F
+Icon=io.inkra.Inkra
+Terminal=false
+Categories=Office;TextEditor;Utility;
+MimeType=text/markdown;text/x-markdown;text/plain;
+StartupWMClass=io.inkra.Inkra
+Keywords=markdown;editor;writing;notes;

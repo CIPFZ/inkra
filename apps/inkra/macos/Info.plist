@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Inkra</string>
+  <key>CFBundleDisplayName</key><string>Inkra</string>
+  <key>CFBundleIdentifier</key><string>io.inkra.Inkra</string>
+  <key>CFBundleExecutable</key><string>inkra</string>
+  <key>CFBundleIconFile</key><string>inkra</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleVersion</key><string>$VERSION</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
+  <key>LSMinimumSystemVersion</key><string>12.0</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSHumanReadableCopyright</key><string>MIT OR Apache-2.0</string>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key><string>Markdown Document</string>
+      <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>md</string><string>markdown</string><string>mdown</string><string>mmd</string>
+        <string>mkd</string><string>mdwn</string><string>mdtxt</string><string>mdtext</string>
+        <string>text</string><string>txt</string><string>mdx</string><string>rmd</string>
+      </array>
+      <key>LSItemContentTypes</key>
+      <array><string>net.daringfireball.markdown</string></array>
+    </dict>
+  </array>
+</dict>
+</plist>
