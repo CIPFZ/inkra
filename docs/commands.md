@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **3**
+Registered commands: **33**
 
 
 ## App
@@ -14,10 +14,50 @@ Registered commands: **3**
 | `app.about` | About Inkra | 关于 Inkra |  |  | — | UI-052 | Show the About dialog. |
 | `app.quit` | Quit | 退出 | `Ctrl+Q` | `⌘Q` | — | FS-005 | Quit the application, closing all windows. |
 
+## Edit
+
+| Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
+|---|---|---|---|---|---|---|---|
+| `edit.copy` | Copy | 复制 | `Ctrl+C` | `⌘C` | — | ED-016 | Copy the selection as Markdown (text/plain) and rendered HTML (text/html). |
+| `edit.cut` | Cut | 剪切 | `Ctrl+X` | `⌘X` | — | ED-016 | Cut the selection to the clipboard. |
+| `edit.deleteBackward` | Delete Backward | 向后删除 |  |  | `{"type":"object","properties":{"unit":{"enum":["char","word","line"]}}}` | ED-012 | Backspace by char, word or to line start. |
+| `edit.deleteForward` | Delete Forward | 向前删除 |  |  | `{"type":"object","properties":{"unit":{"enum":["char","word","line"]}}}` | ED-012 | Delete forward by char, word or to line end. |
+| `edit.deleteLine` | Delete Line | 删除当前行 |  |  | — | ED-012 | Delete the current line. |
+| `edit.deleteWord` | Delete Word | 删除当前词 | `Ctrl+Shift+D` | `⇧⌘D` | — | ED-012 | Delete the word at the caret. |
+| `edit.find` | Find | 查找 | `Ctrl+F` | `⌘F` | — | ED-110 | Open the find bar (pre-filled with the selection). |
+| `edit.findNext` | Find Next | 查找下一个 | `F3` | `F3` | — | ED-110 | Select the next match. |
+| `edit.findPrev` | Find Previous | 查找上一个 | `Shift+F3` | `⇧F3` | — | ED-110 | Select the previous match. |
+| `edit.insertText` | Insert Text | 插入文本 |  |  | `{"type":"object","required":["text"],"properties":{"text":{"type":"string"}}}` | ED-010 | Type text at the caret (with auto-pairing). |
+| `edit.jumpBottom` | Jump to Bottom | 跳转到底部 | `Ctrl+End` | `⌘↘` | — | ED-020 | Move the caret to the end of the document. |
+| `edit.jumpSelection` | Jump to Selection | 跳转到所选内容 | `Ctrl+J` | `⌘J` | — | ED-020 | Scroll the selection into view. |
+| `edit.jumpTop` | Jump to Top | 跳转到顶部 | `Ctrl+Home` | `⌘↖` | — | ED-020 | Move the caret to the start of the document. |
+| `edit.lineEnding` | Line Ending | 换行符 |  |  | `{"type":"object","required":["style"],"properties":{"style":{"enum":["lf","crlf"]}}}` | ED-106 | Convert all line endings to LF or CRLF. |
+| `edit.newline` | New Line | 换行 |  |  | `{"type":"object","properties":{"soft":{"type":"boolean"}}}` | ED-013 | Insert a line break; continues lists, quotes and code indentation. |
+| `edit.paste` | Paste | 粘贴 | `Ctrl+V` | `⌘V` | `{"type":"object","properties":{"text":{"type":"string"},"html":{"type":"string"},"files":{"type":"array","items":{"type":"string"}}}}` | ED-016 | Paste: images, files, HTML (converted to Markdown) or text (ED-016 rules). |
+| `edit.pastePlain` | Paste as Plain Text | 粘贴为纯文本 | `Ctrl+Shift+V` | `⇧⌘V` | `{"type":"object","properties":{"text":{"type":"string"},"html":{"type":"string"},"files":{"type":"array","items":{"type":"string"}}}}` | ED-016 | Paste as plain text without conversion. |
+| `edit.redo` | Redo | 重做 | `Ctrl+Shift+Z`, `Ctrl+Y` | `⇧⌘Z`, `⌘Y` | — | ED-015 | Redo the last undone change group. |
+| `edit.replace` | Replace | 替换 | `Ctrl+H` | `⌘H` | — | ED-111 | Open the find bar with the replace row. |
+| `edit.replaceAll` | Replace All | 全部替换 |  |  | — | ED-111 | Replace all matches (one undo group). |
+| `edit.replaceCurrent` | Replace | 替换当前 |  |  | — | ED-111 | Replace the current match. |
+| `edit.selectAll` | Select All | 全选 | `Ctrl+A` | `⌘A` | — | ED-011 | Select all (inside a code block: the block first). |
+| `edit.selectLine` | Select Line / Sentence | 选择当前行/句 | `Ctrl+L` | `⌘L` | — | ED-011 | Select the current line. |
+| `edit.selectWord` | Select Word | 选择当前词 | `Ctrl+D` | `⌘D` | — | ED-011 | Select the word at the caret. |
+| `edit.tab` | Tab | 制表 |  |  | `{"type":"object","properties":{"outdent":{"type":"boolean"}}}` | ED-014 | Tab / Shift+Tab: indent or outdent list items and code, or insert spaces. |
+| `edit.undo` | Undo | 撤销 | `Ctrl+Z` | `⌘Z` | — | ED-015 | Undo the last change group. |
+
+## Paragraph
+
+| Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
+|---|---|---|---|---|---|---|---|
+| `paragraph.indent` | Indent | 增加缩进 | `Ctrl+]` | `⌘]` | — | ED-061 | Indent the list item (nest it). |
+| `paragraph.outdent` | Outdent | 减少缩进 | `Ctrl+[` | `⌘[` | — | ED-061 | Outdent the list item. |
+
 ## View
 
 | Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
 |---|---|---|---|---|---|---|---|
+| `view.debugOverlay` | Performance Overlay | 性能叠层 |  |  | — | FS-040 | Show the performance overlay (frame and input latency). |
+| `view.sourceMode` | Source Code Mode | 源代码模式 | `Ctrl+/` | `⌘/` | — | ED-120 | Toggle between live rendering and source mode. |
 | `view.toggleSidebar` | Sidebar | 侧边栏 | `Ctrl+Shift+L` | `⇧⌘L` | — | FS-040 | Show or hide the sidebar. |
 
 ## Reserved ids (in menus or key map, not implemented yet)
@@ -26,33 +66,14 @@ These appear greyed out in menus.
 
 - `app.commandPalette` — Command Palette
 - `app.preferences` — Preferences…
-- `edit.copy` — Copy
 - `edit.copyAsHtml` — HTML
 - `edit.copyAsHtmlCode` — HTML Code
 - `edit.copyAsMarkdown` — Markdown
 - `edit.copyAsPlain` — Plain Text
-- `edit.cut` — Cut
-- `edit.deleteLine` — Delete Line
-- `edit.deleteWord` — Delete Word
 - `edit.emojiSymbols` — Emoji & Symbols
-- `edit.find` — Find
-- `edit.findNext` — Find Next
-- `edit.findPrev` — Find Previous
-- `edit.jumpBottom` — Jump to Bottom
-- `edit.jumpSelection` — Jump to Selection
-- `edit.jumpTop` — Jump to Top
-- `edit.lineEnding` — Line Ending
-- `edit.paste` — Paste
-- `edit.pastePlain` — Paste as Plain Text
-- `edit.redo` — Redo
-- `edit.replace` — Replace
-- `edit.selectAll` — Select All
-- `edit.selectLine` — Select Line / Sentence
 - `edit.selectStyleScope` — Select Style Scope
-- `edit.selectWord` — Select Word
 - `edit.toggleSmartPunctuation` — Use Smart Punctuation
 - `edit.toggleSpellcheck` — Check Spelling While Typing
-- `edit.undo` — Undo
 - `file.clearRecent` — Clear Recent Files
 - `file.close` — Close
 - `file.delete` — Delete
@@ -112,14 +133,12 @@ These appear greyed out in menus.
 - `paragraph.headingUp` — Promote Heading
 - `paragraph.hr` — Horizontal Rule
 - `paragraph.html` — HTML Block
-- `paragraph.indent` — Indent
 - `paragraph.linkReference` — Link Reference
 - `paragraph.mathBlock` — Math Block
 - `paragraph.moveDown` — Move Down
 - `paragraph.moveUp` — Move Up
 - `paragraph.normal` — Paragraph
 - `paragraph.orderedList` — Ordered List
-- `paragraph.outdent` — Outdent
 - `paragraph.quote` — Quote
 - `paragraph.table` — Table…
 - `paragraph.taskList` — Task List
@@ -135,13 +154,11 @@ These appear greyed out in menus.
 - `view.actualSize` — Actual Size
 - `view.alwaysOnTop` — Always on Top
 - `view.articles` — Articles
-- `view.debugOverlay` — Performance Overlay
 - `view.fileTree` — File Tree
 - `view.focusMode` — Focus Mode
 - `view.fullscreen` — Full Screen
 - `view.outline` — Outline
 - `view.showWhitespace` — Show Formatting Marks
-- `view.sourceMode` — Source Code Mode
 - `view.toggleMenuBar` — Menu Bar
 - `view.toggleStatusBar` — Status Bar
 - `view.toggleToolbar` — Toolbar

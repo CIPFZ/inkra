@@ -39,6 +39,7 @@ inkra-i18n = { path = "crates/inkra-i18n" }
 
 # third party (see xtask/src/deps.rs for the reviewed allowlist)
 egui = "0.36"
+epaint = "0.36"
 eframe = { version = "0.36", default-features = false }
 egui_kittest = "0.36"
 serde = { version = "1", features = ["derive"] }
@@ -54,10 +55,14 @@ tempfile = "3"
 ropey = { version = "1.6", default-features = false, features = ["simd", "cr_lines"] }
 unicode-segmentation = "1.12"
 unicode-width = "0.2"
+html5ever = "0.39"
+markup5ever_rcdom = "0.39"
+regex = { version = "1", default-features = false, features = ["std", "unicode", "perf"] }
 encoding_rs = "0.8"
 proptest = "1"
 criterion = { version = "0.8", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png"] }
+arboard = { version = "3.6", default-features = false, features = ["image-data"] }
 muda = { version = "0.21", default-features = false }
 
 [profile.release]

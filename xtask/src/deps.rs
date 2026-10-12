@@ -17,6 +17,12 @@ pub enum Scope {
 pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
     ("egui", Scope::Any, "MIT OR Apache-2.0", "GUI (SPEC 2.1)"),
     (
+        "epaint",
+        Scope::Only(&["inkra-layout", "inkra-render", "inkra-export"]),
+        "MIT OR Apache-2.0",
+        "text shaping/layout and shapes (SPEC 2.1)",
+    ),
+    (
         "eframe",
         Scope::Only(&["inkra"]),
         "MIT OR Apache-2.0",
@@ -33,6 +39,12 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         Scope::Any,
         "MIT OR Apache-2.0",
         "image decoding (SPEC 2.1)",
+    ),
+    (
+        "arboard",
+        Scope::Only(&["inkra-ui"]),
+        "MIT OR Apache-2.0",
+        "clipboard with HTML and images (SPEC 2.1)",
     ),
     (
         "muda",
@@ -106,6 +118,24 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         Scope::Only(&["inkra"]),
         "MIT OR Apache-2.0",
         "AttachConsole, AppUserModelID",
+    ),
+    (
+        "html5ever",
+        Scope::Only(&["inkra-html"]),
+        "MIT OR Apache-2.0",
+        "HTML parsing for paste/import (SPEC 2.1)",
+    ),
+    (
+        "markup5ever_rcdom",
+        Scope::Only(&["inkra-html"]),
+        "MIT OR Apache-2.0",
+        "DOM for html5ever (servo project)",
+    ),
+    (
+        "regex",
+        Scope::Any,
+        "MIT OR Apache-2.0",
+        "find/replace (SPEC 2.1, ED-110)",
     ),
     ("ropey", Scope::Any, "MIT", "document rope (SPEC 2.1)"),
     (
