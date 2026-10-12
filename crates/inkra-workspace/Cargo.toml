@@ -1,0 +1,20 @@
+[package]
+name = "inkra-workspace"
+description = "File system: platform paths, file tree model, watching, search, recent files, session, autosave, recovery, log files."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+inkra-text.workspace = true
+inkra-doc.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
