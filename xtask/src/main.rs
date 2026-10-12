@@ -18,7 +18,71 @@ Tasks:
   keybindings [--check]  Generate docs/keybindings.md from the default key map
   docs [--check]     All of the above generators
   bundle-macos [--release]  Assemble target/<profile>/Inkra.app
+  corpus             Fetch the real-world Markdown corpus into target/corpus (TS-002)
 ";
+
+/// Real-world Markdown corpus (TS-002): `(name, git url, pinned commit)`. Not
+/// vendored; fetched on demand. All are MIT/Apache or CC licensed documentation.
+const CORPUS: &[(&str, &str, &str)] = &[
+    (
+        "book",
+        "https://github.com/rust-lang/book.git",
+        "1500248d8f230566e4ec9f27fcbb8fe9e2898ab1",
+    ),
+    (
+        "rust-by-example",
+        "https://github.com/rust-lang/rust-by-example.git",
+        "dcc14f912bf8790792a2df082eddc82ab2539229",
+    ),
+    (
+        "reference",
+        "https://github.com/rust-lang/reference.git",
+        "5baa209fc1998b8425be2ea1e8a57b613fed52d2",
+    ),
+    (
+        "nomicon",
+        "https://github.com/rust-lang/nomicon.git",
+        "46fc44214afcd159be175c8ee62887cad04f615d",
+    ),
+    (
+        "cargo",
+        "https://github.com/rust-lang/cargo.git",
+        "9d5a15d175a3073a185cb344fa476ab81cf82554",
+    ),
+    (
+        "rust-course",
+        "https://github.com/sunface/rust-course.git",
+        "ebe2d82437f621085b0cb6895edbd1283ed63cb1",
+    ),
+    (
+        "trpl-zh-cn",
+        "https://github.com/KaiserY/trpl-zh-cn.git",
+        "108a23ad7dc20f9267933ea109c248ec9d5602bb",
+    ),
+];
+
+fn corpus() -> Result<(), String> {
+    let dir = root().join("target/corpus");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    for (name, url, rev) in CORPUS {
+        let repo = dir.join(name);
+        if !repo.exists() {
+            let mut init = Command::new("git");
+            init.args(["init", "-q"]).arg(&repo);
+            run(&format!("git init {name}"), init)?;
+            let mut fetch = Command::new("git");
+            fetch
+                .current_dir(&repo)
+                .args(["fetch", "-q", "--depth", "1", url, rev]);
+            run(&format!("git fetch {name}"), fetch)?;
+            let mut co = Command::new("git");
+            co.current_dir(&repo).args(["checkout", "-q", "FETCH_HEAD"]);
+            run(&format!("git checkout {name}"), co)?;
+        }
+    }
+    eprintln!("corpus ready in {}", dir.display());
+    Ok(())
+}
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -147,6 +211,7 @@ fn main() -> ExitCode {
         Some("layering") => layering(),
         Some(t @ ("commands" | "prefs" | "keybindings" | "docs")) => docs(t, check),
         Some("bundle-macos") => bundle_macos(args.iter().any(|a| a == "--release")),
+        Some("corpus") => corpus(),
         _ => {
             eprint!("{USAGE}");
             return ExitCode::from(1);
