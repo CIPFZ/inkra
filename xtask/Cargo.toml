@@ -1,0 +1,16 @@
+[package]
+name = "xtask"
+description = "Inkra build tooling: ci, layering, doc generation, bundling"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+inkra-engine.workspace = true
+inkra-i18n.workspace = true
+serde_json.workspace = true
