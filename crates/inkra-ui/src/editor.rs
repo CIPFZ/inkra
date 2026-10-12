@@ -18,6 +18,8 @@ use crate::images::Images;
 
 /// Caret blink period (ED-020): 530 ms on, 530 ms off.
 const BLINK: f64 = 0.53;
+/// Blinking stops this long after the last input.
+const BLINK_FOR: f64 = 30.0;
 
 /// Commands requested by the editor that the shell must run.
 #[derive(Debug, Default)]
@@ -48,6 +50,8 @@ pub struct EditorView {
     pub last_ms: f32,
     /// Loaded images.
     pub images: Images,
+    /// Caret blinks (PR-042).
+    pub blink: bool,
     /// syntect theme for code blocks.
     pub syntax_theme: String,
     last_mode: Option<Mode>,
@@ -78,6 +82,7 @@ impl EditorView {
             scrollbar_drag: None,
             last_ms: 0.0,
             images: Images::default(),
+            blink: true,
             syntax_theme: "InspiredGitHub".to_owned(),
             last_mode: None,
         }
@@ -367,7 +372,11 @@ impl EditorView {
             && window_focused
             && let Some(r) = self.caret_screen
         {
-            let phase = ((now - self.last_activity) / BLINK) as u64;
+            let idle = now - self.last_activity;
+            // Blinking stops (caret stays visible) after a while without input so
+            // an idle editor costs no CPU (SPEC 2.5).
+            let blinking = self.blink && idle < BLINK_FOR;
+            let phase = if blinking { (idle / BLINK) as u64 } else { 0 };
             if let Some(pre) = &engine.state.editor.preedit {
                 let font = egui::FontId::new(
                     r.height().clamp(10.0, 40.0) / 1.5,
@@ -393,8 +402,10 @@ impl EditorView {
                 inkra_render::paint_caret(&mut caret_shapes, r, Vec2::ZERO, self.style.cursor, 2.0);
                 painter.extend(caret_shapes);
             }
-            let next = BLINK - ((now - self.last_activity) % BLINK);
-            ctx.request_repaint_after(Duration::from_secs_f64(next.max(0.01)));
+            if blinking {
+                let next = BLINK - (idle % BLINK);
+                ctx.request_repaint_after(Duration::from_secs_f64(next.max(0.01)));
+            }
             ctx.output_mut(|o| {
                 o.ime = Some(egui::output::IMEOutput {
                     rect: r, // egui-winit uses `rect` as the IME cursor area (ED-010)

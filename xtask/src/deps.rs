@@ -65,6 +65,12 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         "debounced watching (SPEC 2.1)",
     ),
     (
+        "toml",
+        Scope::Only(&["inkra-engine"]),
+        "MIT OR Apache-2.0",
+        "theme files (SPEC 2.1, TH-001)",
+    ),
+    (
         "rfd",
         Scope::Only(&["inkra-ui"]),
         "MIT",

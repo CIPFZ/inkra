@@ -44,6 +44,7 @@ epaint = "0.36"
 eframe = { version = "0.36", default-features = false }
 egui_kittest = "0.36"
 serde = { version = "1", features = ["derive"] }
+toml = { version = "0.9", default-features = false, features = ["parse", "serde"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 log = "0.4"
 fern = "0.7"

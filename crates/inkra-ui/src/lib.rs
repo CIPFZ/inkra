@@ -118,6 +118,11 @@ pub struct Shell {
     /// The root window should close (exit) at the end of this frame.
     close_root: bool,
     focus_request: Option<u64>,
+    applied_style: u64,
+    theme_watcher: Option<inkra_workspace::watch::Watcher>,
+    last_time: f64,
+    theme_names: Vec<String>,
+    theme_names_at: f64,
     #[cfg(target_os = "macos")]
     native_menu: Option<native_menu::NativeMenu>,
 }
@@ -159,6 +164,11 @@ impl Shell {
             last_recovery: 0.0,
             close_root: false,
             focus_request: None,
+            applied_style: 0,
+            theme_watcher: None,
+            last_time: 0.0,
+            theme_names: Vec::new(),
+            theme_names_at: f64::NEG_INFINITY,
             #[cfg(target_os = "macos")]
             native_menu: None,
         }
@@ -176,13 +186,13 @@ impl Shell {
             "fonts installed in {:.1} ms",
             t0.elapsed().as_secs_f64() * 1e3
         );
-        let style = self
-            .windows
-            .values()
-            .next()
-            .map(|w| w.editor.style.clone())
-            .unwrap_or_default();
-        apply_visuals(ctx, &style);
+        let c = ctx.clone();
+        self.theme_watcher = Some(inkra_workspace::watch::Watcher::new(move || {
+            c.request_repaint()
+        }));
+        self.engine.state.system_dark = ctx.system_theme() == Some(egui::Theme::Dark);
+        let _ = self.engine.state.reload_theme();
+        self.sync_style(ctx);
         // Syntax definitions load in the background (AD-5).
         let c = ctx.clone();
         inkra_highlight::on_ready(move || c.request_repaint());
@@ -224,6 +234,19 @@ impl Shell {
         self.windows
             .get(&self.engine.state.active())
             .and_then(|w| w.editor.caret_screen)
+    }
+
+    /// Shows an "operation failed" notice after a caught panic.
+    pub fn notify_failure(&mut self, what: &str) {
+        let now = self.last_time;
+        let text = self.i18n.tr_args(
+            "notice-operation-failed",
+            &[("command", what.to_owned().into())],
+        );
+        self.toasts.push(Toast {
+            text,
+            until: now + TOAST_SECS,
+        });
     }
 
     /// Number of windows.
@@ -375,7 +398,10 @@ impl Shell {
                 Effect::ShowTableDialog => self.table_dialog = Some((3, 3)),
                 Effect::OpenUrl(url) => self.open_url(ctx, &url),
                 Effect::NewWindow(id) => {
-                    self.windows.insert(id, WinUi::new());
+                    let mut w = WinUi::new();
+                    w.editor.style = self.engine.state.style.clone();
+                    w.editor.syntax_theme = self.engine.state.style.syntax_theme.clone();
+                    self.windows.insert(id, w);
                     self.focus_request = Some(id);
                 }
                 Effect::FocusWindow(id) => self.focus_request = Some(id),
@@ -634,6 +660,20 @@ impl Shell {
         }
     }
 
+    /// Re-reads the installed theme list (at most every few seconds; it is shown
+    /// in the Themes menu).
+    fn refresh_theme_names(&mut self, now: f64) {
+        if now - self.theme_names_at < 3.0 && !self.theme_names.is_empty() {
+            return;
+        }
+        self.theme_names_at = now;
+        let dir = self.engine.state.paths.as_ref().map(|p| p.themes_dir());
+        self.theme_names = inkra_engine::theme::list(dir.as_deref())
+            .into_iter()
+            .map(|e| e.name)
+            .collect();
+    }
+
     fn menu_data(&self) -> menubar::MenuData {
         let recent = self
             .engine
@@ -658,10 +698,16 @@ impl Shell {
             .editors()
             .map(|(m, e)| (self.title_of(e), m.id, m.id == active))
             .collect();
+        let current = &self.engine.state.style.name;
+        let themes = self
+            .theme_names
+            .iter()
+            .map(|n| (n.clone(), n == current))
+            .collect();
         menubar::MenuData {
             recent,
             windows,
-            themes: Vec::new(),
+            themes,
         }
     }
 
@@ -687,15 +733,71 @@ impl Shell {
         }
     }
 
+    /// Pushes the engine's theme to egui and every editor when it changed.
+    fn sync_style(&mut self, ctx: &egui::Context) {
+        let style = &self.engine.state.style;
+        if style.version == self.applied_style
+            && self
+                .windows
+                .values()
+                .all(|w| w.editor.style.version == style.version)
+        {
+            return;
+        }
+        self.applied_style = style.version;
+        apply_visuals(ctx, style);
+        for w in self.windows.values_mut() {
+            w.editor.style = style.clone();
+            w.editor.syntax_theme = style.syntax_theme.clone();
+        }
+        // Hot reload of user themes (TH-003).
+        let dir = self.engine.state.paths.as_ref().map(|p| p.themes_dir());
+        let file = inkra_engine::theme::file_of(&style.name, dir.as_deref());
+        log::debug!("theme {} active; watching {:?}", style.name, file);
+        if let Some(w) = &mut self.theme_watcher {
+            w.set_files(file.as_deref());
+        }
+        ctx.request_repaint();
+    }
+
+    /// Theme follow-ups: system appearance (Auto) and edited theme files.
+    fn theme_tasks(&mut self, ctx: &egui::Context) {
+        let dark = ctx.system_theme() == Some(egui::Theme::Dark);
+        if dark != self.engine.state.system_dark {
+            self.engine.state.system_dark = dark;
+            if self.engine.state.prefs.bool("appearance.themeAuto") {
+                let _ = self.engine.state.reload_theme();
+            }
+        }
+        let changed = self
+            .theme_watcher
+            .as_mut()
+            .map(|w| !w.changed().is_empty())
+            .unwrap_or(false);
+        if changed {
+            log::debug!("theme file changed; reloading");
+            if let Err(e) = self.engine.state.reload_theme() {
+                self.toast(ctx, format!("✕ {e}"));
+            }
+        }
+        self.sync_style(ctx);
+    }
+
     /// Frame-level work shared by all windows.
     fn frame_tasks(&mut self, ctx: &egui::Context) {
+        self.last_time = ctx.input(|i| i.time);
+        self.refresh_theme_names(self.last_time);
+        self.theme_tasks(ctx);
         let now = ctx.input(|i| i.time);
         // Recovery (FS-004).
         if now - self.last_recovery > RECOVERY_SECS {
             self.last_recovery = now;
             inkra_engine::files::write_recovery(&self.engine.state);
         }
-        ctx.request_repaint_after(Duration::from_secs_f64(RECOVERY_SECS));
+        // Only while something is unsaved.
+        if self.engine.state.editors().any(|(_, e)| e.doc.is_dirty()) {
+            ctx.request_repaint_after(Duration::from_secs_f64(RECOVERY_SECS));
+        }
         // External changes (FS-007).
         let mut changed_ids = Vec::new();
         if let Some(w) = &mut self.watcher {
@@ -753,6 +855,13 @@ impl Shell {
             self.setup(&ctx);
             ctx.request_repaint();
             return;
+        }
+        if std::env::var_os("INKRA_DEBUG_REPAINT").is_some() {
+            log::info!(
+                "frame t={:.2} causes={:?}",
+                ctx.input(|i| i.time),
+                ctx.repaint_causes()
+            );
         }
         self.handle_dialogs(&ctx);
         self.frame_tasks(&ctx);
@@ -1026,10 +1135,27 @@ pub fn apply_visuals(ctx: &egui::Context, style: &inkra_layout::Style) {
     } else {
         egui::Color32::WHITE
     };
+    v.faint_bg_color = style.sidebar_bg;
+    v.code_bg_color = style.code_bg;
     v.selection.bg_fill = style.selection;
+    v.selection.stroke.color = style.fg;
     v.hyperlink_color = style.accent;
     v.text_cursor.stroke.color = style.cursor;
-    ctx.set_visuals(v);
+    v.window_stroke.color = style.code_border;
+    v.widgets.noninteractive.bg_stroke.color = style.hr;
+    v.widgets.noninteractive.fg_stroke.color = style.fg;
+    v.widgets.inactive.fg_stroke.color = style.fg;
+    v.widgets.inactive.weak_bg_fill = style.code_bg;
+    v.widgets.hovered.weak_bg_fill = style.sidebar_active_bg;
+    v.widgets.active.weak_bg_fill = style.sidebar_active_bg;
+    // The UI chrome follows the document theme (TH-001), not the OS preference.
+    let theme = if style.dark {
+        egui::Theme::Dark
+    } else {
+        egui::Theme::Light
+    };
+    ctx.set_theme(theme);
+    ctx.set_visuals_of(theme, v);
 }
 
 #[cfg(test)]

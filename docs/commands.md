@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **86**
+Registered commands: **90**
 
 
 ## App
@@ -114,6 +114,15 @@ Registered commands: **86**
 | `paragraph.toc` | Table of Contents | 目录 |  |  | — | ED-064 | Insert `[TOC]`. |
 | `paragraph.unorderedList` | Unordered List | 无序列表 | `Ctrl+Shift+]` | `⇧⌘]` | — | ED-058 | Toggle a bullet list. |
 
+## Theme
+
+| Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
+|---|---|---|---|---|---|---|---|
+| `theme.auto` | Auto | 自动 |  |  | — | TH-002 | Follow the system light/dark appearance. |
+| `theme.openFolder` | Open Theme Folder | 打开主题文件夹 |  |  | — | TH-003 | Open the user theme folder. |
+| `theme.reload` | Reload Theme | 重新加载主题 |  |  | — | TH-003 | Reload the current theme from disk. |
+| `theme.select` | Select Theme | 选择主题 |  |  | `{"type":"object","required":["name"],"properties":{"name":{"type":"string"}}}` | TH-003 | Switch to a theme (instantly, no restart). |
+
 ## View
 
 | Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
@@ -169,8 +178,6 @@ These appear greyed out in menus.
 - `table.insertRowBelow` — Insert Row Below
 - `table.moveRowDown` — Move Row Down
 - `table.moveRowUp` — Move Row Up
-- `theme.auto` — Auto
-- `theme.openFolder` — Open Theme Folder
 - `view.actualSize` — Actual Size
 - `view.alwaysOnTop` — Always on Top
 - `view.articles` — Articles

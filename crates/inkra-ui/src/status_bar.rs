@@ -39,7 +39,7 @@ pub fn show(
     }
     let mut cmd = None;
     ui.horizontal(|ui| {
-        ui.style_mut().visuals.override_text_color = Some(style.fg_muted);
+        ui.style_mut().visuals.override_text_color = Some(style.statusbar_fg);
         let source = e.mode == ViewMode::Source;
         let label = egui::RichText::new("</>").monospace().color(if source {
             style.accent

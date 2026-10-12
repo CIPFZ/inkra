@@ -13,6 +13,10 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `general.startup` | `restore` / `new` / `folder` | `"restore"` | PR-010 | On startup: restore the last session, open a new document, or open a folder. |
 | `general.defaultEncoding` | string | `"utf-8"` | PR-016 | Encoding tried for files that are not valid UTF-8 (e.g. `gbk`). |
 | `editor.defaultMode` | `live` / `source` | `"live"` | PR-030 | Open documents in live rendering or source mode. |
+| `appearance.theme` | string | `"Paper"` | TH-003 | Theme name. |
+| `appearance.themeAuto` | bool | `false` | TH-002 | Follow the system light/dark setting (Auto theme). |
+| `appearance.lightTheme` | string | `"Paper"` | TH-002 | Theme used by Auto in light mode. |
+| `appearance.darkTheme` | string | `"Ink"` | TH-002 | Theme used by Auto in dark mode. |
 | `markdown.inlineMath` | bool | `false` | MD-060 | Inline math `$...$`. |
 | `markdown.subscript` | bool | `false` | MD-061 | Subscript `~x~`. |
 | `markdown.superscript` | bool | `false` | MD-062 | Superscript `^x^`. |

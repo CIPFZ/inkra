@@ -46,7 +46,17 @@ impl eframe::App for App {
         if self.measure_startup && self.frames == 1 {
             ui.ctx().request_repaint();
         }
-        self.shell.ui(ui);
+        // NF-002 / iron rule 10: a bug in a frame must never take the documents
+        // with it. Panics are caught here, unsaved content goes to the recovery
+        // directory immediately, and the next frame carries on.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.shell.ui(ui)));
+        if let Err(payload) = result {
+            let msg = inkra_engine::command::panic_message(payload.as_ref());
+            log::error!("frame panicked: {msg}");
+            inkra_engine::files::write_recovery(&self.shell.engine.state);
+            self.shell.notify_failure(&msg);
+            ui.ctx().request_repaint();
+        }
     }
 
     fn on_exit(&mut self) {
