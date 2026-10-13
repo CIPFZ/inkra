@@ -228,6 +228,31 @@ pub fn register(r: &mut CommandRegistry) {
             }
         },
     ));
+    r.register(FnCommand::new(
+        edits(params(
+            spec("format.editLink", Format, "UI-040", "Edit the text and address of the link at the caret, or insert one for the selection (opens a dialog without parameters)."),
+            r#"{"type":"object","properties":{"text":{"type":"string"},"url":{"type":"string"}}}"#,
+        )),
+        |cx, p| {
+            let e = &cx.app.editor;
+            let existing = f::link_ranges(&e.doc, e.sel.head);
+            let range = existing.as_ref().map_or_else(|| e.sel.range(), |(whole, _)| whole.clone());
+            let (Some(text), Some(url)) = (p.get("text").and_then(Value::as_str), p.get("url").and_then(Value::as_str)) else {
+                let text = match &existing {
+                    Some((_, t)) => e.doc.text().slice(t.clone()).into_owned(),
+                    None => e.doc.text().slice(e.sel.range()).into_owned(),
+                };
+                let url = crate::editor::ops::link_at(&e.doc, e.sel.head).unwrap_or_default();
+                cx.effects.push(Effect::LinkDialog { text, url });
+                return Ok(Outcome::Done);
+            };
+            let dest = if url.contains([' ', '(', ')']) { format!("<{url}>") } else { url.to_owned() };
+            let t = format!("[{}]({dest})", text.replace('[', "\\[").replace(']', "\\]"));
+            let caret = range.start + t.len();
+            let tx = inkra_doc::Transaction::single(range, &t).with_selection_before(e.sel).with_selection_after(inkra_doc::Selection::caret(caret));
+            apply(cx, Some(tx))
+        },
+    ));
     r.register(
         FnCommand::new(
             edits(spec(

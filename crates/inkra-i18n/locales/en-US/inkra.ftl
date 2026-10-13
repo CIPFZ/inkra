@@ -571,3 +571,6 @@ cmd-edit-insertFileLink = Insert File Link
 pref-general-dropMarkdown = Dropped Markdown files
 pref-general-dropMarkdown--open = Open them
 pref-general-dropMarkdown--link = Insert a link
+cmd-format-editLink = Edit Link…
+link-dialog-text = Text
+link-dialog-url = Address

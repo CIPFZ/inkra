@@ -431,6 +431,13 @@ pub enum Effect {
     ReloadImage(String),
     /// Download a remote image, then run `image.toLocal` with the file.
     DownloadImage(String),
+    /// Edit a link's text and address (UI-040).
+    LinkDialog {
+        /// Link text.
+        text: String,
+        /// Address.
+        url: String,
+    },
     /// Edit an image's alt text, title and width.
     ImageDialog(crate::imaging::ImageRef),
     /// Ask for a settings file to import or a place to export to (PR-002).

@@ -346,6 +346,7 @@ pub const MENU_BAR: &[Menu] = &[
             c("format.subscript"),
             S,
             c("format.link"),
+            c("format.editLink"),
             sub(
                 "menu-format-image",
                 &[

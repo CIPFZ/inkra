@@ -130,6 +130,7 @@ pub fn show(
             &mut out,
         );
         if has_link {
+            cmd_button(ui, engine, i18n, "format.editLink", &mut out);
             cmd_button(ui, engine, i18n, "format.removeLink", &mut out);
         }
         ui.separator();
@@ -227,6 +228,7 @@ pub fn show(
         for id in [
             "format.image",
             "format.link",
+            "format.editLink",
             "paragraph.table",
             "paragraph.codeFences",
             "paragraph.mathBlock",

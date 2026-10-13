@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **203**
+Registered commands: **204**
 
 
 ## App
@@ -109,6 +109,7 @@ Registered commands: **203**
 | `format.clear` | Clear Format | 清除样式 | `Ctrl+\` | `⌘\` | — | ED-041 | Remove all inline formatting in the selection. |
 | `format.code` | Code | 代码 | `Ctrl+Shift+`` | `⇧⌘`` | — | ED-033 | Toggle `inline code` (double backticks when the text has one). |
 | `format.comment` | Comment | 注释 |  |  | — | ED-038 | Wrap the selection in an HTML comment. |
+| `format.editLink` | Edit Link… | 编辑链接… |  |  | `{"type":"object","properties":{"text":{"type":"string"},"url":{"type":"string"}}}` | UI-040 | Edit the text and address of the link at the caret, or insert one for the selection (opens a dialog without parameters). |
 | `format.highlight` | Highlight | 高亮 |  |  | — | ED-035 | Toggle ==highlight== (needs MD-063). |
 | `format.image` | Insert Image… | 插入图像… | `Ctrl+Shift+I` | `⇧⌘I` | `{"type":"object","properties":{"src":{"type":"string"},"alt":{"type":"string"}}}` | ED-040 | Insert an image: `src` inserts directly, otherwise a file picker opens. |
 | `format.imageLocal` | Insert Local Image… | 插入本地图片… |  |  | — | ED-040 | Insert a local image file. |

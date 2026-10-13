@@ -233,3 +233,25 @@ fn drag_moves_and_copies_text() {
     .unwrap();
     assert_eq!(e.state.editor.text(), "x![pic](/tmp/pic.png)");
 }
+
+#[test]
+fn link_dialog_edits_and_inserts() {
+    use serde_json::json;
+    let mut e = crate::Engine::new(crate::Preferences::default());
+    e.state.editor = Editor::from_text("see [old](http://a) here");
+    e.state.editor.sel = Selection::caret(6);
+    e.execute("format.editLink", &json!({})).unwrap();
+    assert!(
+        matches!(e.take_effects().as_slice(), [crate::Effect::LinkDialog { text, url }] if text == "old" && url == "http://a")
+    );
+    e.execute(
+        "format.editLink",
+        &json!({ "text": "new", "url": "https://b" }),
+    )
+    .unwrap();
+    assert_eq!(e.state.editor.text(), "see [new](https://b) here");
+    e.state.editor.sel = Selection::new(21, 25);
+    e.execute("format.editLink", &json!({ "text": "here", "url": "x y" }))
+        .unwrap();
+    assert_eq!(e.state.editor.text(), "see [new](https://b) [here](<x y>)");
+}

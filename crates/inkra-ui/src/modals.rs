@@ -862,3 +862,57 @@ pub(crate) fn welcome(shell: &mut Shell, ui: &mut egui::Ui) -> Option<(String, V
         });
     out
 }
+
+/// Link text and address (UI-040).
+pub(crate) fn link_dialog(shell: &mut Shell, ctx: &egui::Context) {
+    let Some((mut text, mut url)) = shell.link_dialog.take() else {
+        return;
+    };
+    let i18n = shell.i18n.clone();
+    let mut done = None;
+    let resp = egui::Modal::new(egui::Id::new("inkra-link-dialog")).show(ctx, |ui| {
+        ui.heading(i18n.tr("cmd-format-editLink"));
+        egui::Grid::new("link-dialog")
+            .num_columns(2)
+            .spacing([12.0, 6.0])
+            .show(ui, |ui| {
+                ui.label(i18n.tr("link-dialog-text"));
+                ui.add(egui::TextEdit::singleline(&mut text).desired_width(320.0));
+                ui.end_row();
+                ui.label(i18n.tr("link-dialog-url"));
+                let r = ui.add(
+                    egui::TextEdit::singleline(&mut url)
+                        .desired_width(320.0)
+                        .hint_text("https://"),
+                );
+                if url.is_empty() && !r.has_focus() && !r.lost_focus() {
+                    r.request_focus();
+                }
+                if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    done = Some(true);
+                }
+                ui.end_row();
+            });
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if ui.button(i18n.tr("dialog-ok")).clicked() {
+                done = Some(true);
+            }
+            if ui.button(i18n.tr("dialog-cancel")).clicked() {
+                done = Some(false);
+            }
+        });
+    });
+    if resp.should_close() && done.is_none() {
+        done = Some(false);
+    }
+    match done {
+        Some(true) => shell.invoke(
+            ctx,
+            "format.editLink",
+            &json!({ "text": text, "url": url.trim() }),
+        ),
+        Some(false) => {}
+        None => shell.link_dialog = Some((text, url)),
+    }
+}

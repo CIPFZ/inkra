@@ -571,3 +571,6 @@ cmd-edit-insertFileLink = 插入文件链接
 pref-general-dropMarkdown = 拖入 Markdown 文件时
 pref-general-dropMarkdown--open = 打开
 pref-general-dropMarkdown--link = 插入链接
+cmd-format-editLink = 编辑链接…
+link-dialog-text = 文字
+link-dialog-url = 地址

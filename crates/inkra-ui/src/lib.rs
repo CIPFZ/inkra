@@ -155,6 +155,7 @@ pub struct Shell {
     delete_confirm: Option<PathBuf>,
     properties_open: bool,
     image_dialog: Option<(inkra_engine::imaging::ImageRef, String, String, Option<u32>)>,
+    link_dialog: Option<(String, String)>,
     downloads: Option<std::sync::mpsc::Receiver<Result<PathBuf, String>>>,
     updates: Option<std::sync::mpsc::Receiver<UpdateResult>>,
     update_available: Option<(String, String)>,
@@ -219,6 +220,7 @@ impl Shell {
             delete_confirm: None,
             properties_open: false,
             image_dialog: None,
+            link_dialog: None,
             downloads: None,
             updates: None,
             update_available: None,
@@ -699,6 +701,7 @@ impl Shell {
                     ctx.request_repaint();
                 }
                 Effect::DownloadImage(url) => self.download_image(ctx, url),
+                Effect::LinkDialog { text, url } => self.link_dialog = Some((text, url)),
                 Effect::ImageDialog(img) => {
                     let (alt, title, width) = (
                         img.alt.clone(),
@@ -1810,6 +1813,7 @@ impl Shell {
         modals::delete_confirm(self, &ctx);
         modals::properties_dialog(self, &ctx);
         modals::image_dialog(self, &ctx);
+        modals::link_dialog(self, &ctx);
         modals::update_banner(self, &ctx);
         modals::import_offer(self, &ctx);
         modals::prefs_problem_dialog(self, &ctx);
