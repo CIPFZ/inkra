@@ -15,6 +15,7 @@ pub mod formatting;
 pub mod keymap;
 pub mod menu;
 pub mod prefs;
+pub mod sidebar;
 pub mod state;
 pub mod tables;
 pub mod theme;
@@ -52,6 +53,7 @@ impl Engine {
         state.meta.recovery_id = state::recovery_id(1);
         state.editor.doc.set_options(markdown_options(&state.prefs));
         let _ = state.reload_theme();
+        viewing::view_from_prefs(&mut state.view, &state.prefs);
         Self {
             registry: builtin_registry(),
             keymap: Keymap::defaults(Os::current()),
@@ -114,6 +116,7 @@ pub fn builtin_registry() -> CommandRegistry {
     theming::register(&mut r);
     viewing::register(&mut r);
     tables::register(&mut r);
+    sidebar::register(&mut r);
     r
 }
 

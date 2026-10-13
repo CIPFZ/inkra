@@ -7,7 +7,7 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | Key | Type | Default | Req | Description |
 |---|---|---|---|---|
 | `general.language` | string | `"system"` | PR-018 | UI language: `system` to follow the OS, or a tag such as `zh-CN` / `en-US`. |
-| `general.openFileIn` | `reuse` / `newWindow` | `"reuse"` | PR-011 | Opening a file: reuse a blank window, or always open a new window. |
+| `general.openFileIn` | `reuse` / `newWindow` / `current` | `"reuse"` | PR-011 | Opening a file: reuse a blank window (else a new one), always a new window, or the current window when it has no unsaved changes. |
 | `general.autoSave` | bool | `false` | PR-012 | Save automatically 3 s after changes and when the window loses focus (FS-004). |
 | `general.autoReload` | bool | `true` | PR-017 | Reload files changed on disk when there are no local changes (FS-007). |
 | `general.startup` | `restore` / `new` / `folder` | `"restore"` | PR-010 | On startup: restore the last session, open a new document, or open a folder. |
@@ -21,6 +21,23 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `image.copyFolder` | string | `""` | ED-092 | Target folder pattern for `folder` (supports `${filename}`, `${filepath}`). |
 | `image.applyToLocal` | bool | `false` | ED-092 | Also copy inserted local image files (pasted bitmaps are always saved). |
 | `image.preferRelative` | bool | `true` | ED-092 | Insert image paths relative to the document. |
+| `markdown.tableAlign` | bool | `true` | ED-085 | Align table pipes with spaces when tables are rewritten. |
+| `general.defaultExtension` | `md` / `markdown` / `txt` | `"md"` | PR-014 | Extension of new files. |
+| `sidebar.outlineDepth` | number | `6` | FS-020 | Deepest heading level shown in the outline. |
+| `sidebar.articlesRecursive` | bool | `true` | FS-021 | The article list includes subfolders. |
+| `sidebar.articlesSort` | `name` / `modified` / `created` | `"name"` | FS-021 | Article list order. |
+| `sidebar.articlesSortDesc` | bool | `false` | FS-021 | Article list in descending order. |
+| `sidebar.showHidden` | bool | `false` | FS-022 | Show hidden files and folders. |
+| `sidebar.showAllFiles` | bool | `false` | FS-022 | Show all files, not only Markdown. |
+| `sidebar.fileFilter` | string | `""` | FS-022 | Custom glob filter, e.g. `*.md,*.txt,!node_modules`. |
+| `sidebar.revealCurrent` | bool | `true` | FS-023 | Expand the file tree to the opened file. |
+| `search.gitignore` | bool | `true` | FS-031 | Global search respects `.gitignore`. |
+| `view.statusBar` | bool | `true` | PR-043 | Show the status bar. |
+| `view.menuBar` | bool | `true` | TH-008 | Show the menu bar (Windows/Linux; Alt shows it temporarily). |
+| `editor.focusMode` | bool | `false` | PR-038 | Focus mode (remembered). |
+| `editor.typewriterMode` | bool | `false` | PR-038 | Typewriter mode (remembered). |
+| `editor.rememberZoom` | bool | `true` | PR-039 | Remember the editor zoom (Ctrl+wheel, Ctrl+Shift+=/-). |
+| `editor.zoom` | number | `1.0` | PR-039 | Editor zoom factor, 0.5 to 3.0. |
 | `markdown.inlineMath` | bool | `false` | MD-060 | Inline math `$...$`. |
 | `markdown.subscript` | bool | `false` | MD-061 | Subscript `~x~`. |
 | `markdown.superscript` | bool | `false` | MD-062 | Superscript `^x^`. |

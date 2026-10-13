@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **105**
+Registered commands: **145**
 
 
 ## App
@@ -15,6 +15,7 @@ Registered commands: **105**
 | `app.openUrl` | Open Link | 打开链接 |  |  | `{"type":"object","required":["url"],"properties":{"url":{"type":"string"}}}` | MD-033 | Open a link (internal anchors scroll, files open, URLs go to the browser). |
 | `app.quit` | Quit | 退出 | `Ctrl+Q` | `⌘Q` | — | FS-005 | Quit the application, closing all windows. |
 | `app.setClipboard` | Copy Text | 复制文本 |  |  | `{"type":"object","required":["text"],"properties":{"text":{"type":"string"}}}` | ED-016 | Put text on the clipboard. |
+| `app.setPreference` | Set Preference | 设置偏好 |  |  | `{"type":"object","required":["key","value"],"properties":{"key":{"type":"string"},"value":{}}}` | PR-001 | Set a preference (validated against the preference table) and save. |
 
 ## Edit
 
@@ -64,8 +65,10 @@ Registered commands: **105**
 | `file.open` | Open… | 打开… | `Ctrl+O` | `⌘O` | `{"type":"object","properties":{"path":{"type":"string"}}}` | FS-002 | Open a file (dialog without `path`). |
 | `file.openFolder` | Open Folder… | 打开文件夹… | `Ctrl+Shift+O` |  | — | FS-002 | Open a folder as the sidebar root. |
 | `file.openRecent` | Open Recent File | 打开最近文件 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"}}}` | FS-002 | Open a recently used file. |
+| `file.quickOpen` | Quick Open… | 快速打开… | `Ctrl+P` | `⌘P`, `⇧⌘O` | — | FS-030 | Fuzzy-find a file of the root folder or the recent files. |
 | `file.reload` | Reload from Disk | 从磁盘重新加载 |  |  | — | FS-007 | Reload the file from disk, discarding local changes. |
 | `file.revealInFolder` | Reveal in Folder | 在文件夹中显示 |  |  | — | FS-010 | Show the file in the system file manager. |
+| `file.revealInSidebar` | Reveal in Sidebar | 在侧边栏中显示 |  |  | — | FS-023 | Show the current file in the sidebar file tree. |
 | `file.save` | Save | 保存 | `Ctrl+S` | `⌘S` | — | FS-003 | Save (asks for a name for new documents). |
 | `file.saveAll` | Save All | 保存全部 |  |  | — | FS-003 | Save every modified document that has a file. |
 | `file.saveAs` | Save As… | 另存为… | `Ctrl+Shift+S` | `⇧⌘S` | `{"type":"object","properties":{"path":{"type":"string"}}}` | FS-003 | Save under a new name (dialog without `path`). |
@@ -120,6 +123,55 @@ Registered commands: **105**
 | `paragraph.toc` | Table of Contents | 目录 |  |  | — | ED-064 | Insert `[TOC]`. |
 | `paragraph.unorderedList` | Unordered List | 无序列表 | `Ctrl+Shift+]` | `⇧⌘]` | — | ED-058 | Toggle a bullet list. |
 
+## Edit
+
+| Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
+|---|---|---|---|---|---|---|---|
+| `search.global` | Search in Folder | 全局搜索 | `Ctrl+Shift+F` | `⇧⌘F` | — | FS-031 | Search all files of the root folder. |
+
+## File
+
+| Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
+|---|---|---|---|---|---|---|---|
+| `sidebar.copyPath` | Copy Path | 复制路径 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"},"relative":{"type":"boolean"}}}` | FS-022 | Copy the absolute (or root-relative) path. |
+| `sidebar.delete` | Delete | 删除 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"}}}` | FS-022 | Move a file or folder to the recycle bin. |
+| `sidebar.move` | Move To… | 移动到… |  |  | `{"type":"object","required":["path","dest"],"properties":{"path":{"type":"string"},"dest":{"type":"string"}}}` | FS-022 | Move a file or folder into another folder (open documents follow). |
+| `sidebar.newFile` | New File | 新建文件 |  |  | `{"type":"object","required":["dir"],"properties":{"dir":{"type":"string"}}}` | FS-022 | Create `Untitled.md` in a folder and start renaming it. |
+| `sidebar.newFolder` | New Folder | 新建文件夹 |  |  | `{"type":"object","required":["dir"],"properties":{"dir":{"type":"string"}}}` | FS-022 | Create a folder and start renaming it. |
+| `sidebar.openInNewWindow` | Open in New Window | 在新窗口中打开 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"}}}` | FS-022 | Open a file in a new window. |
+| `sidebar.refresh` | Refresh | 刷新 |  |  | — | FS-022 | Re-read the root folder. |
+| `sidebar.rename` | Rename | 重命名 |  |  | `{"type":"object","required":["path","name"],"properties":{"path":{"type":"string"},"name":{"type":"string"}}}` | FS-022 | Rename a file or folder (open documents follow). |
+| `sidebar.reveal` | Show in Folder | 在文件夹中显示 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"}}}` | FS-022 | Show a file or folder in the system file manager. |
+| `sidebar.setRoot` | Set as Root Folder | 设为根目录 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"}}}` | FS-022 | Use a folder as the sidebar root. |
+
+## Table
+
+| Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
+|---|---|---|---|---|---|---|---|
+| `table.alignCenter` | Align Center | 居中对齐 |  |  | — | ED-083 | Center the column. |
+| `table.alignLeft` | Align Left | 左对齐 |  |  | — | ED-083 | Align the column left. |
+| `table.alignRight` | Align Right | 右对齐 |  |  | — | ED-083 | Align the column right. |
+| `table.copyAsCsv` | Copy Table as CSV | 复制表格为 CSV |  |  | — | ED-083 | Copy the table as CSV. |
+| `table.copyAsHtml` | Copy Table as HTML | 复制表格为 HTML |  |  | — | ED-083 | Copy the table as HTML. |
+| `table.copyAsMarkdown` | Copy Table as Markdown | 复制表格为 Markdown |  |  | — | ED-083 | Copy the table as Markdown. |
+| `table.deleteCol` | Delete Column | 删除列 |  |  | — | ED-083 | Delete the column. |
+| `table.deleteRow` | Delete Row | 删除行 |  |  | — | ED-083 | Delete the row (the header row only goes with the table). |
+| `table.deleteTable` | Delete Table | 删除表格 |  |  | — | ED-083 | Delete the whole table. |
+| `table.format` | Format Table | 格式化表格 |  |  | — | ED-083 | Re-align the table source. |
+| `table.insertColLeft` | Insert Column Left | 在左侧插入列 |  |  | — | ED-083 | Insert a column to the left. |
+| `table.insertColRight` | Insert Column Right | 在右侧插入列 |  |  | — | ED-083 | Insert a column to the right. |
+| `table.insertRowAbove` | Insert Row Above | 在上方插入行 |  |  | — | ED-083 | Insert a row above. |
+| `table.insertRowBelow` | Insert Row Below | 在下方插入行 | `Ctrl+Enter` (in table) | `⌘↩` (in table) | — | ED-083 | Insert a row below (Ctrl+Enter). |
+| `table.moveColLeft` | Move Column Left | 左移列 |  |  | — | ED-083 | Move the column left. |
+| `table.moveColRight` | Move Column Right | 右移列 |  |  | — | ED-083 | Move the column right. |
+| `table.moveRowDown` | Move Row Down | 下移行 | `Alt+Down` (in table) | `⌥↓` (in table) | — | ED-083 | Move the row down (Alt+Down). |
+| `table.moveRowUp` | Move Row Up | 上移行 | `Alt+Up` (in table) | `⌥↑` (in table) | — | ED-083 | Move the row up (Alt+Up). |
+| `table.nextCell` | Next Cell | 下一个单元格 |  |  | — | ED-014 | Move to the next cell (adds a row after the last cell). |
+| `table.prevCell` | Previous Cell | 上一个单元格 |  |  | — | ED-014 | Move to the previous cell. |
+| `table.resize` | Resize Table… | 调整表格大小… |  |  | `{"type":"object","properties":{"rows":{"type":"integer","minimum":1},"cols":{"type":"integer","minimum":1}}}` | ED-083 | Set the number of body rows and columns (dialog without params). |
+| `table.sortByColumnAsc` | Sort Ascending | 升序排序 |  |  | — | ED-083 | Sort rows by this column, ascending (numbers compare numerically). |
+| `table.sortByColumnDesc` | Sort Descending | 降序排序 |  |  | — | ED-083 | Sort rows by this column, descending. |
+
 ## Theme
 
 | Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
@@ -135,9 +187,12 @@ Registered commands: **105**
 |---|---|---|---|---|---|---|---|
 | `view.actualSize` | Actual Size | 实际大小 | `Ctrl+Shift+0` | `⇧⌘0` | — | FS-040 | Reset the editor zoom to 100%. |
 | `view.alwaysOnTop` | Always on Top | 总是在最前 |  |  | — | FS-040 | Keep the window above others. |
+| `view.articles` | Articles | 文章 | `Ctrl+Shift+2` | `⇧⌘2` | — | FS-021 | Show the article list in the sidebar (again: hide). |
 | `view.debugOverlay` | Performance Overlay | 性能叠层 |  |  | — | FS-040 | Show the performance overlay (frame and input latency). |
+| `view.fileTree` | File Tree | 文件树 | `Ctrl+Shift+3` | `⇧⌘3` | — | FS-022 | Show the file tree in the sidebar (again: hide). |
 | `view.focusMode` | Focus Mode | 专注模式 | `F8` | `F8` | — | WM-001 | Focus mode: dim everything except the current block. |
 | `view.fullscreen` | Full Screen | 全屏 | `F11` | `⌃⌘F` | — | WM-003 | Toggle full screen. |
+| `view.outline` | Outline | 大纲 | `Ctrl+Shift+1` | `⇧⌘1` | — | FS-020 | Show the outline in the sidebar (again: hide). |
 | `view.sourceMode` | Source Code Mode | 源代码模式 | `Ctrl+/` | `⌘/` | — | ED-120 | Toggle between live rendering and source mode. |
 | `view.switchWindow` | Switch Window | 切换窗口 |  |  | `{"type":"object","required":["window"],"properties":{"window":{"type":"integer"}}}` | FS-040 | Bring a window to the front. |
 | `view.toggleMenuBar` | Menu Bar | 显示菜单栏 |  |  | — | TH-008 | Show or hide the menu bar (Alt shows it temporarily). |
@@ -168,7 +223,6 @@ These appear greyed out in menus.
 - `file.pageSetup` — Page Setup…
 - `file.print` — Print…
 - `file.properties` — Properties
-- `file.quickOpen` — Quick Open…
 - `file.rename` — Rename…
 - `format.clear` — Clear Format
 - `format.imageOps` — Image Operations…
@@ -185,12 +239,5 @@ These appear greyed out in menus.
 - `paragraph.linkReference` — Link Reference
 - `paragraph.moveDown` — Move Down
 - `paragraph.moveUp` — Move Up
-- `search.global` — Search in Folder
-- `table.insertRowBelow` — Insert Row Below
-- `table.moveRowDown` — Move Row Down
-- `table.moveRowUp` — Move Row Up
-- `view.articles` — Articles
-- `view.fileTree` — File Tree
-- `view.outline` — Outline
 - `view.showWhitespace` — Show Formatting Marks
 - `view.toggleToolbar` — Toolbar

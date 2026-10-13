@@ -59,7 +59,15 @@ pub fn open_path(cx: &mut CommandContext<'_>, path: &Path) -> CommandResult {
     }
     let (editor, disk) = load_editor(cx.app, &canon).map_err(|e| err("file.open", e))?;
     cx.app.session.touch_recent(&canon);
-    let reuse = active_is_blank(cx.app) && cx.app.prefs.string("general.openFileIn") != "newWindow";
+    let reuse = match cx.app.prefs.string("general.openFileIn").as_str() {
+        "newWindow" => false,
+        // Never replaces unsaved changes (iron rule: no content loss).
+        "current" => !cx.app.editor.doc.is_dirty(),
+        _ => active_is_blank(cx.app),
+    };
+    if reuse && let Some(p) = &cx.app.paths {
+        inkra_workspace::recovery::Recovery::new(p.recovery_dir()).remove(&cx.app.meta.recovery_id);
+    }
     if reuse {
         cx.app.editor = editor;
         cx.app.meta.disk = Some(disk);

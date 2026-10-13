@@ -15,6 +15,34 @@ fn zoom(z: f32) -> f32 {
     ((z * 10.0).round() / 10.0).clamp(ZOOM_MIN, ZOOM_MAX)
 }
 
+/// The preference that remembers a view flag.
+fn remembered_key(field: &str) -> Option<&'static str> {
+    Some(match field {
+        "status_bar" => "view.statusBar",
+        "menu_bar" => "view.menuBar",
+        "focus" => "editor.focusMode",
+        "typewriter" => "editor.typewriterMode",
+        _ => return None,
+    })
+}
+
+/// Applies remembered view preferences to a fresh view state.
+pub fn view_from_prefs(view: &mut crate::state::ViewState, prefs: &crate::prefs::Preferences) {
+    view.status_bar = prefs.bool("view.statusBar");
+    view.menu_bar = prefs.bool("view.menuBar");
+    view.focus = prefs.bool("editor.focusMode");
+    view.typewriter = prefs.bool("editor.typewriterMode");
+    view.zoom = zoom(prefs.f64("editor.zoom") as f32);
+}
+
+fn set_zoom(cx: &mut crate::state::CommandContext<'_>, z: f32) {
+    cx.app.view.zoom = zoom(z);
+    if cx.app.prefs.bool("editor.rememberZoom") {
+        let v = cx.app.view.zoom as f64;
+        cx.app.set_pref("editor.zoom", Value::from(v));
+    }
+}
+
 /// Registers view and copy-as commands.
 pub fn register(r: &mut CommandRegistry) {
     use Category::{Edit, View};
@@ -23,6 +51,11 @@ pub fn register(r: &mut CommandRegistry) {
             r.register(
                 FnCommand::new(spec($id, View, $req, $doc), |cx, _| {
                     cx.app.view.$field = !cx.app.view.$field;
+                    // Remembered across sessions (PR-038, PR-043, TH-008).
+                    if let Some(key) = remembered_key(stringify!($field)) {
+                        let v = cx.app.view.$field;
+                        cx.app.set_pref(key, Value::from(v));
+                    }
                     cx.effects.push(Effect::WindowFlags);
                     Ok(Outcome::Done)
                 })
@@ -86,7 +119,8 @@ pub fn register(r: &mut CommandRegistry) {
             "Zoom the editor in by 10% (max 300%).",
         ),
         |cx, _| {
-            cx.app.view.zoom = zoom(cx.app.view.zoom + ZOOM_STEP);
+            let z = cx.app.view.zoom + ZOOM_STEP;
+            set_zoom(cx, z);
             Ok(Outcome::Done)
         },
     ));
@@ -98,7 +132,8 @@ pub fn register(r: &mut CommandRegistry) {
             "Zoom the editor out by 10% (min 50%).",
         ),
         |cx, _| {
-            cx.app.view.zoom = zoom(cx.app.view.zoom - ZOOM_STEP);
+            let z = cx.app.view.zoom - ZOOM_STEP;
+            set_zoom(cx, z);
             Ok(Outcome::Done)
         },
     ));

@@ -308,37 +308,7 @@ pub fn smart_cmp(a: &str, b: &str) -> std::cmp::Ordering {
 
 /// Natural string order (`file2` < `file10`).
 pub fn natural_cmp(a: &str, b: &str) -> std::cmp::Ordering {
-    let (mut ai, mut bi) = (a.chars().peekable(), b.chars().peekable());
-    loop {
-        match (ai.peek().copied(), bi.peek().copied()) {
-            (None, None) => return std::cmp::Ordering::Equal,
-            (None, Some(_)) => return std::cmp::Ordering::Less,
-            (Some(_), None) => return std::cmp::Ordering::Greater,
-            (Some(x), Some(y)) if x.is_ascii_digit() && y.is_ascii_digit() => {
-                let mut na = String::new();
-                while let Some(c) = ai.peek().copied().filter(char::is_ascii_digit) {
-                    na.push(c);
-                    ai.next();
-                }
-                let mut nb = String::new();
-                while let Some(c) = bi.peek().copied().filter(char::is_ascii_digit) {
-                    nb.push(c);
-                    bi.next();
-                }
-                let o = na.len().cmp(&nb.len()).then(na.cmp(&nb));
-                if o != std::cmp::Ordering::Equal {
-                    return o;
-                }
-            }
-            (Some(x), Some(y)) => {
-                if x != y {
-                    return x.cmp(&y);
-                }
-                ai.next();
-                bi.next();
-            }
-        }
-    }
+    inkra_text::sort::natural_cmp(a, b)
 }
 
 /// CSV of the table (RFC 4180 quoting).

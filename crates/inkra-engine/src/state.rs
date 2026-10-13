@@ -8,6 +8,8 @@ use crate::prefs::Preferences;
 pub struct ViewState {
     /// Whether the sidebar is shown (`view.toggleSidebar`).
     pub sidebar_visible: bool,
+    /// The sidebar view.
+    pub sidebar_view: SidebarView,
     /// Performance overlay (`view.debugOverlay`, FS-040).
     pub debug_overlay: bool,
     /// Status bar shown (PR-043).
@@ -30,6 +32,7 @@ impl Default for ViewState {
     fn default() -> Self {
         Self {
             sidebar_visible: false,
+            sidebar_view: SidebarView::Outline,
             debug_overlay: false,
             status_bar: true,
             menu_bar: true,
@@ -40,6 +43,20 @@ impl Default for ViewState {
             always_on_top: false,
         }
     }
+}
+
+/// The sidebar's view (FS-020 … FS-024).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SidebarView {
+    /// Document outline.
+    #[default]
+    Outline,
+    /// Flat article list of the root folder.
+    Articles,
+    /// File tree of the root folder.
+    Files,
+    /// Global search.
+    Search,
 }
 
 /// An external change to the open file (FS-007).
@@ -303,6 +320,16 @@ pub enum Effect {
     WindowFlags,
     /// Show the table resize dialog (ED-083).
     ShowTableResize,
+    /// Show the quick open palette (FS-030).
+    ShowQuickOpen,
+    /// Focus the global search field (FS-031).
+    FocusGlobalSearch,
+    /// Expand the file tree to `path` and select it (FS-023).
+    RevealInTree(std::path::PathBuf),
+    /// Start renaming `path` in the file tree.
+    RenameInTree(std::path::PathBuf),
+    /// The sidebar root changed: rebuild the tree, index and article list.
+    RootChanged,
 }
 
 /// Context passed to every command.

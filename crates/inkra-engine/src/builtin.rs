@@ -6,6 +6,24 @@ use crate::state::Effect;
 /// Registers all built-in commands.
 pub fn register_all(r: &mut CommandRegistry) {
     r.register(FnCommand::new(
+        {
+            let mut s = spec("app.setPreference", Category::App, "PR-001", "Set a preference (validated against the preference table) and save.");
+            s.params = Some(r#"{"type":"object","required":["key","value"],"properties":{"key":{"type":"string"},"value":{}}}"#);
+            s
+        },
+        |cx, p| {
+            let key = p.get("key").and_then(serde_json::Value::as_str).unwrap_or_default().to_owned();
+            let value = p.get("value").cloned().unwrap_or(serde_json::Value::Null);
+            if !cx.app.set_pref(&key, value) {
+                return Err(crate::command::CommandError::Failed { id: "app.setPreference".into(), msg: format!("invalid value for `{key}`") });
+            }
+            if key.starts_with("appearance.") {
+                let _ = cx.app.reload_theme();
+            }
+            Ok(Outcome::Done)
+        },
+    ));
+    r.register(FnCommand::new(
         spec(
             "app.quit",
             Category::App,
