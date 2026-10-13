@@ -11,6 +11,7 @@ pub mod count;
 pub mod encoding;
 pub mod eol;
 pub mod segment;
+pub mod sort;
 mod text;
 
 pub use encoding::{Decoded, Encoding};

@@ -53,6 +53,42 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         "code highlighting (SPEC 2.1), pure-Rust fancy-regex",
     ),
     (
+        "nucleo-matcher",
+        Scope::Only(&["inkra-workspace"]),
+        "MPL-2.0",
+        "fuzzy matching for quick open and outline filter (SPEC 2.1 nucleo); file-level copyleft, used unmodified",
+    ),
+    (
+        "grep-searcher",
+        Scope::Only(&["inkra-workspace"]),
+        "Unlicense OR MIT",
+        "global search (SPEC 2.1, FS-031)",
+    ),
+    (
+        "grep-regex",
+        Scope::Only(&["inkra-workspace"]),
+        "Unlicense OR MIT",
+        "global search (SPEC 2.1, FS-031)",
+    ),
+    (
+        "grep-matcher",
+        Scope::Only(&["inkra-workspace"]),
+        "Unlicense OR MIT",
+        "global search match ranges (SPEC 2.1, FS-031)",
+    ),
+    (
+        "ignore",
+        Scope::Only(&["inkra-workspace"]),
+        "Unlicense OR MIT",
+        "directory walking with .gitignore and glob filters (SPEC 2.1)",
+    ),
+    (
+        "trash",
+        Scope::Only(&["inkra-workspace"]),
+        "MIT",
+        "move files to the recycle bin (SPEC 5.1)",
+    ),
+    (
         "notify",
         Scope::Only(&["inkra-workspace"]),
         "CC0-1.0 OR Artistic-2.0",

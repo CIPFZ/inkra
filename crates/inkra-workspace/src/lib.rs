@@ -7,13 +7,18 @@
 //! the file tree model and search.
 
 pub mod assets;
+pub mod fileops;
 pub mod files;
 pub mod fs;
+pub mod fuzzy;
+pub mod index;
 pub mod logfile;
 pub mod paths;
 pub mod recovery;
+pub mod search;
 pub mod session;
 pub mod time;
+pub mod tree;
 pub mod watch;
 
 pub use paths::Paths;

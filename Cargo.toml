@@ -65,6 +65,12 @@ encoding_rs = "0.8"
 proptest = "1"
 criterion = { version = "0.8", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png"] }
+nucleo-matcher = "0.3"
+grep-searcher = "0.1"
+grep-regex = "0.1"
+grep-matcher = "0.1"
+ignore = "0.4"
+trash = "5"
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
 notify-debouncer-mini = { version = "0.7", default-features = false }
 rfd = { version = "0.17", default-features = false, features = ["xdg-portal"] }
