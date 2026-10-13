@@ -5,6 +5,19 @@ All notable changes to Inkra are documented here. The format follows
 
 ## [Unreleased]
 
+### M4 — Tables, sidebar and search
+- Tables: aligned source rewrite (CJK width 2), Tab/Shift+Tab/Enter navigation,
+  `|` escaping, protected pipes, toolbar and table menu, insert/delete/move rows and
+  columns, alignment, numeric sort, resize dialog, copy as Markdown/HTML/CSV, column
+  width dragging (display only), drag reordering, horizontal scrolling of wide tables.
+- Sidebar: outline (filter, collapse, current section, jump), article list (summaries,
+  sorting), file tree (lazy, natural order, filters, drag & drop move, inline rename,
+  recycle bin, context menu, keyboard navigation, reveal current file), global search
+  (case/word/regex/globs, `.gitignore`, background, grouped results).
+- Quick open (`Ctrl+P`) over a background file index and recent files.
+- Word count details, remembered view flags and zoom, window positions in the session.
+- Fix: incremental re-parsing no longer resynchronizes on a table split off a paragraph.
+
 ### M3 — Live rendering MVP
 - Live view: documents are flattened into leaf blocks with container frames (quotes,
   list items, footnotes); inline markers are shown only for the node under the caret;
