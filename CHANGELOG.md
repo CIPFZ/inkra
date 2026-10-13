@@ -5,6 +5,24 @@ All notable changes to Inkra are documented here. The format follows
 
 ## [Unreleased]
 
+### M6 — Export and import
+- HTML export with the theme's styles (only the rules in use) or as a plain
+  fragment: heading anchors, `[TOC]`, footnotes, highlighted code, SVG formulas
+  (or TeX for MathJax pages), SVG diagrams, alerts; image paths kept, absolute or
+  embedded. Copy as HTML uses the same generator.
+- PDF export with krilla: the live layout paginated (keep-with-next, no widows or
+  orphans, repeated table headers, split code blocks, page-fitting images),
+  selectable and searchable text with subset fonts, vector math and diagrams,
+  links and internal jumps, bookmarks from headings, title/author metadata,
+  header/footer templates; page setup dialog; print via PDF.
+- Image export (long PNG or one image per page, 1x–3x); formulas and diagrams
+  copy as SVG/PNG and export as images.
+- Pandoc bridge (docx, odt, rtf, epub, LaTeX, MediaWiki, rst, Textile, OPML, Org)
+  with Mermaid pre-rendered; import through Pandoc (media into `assets/`) or the
+  built-in HTML converter; dropping such files offers to import; custom export
+  commands.
+- `inkra-cli convert in.md out.pdf|out.html|out.png`.
+
 ### M5 — Math, diagrams and extensions
 - Math: own TeX engine on the OpenType MATH table of STIX Two Math — fractions,
   radicals, big operators with limits, stretchy delimiters (variants and

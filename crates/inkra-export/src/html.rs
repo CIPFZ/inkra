@@ -202,6 +202,8 @@ impl HtmlHooks for Hooks<'_> {
         if !self.o.highlight || lang.is_empty() {
             return None;
         }
+        // Exports run off the UI thread or in the CLI: wait for the syntaxes.
+        inkra_highlight::load_now();
         let spans = inkra_highlight::highlight(code, lang, &self.o.style.syntax_theme)?;
         let mut out = format!("<pre><code class=\"language-{}\">", escape(lang));
         let mut at = 0;
@@ -445,6 +447,52 @@ nav.toc > ul {{ padding-left: 0; }}
     css
 }
 
+/// Keeps only the rules the body needs (EX-001 "仅输出文档实际用到的样式").
+fn used_css(css: &str, body: &str) -> String {
+    let needs = |line: &str| -> bool {
+        let sel = line.trim_start();
+        let sel = sel.split('{').next().unwrap_or("").trim();
+        let first = sel.split([',', ' ', ':', '.', '>']).next().unwrap_or("");
+        let want: Option<String> = if let Some(rest) = sel.strip_prefix(".markdown-alert-") {
+            Some(format!(
+                "markdown-alert-{}",
+                rest.split([' ', '{', '.']).next().unwrap_or("")
+            ))
+        } else if sel.starts_with(".markdown-alert") {
+            Some("markdown-alert".into())
+        } else if sel.starts_with(".math") {
+            Some("math-display".into())
+        } else if sel.starts_with("figure.diagram") || sel.starts_with(".diagram") {
+            Some("diagram".into())
+        } else if sel.starts_with("nav.toc") {
+            Some("class=\"toc\"".into())
+        } else if sel.starts_with(".footnotes") {
+            Some("footnotes".into())
+        } else if sel.starts_with("ul.contains-task-list") {
+            Some("task-list".into())
+        } else {
+            match first {
+                "table" | "th" | "tr" => Some("<table".into()),
+                "blockquote" => Some("<blockquote".into()),
+                "hr" => Some("<hr".into()),
+                "img" => Some("<img".into()),
+                "mark" => Some("<mark".into()),
+                "kbd" => Some("<kbd".into()),
+                "pre" => Some("<pre".into()),
+                h if h.len() == 2 && h.starts_with('h') && sel.len() > 2 && !sel.contains(',') => {
+                    Some(format!("<{h}"))
+                }
+                _ => None,
+            }
+        };
+        want.is_none_or(|w| body.contains(&w))
+    };
+    css.lines()
+        .filter(|l| needs(l))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// The document title: front matter `title:`, else the first heading, else the
 /// file name.
 pub fn title_of(src: &str, doc_path: Option<&Path>) -> String {
@@ -493,7 +541,7 @@ pub fn export_html(src: &str, parse: &inkra_markdown::ParseOptions, o: &HtmlExpo
         "<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<meta name=\"generator\" content=\"Inkra {}\">\n<title>{}</title>\n<style>{}{}</style>\n{}</head>\n<body>\n<article class=\"markdown-body\">\n{}</article>\n{}</body>\n</html>\n",
         env!("CARGO_PKG_VERSION"),
         escape(&title),
-        theme_css(&o.style),
+        used_css(&theme_css(&o.style), &body),
         o.custom_css,
         o.head_html,
         body,

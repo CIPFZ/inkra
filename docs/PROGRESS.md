@@ -1,11 +1,12 @@
 # Inkra 开发进度
 
 更新时间：2026-10-13
-当前里程碑：M6 导出与导入（M0～M5 已完成）
+当前里程碑：M7 打磨与 1.0（M0～M6 已完成）
 CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 测试机均通过；macOS 仅做交叉 `cargo clippy --target aarch64-apple-darwin`，未实机运行；无 GitHub 远程仓库，Actions 未实际运行）
 
 ## 已完成的需求编号
 - M0：AD-3（命令注册表）、CM-001（框架 + 3 个样例命令）、PR-001、PR-003、PR-018（键）、UI-001（菜单骨架，macOS muda 原生菜单）、UI-002、UI-010（默认快捷键表）、UI-050、NF-002（命令边界 catch_unwind）、NF-008、CM-004（`--version` / `--help` / `--measure-startup` / `--config` 等参数解析）
+- M6：EX-001～EX-006、EX-020、EX-021（HTML 两种、PDF、图片、Pandoc 导出/导入、页面设置、打印、复制为 HTML、自定义导出项）
 - M5：MD-008（数学块、自动编号、`\tag`/`\label`/`\eqref`）、MD-035（行内公式）、MD-004、MD-010、MD-013、MD-014、MD-039/040、MD-064、MD-068、MD-078、MD-100～MD-102（Mermaid flowchart/sequence/pie、mmdc 兜底、主题配色）、ED-018、ED-041、ED-102～ED-105、PR-031/032/035/036/041
 - M4：ED-080～ED-085（表格呈现、单元格编辑、工具条、命令、拖拽列宽与重排、源码对齐）、FS-020～FS-025（大纲、文章列表、文件树、当前文件定位、搜索入口、字数详情）、FS-030（快速打开）、FS-031（全局搜索）、PR-011（`current` 选项）、PR-014、PR-038、PR-039、PR-043、窗口状态记忆
 - M3：ED-001～ED-006、ED-012～ED-014（实时模式语义）、ED-016 规则 1（粘贴位图）、ED-020、ED-030/031/033/034/039/040、ED-050/051/052/053/054/056～061/063/070、ED-090/091/092（本地图片、相对路径、`./<doc>.assets/` 复制）、ED-130（右键菜单 P0 项，表格菜单随 M4）、FS-001～FS-008、FS-040（视图菜单：侧边栏、源码模式、专注、打字机、状态栏、菜单栏、全屏、总在最前、缩放 50%～300%、性能叠层）、TH-001～TH-003（六个原创主题 + Auto + 热重载）、WM-001、WM-002、WM-003、MD-075、PR-010～PR-012、PR-016、PR-017、PR-030
@@ -46,8 +47,11 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 ### M5
 见 `docs/acceptance/m5.md`：数学语料 233 个公式、图表语料 35 个全部渲染。
 
+### M6
+见 `docs/acceptance/m6.md`：134 页 PDF 0.32 s；书签、可搜索文字、内外链接、表头重复；docx 往返。
+
 ## 进行中
-- [ ] M6：HTML 导出（含样式 / 不含样式）、PDF（krilla，分页、书签、链接、页眉页脚）、图片导出、Pandoc 桥接与导入、页面设置、打印
+- [ ] M7：偏好设置窗口（全部 P1 偏好项）、自定义快捷键 UI、配置导入导出、文件菜单剩余项（属性、重命名、移动、删除当前文件）、帮助菜单文档、CLI（inspect/lint/fmt/run）、AccessKit、安装包与文件关联、更新检查、行为清单 ≥ 95%
 
 ## 已知问题
 - 增量解析器修复：表格从段落中拆分出来的块不能作为重新同步点（proptest 发现，已加回归测试）。
@@ -89,4 +93,4 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 - 语料：`cargo xtask corpus` 拉取固定提交的 7 个仓库到 `target/corpus`（不入库）。
 
 ## 下次会话从这里继续
-- M6：新建 inkra-export：HTML 生成器（与复制为 HTML 共用），然后 krilla PDF（复用 inkra-layout 的块布局做分页，公式/图表矢量嵌入）。
+- M7：先做偏好设置窗口与快捷键 UI（PR-0xx），再补文件菜单剩余命令与 CLI，最后生成 behavior-checklist 并逐项验收。
