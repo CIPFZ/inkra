@@ -1,0 +1,252 @@
+# 数学公式语料（M5 验收）
+
+M5 验收要求下列 200 个常见公式全部渲染、无报错（`cargo test -p inkra-math corpus`），
+并与 MathJax 渲染结果肉眼一致（`cargo run -p inkra-math --example render -- out.png
+docs/acceptance/math-corpus.md` 生成对照图）。每行一个公式，以 `- ` 开头。
+
+## 代数与初等函数
+- x^2 + y^2 = z^2
+- (a+b)^2 = a^2 + 2ab + b^2
+- a^2 - b^2 = (a-b)(a+b)
+- x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
+- \frac{1}{x} + \frac{1}{y} = \frac{x+y}{xy}
+- \sqrt{2} \approx 1.41421
+- \sqrt[3]{27} = 3
+- \sqrt[n]{a^m} = a^{m/n}
+- |x| = \begin{cases} x & x \ge 0 \\ -x & x < 0 \end{cases}
+- \lfloor x \rfloor \le x < \lfloor x \rfloor + 1
+- \lceil x \rceil = -\lfloor -x \rfloor
+- \log_a b = \frac{\ln b}{\ln a}
+- \ln(xy) = \ln x + \ln y
+- e^{i\pi} + 1 = 0
+- e^{i\theta} = \cos\theta + i\sin\theta
+- \sin^2\theta + \cos^2\theta = 1
+- \tan\theta = \frac{\sin\theta}{\cos\theta}
+- \sin(\alpha \pm \beta) = \sin\alpha\cos\beta \pm \cos\alpha\sin\beta
+- \cos 2\theta = \cos^2\theta - \sin^2\theta
+- \arctan x + \arctan\frac{1}{x} = \frac{\pi}{2}
+- a_n = a_1 + (n-1)d
+- S_n = \frac{n(a_1 + a_n)}{2}
+- a_n = a_1 r^{n-1}
+- S_n = a_1 \frac{1 - r^n}{1 - r}
+- \binom{n}{k} = \frac{n!}{k!\,(n-k)!}
+- (x+y)^n = \sum_{k=0}^{n} \binom{n}{k} x^{n-k} y^k
+- n! = \prod_{k=1}^{n} k
+- \frac{a}{b} \div \frac{c}{d} = \frac{ad}{bc}
+- x_{1,2} = \frac{-p}{2} \pm \sqrt{\frac{p^2}{4} - q}
+- 0.\overline{3} = \frac{1}{3}
+- 10^{-3} \text{ m} = 1 \text{ mm}
+- a \equiv b \pmod{n}
+- \gcd(a, b) \cdot \operatorname{lcm}(a, b) = ab
+- p \mid ab \implies p \mid a \lor p \mid b
+- \sqrt{a}\sqrt{b} = \sqrt{ab}
+- \frac{x^{n+1} - 1}{x - 1} = \sum_{k=0}^{n} x^k
+- f^{-1}(f(x)) = x
+- (f \circ g)(x) = f(g(x))
+- \max_{x \in [0,1]} x(1-x) = \frac{1}{4}
+- \min\{a, b\} \le \frac{a+b}{2} \le \max\{a, b\}
+
+## 微积分
+- \lim_{x \to 0} \frac{\sin x}{x} = 1
+- \lim_{n \to \infty} \left(1 + \frac{1}{n}\right)^n = e
+- f'(x) = \lim_{h \to 0} \frac{f(x+h) - f(x)}{h}
+- \frac{d}{dx} x^n = n x^{n-1}
+- \frac{d}{dx} e^x = e^x
+- (fg)' = f'g + fg'
+- \left(\frac{f}{g}\right)' = \frac{f'g - fg'}{g^2}
+- \frac{dy}{dx} = \frac{dy}{du} \cdot \frac{du}{dx}
+- \int x^n \, dx = \frac{x^{n+1}}{n+1} + C
+- \int_a^b f(x)\,dx = F(b) - F(a)
+- \int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}
+- \int_{-\infty}^{\infty} e^{-\frac{x^2}{2}}\,dx = \sqrt{2\pi}
+- \int u \, dv = uv - \int v \, du
+- \iint_D f(x,y)\,dA
+- \iiint_V \rho \, dV
+- \oint_C \mathbf{F} \cdot d\mathbf{r}
+- \frac{\partial f}{\partial x}
+- \frac{\partial^2 u}{\partial t^2} = c^2 \frac{\partial^2 u}{\partial x^2}
+- \nabla f = \left( \frac{\partial f}{\partial x}, \frac{\partial f}{\partial y}, \frac{\partial f}{\partial z} \right)
+- \nabla \cdot \mathbf{F} = \frac{\partial F_x}{\partial x} + \frac{\partial F_y}{\partial y} + \frac{\partial F_z}{\partial z}
+- \nabla \times \mathbf{F}
+- \Delta u = \nabla^2 u = 0
+- f(x) = \sum_{n=0}^{\infty} \frac{f^{(n)}(a)}{n!}(x-a)^n
+- e^x = \sum_{n=0}^\infty \frac{x^n}{n!}
+- \sin x = x - \frac{x^3}{3!} + \frac{x^5}{5!} - \cdots
+- \frac{1}{1-x} = \sum_{n=0}^{\infty} x^n, \quad |x| < 1
+- \sum_{n=1}^{\infty} \frac{1}{n^2} = \frac{\pi^2}{6}
+- \zeta(s) = \sum_{n=1}^{\infty} \frac{1}{n^s}
+- \Gamma(z) = \int_0^\infty t^{z-1} e^{-t}\,dt
+- \int_0^1 x^{a-1}(1-x)^{b-1}\,dx = \frac{\Gamma(a)\Gamma(b)}{\Gamma(a+b)}
+- \lim_{x \to a^+} f(x) = L
+- \limsup_{n \to \infty} a_n
+- \liminf_{n\to\infty} a_n
+- \sup_{x \in A} f(x)
+- \inf_{x > 0} \left(x + \frac{1}{x}\right) = 2
+- \frac{d}{dt}\int_a^t f(s)\,ds = f(t)
+- \mathcal{L}\{f\}(s) = \int_0^\infty f(t) e^{-st}\,dt
+- \hat{f}(\xi) = \int_{-\infty}^{\infty} f(x)\, e^{-2\pi i x \xi}\,dx
+- y'' + p(x)y' + q(x)y = 0
+- \dot{x} = Ax + Bu
+- \ddot{\theta} + \frac{g}{l}\sin\theta = 0
+- \int\limits_0^1 x\,dx
+- \sum\nolimits_{i} a_i
+
+## 线性代数
+- \begin{pmatrix} a & b \\ c & d \end{pmatrix}
+- \begin{bmatrix} 1 & 0 & 0 \\ 0 & 1 & 0 \\ 0 & 0 & 1 \end{bmatrix}
+- \det\begin{vmatrix} a & b \\ c & d \end{vmatrix} = ad - bc
+- A^{-1} = \frac{1}{\det A} \begin{pmatrix} d & -b \\ -c & a \end{pmatrix}
+- A\mathbf{x} = \lambda\mathbf{x}
+- \det(A - \lambda I) = 0
+- (AB)^T = B^T A^T
+- \operatorname{tr}(AB) = \operatorname{tr}(BA)
+- \mathbf{u} \cdot \mathbf{v} = \|\mathbf{u}\| \|\mathbf{v}\| \cos\theta
+- \|\mathbf{x}\|_2 = \sqrt{\sum_{i=1}^n x_i^2}
+- \langle u, v \rangle = \overline{\langle v, u \rangle}
+- \mathbf{a} \times \mathbf{b} = \begin{vmatrix} \mathbf{i} & \mathbf{j} & \mathbf{k} \\ a_1 & a_2 & a_3 \\ b_1 & b_2 & b_3 \end{vmatrix}
+- \begin{pmatrix} x_1 \\ x_2 \\ \vdots \\ x_n \end{pmatrix}
+- \begin{pmatrix} a_{11} & \cdots & a_{1n} \\ \vdots & \ddots & \vdots \\ a_{m1} & \cdots & a_{mn} \end{pmatrix}
+- \operatorname{rank}(A) + \dim\ker A = n
+- A = U \Sigma V^T
+- \mathbf{e}_i^T \mathbf{e}_j = \delta_{ij}
+- \begin{Bmatrix} x \\ y \end{Bmatrix}
+- \begin{Vmatrix} A \end{Vmatrix}
+- \left[\begin{array}{cc|c} 1 & 2 & 3 \\ 4 & 5 & 6 \end{array}\right]
+
+## 概率与统计
+- P(A \mid B) = \frac{P(B \mid A)\,P(A)}{P(B)}
+- P(A \cup B) = P(A) + P(B) - P(A \cap B)
+- E[X] = \sum_{i} x_i\, p_i
+- \operatorname{Var}(X) = E[X^2] - (E[X])^2
+- \sigma = \sqrt{\frac{1}{N}\sum_{i=1}^N (x_i - \mu)^2}
+- f(x) = \frac{1}{\sigma\sqrt{2\pi}} e^{-\frac{(x-\mu)^2}{2\sigma^2}}
+- X \sim \mathcal{N}(\mu, \sigma^2)
+- P(X = k) = \binom{n}{k} p^k (1-p)^{n-k}
+- P(X = k) = \frac{\lambda^k e^{-\lambda}}{k!}
+- \bar{x} = \frac{1}{n}\sum_{i=1}^n x_i
+- \hat{\beta} = (X^T X)^{-1} X^T y
+- \operatorname{Cov}(X, Y) = E[(X - \mu_X)(Y - \mu_Y)]
+- \rho_{X,Y} = \frac{\operatorname{Cov}(X,Y)}{\sigma_X \sigma_Y}
+- H(X) = -\sum_{x} p(x) \log_2 p(x)
+- D_{KL}(P \parallel Q) = \sum_x P(x) \log\frac{P(x)}{Q(x)}
+- \Pr\left[\,|X - \mu| \ge k\sigma\,\right] \le \frac{1}{k^2}
+- \lim_{n\to\infty} P\left(\left|\frac{S_n}{n} - \mu\right| > \varepsilon\right) = 0
+- \chi^2 = \sum \frac{(O_i - E_i)^2}{E_i}
+- L(\theta) = \prod_{i=1}^n f(x_i \mid \theta)
+- \arg\max_\theta \log L(\theta)
+
+## 物理
+- E = mc^2
+- F = ma
+- \mathbf{F} = -\nabla V
+- W = \int \mathbf{F} \cdot d\mathbf{s}
+- p = mv, \quad E_k = \frac{1}{2}mv^2
+- F = G\frac{m_1 m_2}{r^2}
+- \nabla \cdot \mathbf{E} = \frac{\rho}{\varepsilon_0}
+- \nabla \cdot \mathbf{B} = 0
+- \nabla \times \mathbf{E} = -\frac{\partial \mathbf{B}}{\partial t}
+- \nabla \times \mathbf{B} = \mu_0 \mathbf{J} + \mu_0 \varepsilon_0 \frac{\partial \mathbf{E}}{\partial t}
+- i\hbar \frac{\partial}{\partial t}\Psi = \hat{H}\Psi
+- \hat{H} = -\frac{\hbar^2}{2m}\nabla^2 + V
+- \Delta x \, \Delta p \ge \frac{\hbar}{2}
+- E = h\nu = \hbar\omega
+- \lambda = \frac{h}{p}
+- PV = nRT
+- dS = \frac{\delta Q}{T}
+- \eta = 1 - \frac{T_C}{T_H}
+- \gamma = \frac{1}{\sqrt{1 - v^2/c^2}}
+- ds^2 = -c^2 dt^2 + dx^2 + dy^2 + dz^2
+- R_{\mu\nu} - \frac{1}{2}R g_{\mu\nu} = \frac{8\pi G}{c^4} T_{\mu\nu}
+- \langle \psi | \hat{A} | \psi \rangle
+- |\psi\rangle = \alpha|0\rangle + \beta|1\rangle
+- Z = \sum_i e^{-\beta E_i}
+- \omega = 2\pi f = \frac{2\pi}{T}
+- x(t) = A\cos(\omega t + \varphi)
+- V = IR, \quad P = IV
+- \Phi_B = \oint \mathbf{B} \cdot d\mathbf{A}
+- \tau = \mathbf{r} \times \mathbf{F}
+- L = T - V
+
+## 集合、逻辑与数论
+- A \cup B, \quad A \cap B, \quad A \setminus B
+- A \subseteq B \iff \forall x\,(x \in A \Rightarrow x \in B)
+- \overline{A \cup B} = \bar{A} \cap \bar{B}
+- \mathbb{N} \subset \mathbb{Z} \subset \mathbb{Q} \subset \mathbb{R} \subset \mathbb{C}
+- \{x \in \mathbb{R} \mid x^2 < 2\}
+- \emptyset \ne \{\emptyset\}
+- |A \times B| = |A| \cdot |B|
+- \mathcal{P}(A) = \{ S \mid S \subseteq A \}
+- \neg(p \land q) \equiv \neg p \lor \neg q
+- \exists x \in S : P(x)
+- \forall \varepsilon > 0\ \exists \delta > 0
+- a \equiv b \pmod{m}
+- \varphi(n) = n \prod_{p \mid n}\left(1 - \frac{1}{p}\right)
+- a^{p-1} \equiv 1 \pmod p
+- \sum_{d \mid n} \varphi(d) = n
+- \pi(x) \sim \frac{x}{\ln x}
+- \aleph_0 < 2^{\aleph_0}
+- f: X \to Y, \quad x \mapsto f(x)
+- f \colon A \hookrightarrow B
+- A \cong B, \quad G / N, \quad \ker \varphi \trianglelefteq G
+
+## 结构与排版
+- \overbrace{1 + 2 + \cdots + n}^{n \text{ terms}}
+- \underbrace{a + a + \cdots + a}_{k}
+- \overset{\text{def}}{=}
+- \underset{x \to 0}{\lim}
+- \stackrel{?}{=}
+- a \xrightarrow{\text{map}} b
+- \hat{a}\ \check{a}\ \tilde{a}\ \acute{a}\ \grave{a}\ \dot{a}\ \ddot{a}\ \breve{a}\ \bar{a}\ \vec{a}
+- \widehat{ABC}\ \widetilde{xyz}
+- \overline{z_1 z_2} = \overline{z_1}\,\overline{z_2}
+- \underline{\text{important}}
+- \overrightarrow{AB} + \overleftarrow{CD}
+- \boxed{E = mc^2}
+- \color{blue}{x} + y
+- \textcolor{red}{\alpha} + \beta
+- \left\langle \frac{a}{b} \right\rangle
+- \left\| \mathbf{v} \right\|
+- \left. \frac{df}{dx} \right|_{x=0}
+- \bigl( \Bigl( \biggl( \Biggl( x \Biggr) \biggr) \Bigr) \bigr)
+- \left( \begin{array}{c} n \\ k \end{array} \right)
+- \frac{\frac{1}{x}+\frac{1}{y}}{\frac{1}{z}}
+- \cfrac{1}{1 + \cfrac{1}{1 + \cfrac{1}{1 + x}}}
+- \dfrac{a}{b} \tfrac{c}{d}
+- \sum_{\substack{0 \le i \le m \\ 0 < j < n}} P(i, j)
+- \begin{aligned} a &= b + c \\ &= d \end{aligned}
+- \begin{gathered} x = 1 \\ y = 2 \end{gathered}
+- \begin{matrix} a & b \\ c & d \end{matrix}
+- \begin{smallmatrix} a & b \\ c & d \end{smallmatrix}
+- f(x) = \begin{cases} 1 & \text{if } x \in \mathbb{Q} \\ 0 & \text{otherwise} \end{cases}
+- \mathbf{A}\ \mathit{A}\ \mathrm{A}\ \mathsf{A}\ \mathtt{A}\ \mathcal{A}\ \mathfrak{A}\ \mathbb{A}
+- \alpha\ \beta\ \gamma\ \delta\ \epsilon\ \varepsilon\ \zeta\ \eta\ \theta\ \vartheta\ \iota\ \kappa\ \lambda\ \mu
+- \nu\ \xi\ \pi\ \varpi\ \rho\ \varrho\ \sigma\ \varsigma\ \tau\ \upsilon\ \phi\ \varphi\ \chi\ \psi\ \omega
+- \Gamma\ \Delta\ \Theta\ \Lambda\ \Xi\ \Pi\ \Sigma\ \Upsilon\ \Phi\ \Psi\ \Omega
+- \le\ \ge\ \ne\ \approx\ \equiv\ \sim\ \simeq\ \cong\ \propto\ \ll\ \gg
+- \leftarrow\ \rightarrow\ \leftrightarrow\ \Leftarrow\ \Rightarrow\ \Leftrightarrow\ \uparrow\ \downarrow\ \mapsto
+- \pm\ \mp\ \times\ \div\ \cdot\ \circ\ \bullet\ \oplus\ \otimes\ \cap\ \cup\ \wedge\ \vee
+- \infty\ \partial\ \nabla\ \forall\ \exists\ \emptyset\ \neg\ \angle\ \hbar\ \ell\ \Re\ \Im\ \aleph
+- \ldots\ \cdots\ \vdots\ \ddots
+- a\,b\;c\quad d\qquad e\!f
+- x \in A \text{ 且 } y \notin B
+- \text{速度 } v = \frac{\Delta s}{\Delta t}
+- \sum_{i=1}^{n} \sum_{j=1}^{m} a_{ij} = \sum_{j=1}^{m} \sum_{i=1}^{n} a_{ij}
+- \prod_{i=1}^n (1 + x_i) \ge 1 + \sum_{i=1}^n x_i
+- \bigcup_{i=1}^\infty A_i, \quad \bigcap_{i \in I} B_i
+- \bigoplus_{i=1}^n V_i, \quad \bigotimes_{k} W_k
+- x^{y^{z}} \ne (x^y)^z
+- a_{i_1 i_2}^{j_1 j_2}
+- {}^{14}_{6}\mathrm{C}
+- \mathrm{H_2O} + \mathrm{CO_2}
+- \sin\left(\frac{\pi}{2} - \theta\right) = \cos\theta
+- \frac{\mathrm{d}^n}{\mathrm{d}x^n}
+- \int_{\partial\Omega} \omega = \int_\Omega d\omega
+- \oint_{\gamma} f(z)\,dz = 2\pi i \sum \operatorname{Res}(f, a_k)
+- f(z) = \frac{1}{2\pi i}\oint \frac{f(\zeta)}{\zeta - z}\,d\zeta
+- \frac{\partial \mathcal{L}}{\partial q} - \frac{d}{dt}\frac{\partial \mathcal{L}}{\partial \dot{q}} = 0
+- \mathbb{E}_{x \sim p}[f(x)]
+- \operatorname*{arg\,min}_{w} \|Xw - y\|^2 + \lambda \|w\|_1
+- \sigma(x) = \frac{1}{1 + e^{-x}}
+- \mathrm{softmax}(z)_i = \frac{e^{z_i}}{\sum_j e^{z_j}}
+- \mathcal{O}(n \log n)
+- T(n) = 2T\left(\frac{n}{2}\right) + O(n)

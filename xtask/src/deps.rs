@@ -53,6 +53,34 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         "code highlighting (SPEC 2.1), pure-Rust fancy-regex",
     ),
     (
+        "ttf-parser",
+        Scope::Only(&["inkra-math", "inkra-diagram"]),
+        "MIT OR Apache-2.0",
+        "OpenType MATH table and glyph outlines for the math engine (SPEC 2.4)",
+    ),
+    (
+        "tiny-skia-path",
+        Scope::Only(&[
+            "inkra-math",
+            "inkra-diagram",
+            "inkra-render",
+            "inkra-export",
+        ]),
+        "BSD-3-Clause",
+        "vector paths shared by math, diagrams, rasterizer and PDF (krilla)",
+    ),
+    (
+        "tiny-skia",
+        Scope::Only(&[
+            "inkra-render",
+            "inkra-export",
+            "inkra-math",
+            "inkra-diagram",
+        ]),
+        "BSD-3-Clause",
+        "rasterizing formulas and diagrams (also used by resvg); math/diagram examples only",
+    ),
+    (
         "nucleo-matcher",
         Scope::Only(&["inkra-workspace"]),
         "MPL-2.0",
