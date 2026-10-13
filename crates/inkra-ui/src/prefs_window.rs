@@ -49,6 +49,7 @@ fn keys(page: Page) -> &'static [Option<&'static str>] {
             Some("general.language"),
             Some("general.startup"),
             Some("general.openFileIn"),
+            Some("general.dropMarkdown"),
             None,
             Some("general.autoSave"),
             Some("general.autoReload"),

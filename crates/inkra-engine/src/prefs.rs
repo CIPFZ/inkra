@@ -150,6 +150,13 @@ pub const PREFS: &[PrefSpec] = &[
         doc: "File extensions treated as Markdown (file tree, open dialog, drops).",
     },
     PrefSpec {
+        key: "general.dropMarkdown",
+        default: r#""open""#,
+        kind: PrefKind::Enum(&["open", "link"]),
+        req: "ED-017",
+        doc: "A Markdown file dropped on the editor opens, or is inserted as a link.",
+    },
+    PrefSpec {
         key: "general.saveToast",
         default: r#"true"#,
         kind: PrefKind::Bool,

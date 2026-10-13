@@ -28,7 +28,7 @@
 | 18 | ED-016 | 粘贴位图保存为图片文件并插入 | 手工 W | ✅ |
 | 19 | ED-016 | 复制为 Markdown / HTML / 纯文本 / HTML 代码 | 手工 L；`clipboard_html` 共用导出生成器 | ✅ |
 | 20 | ED-017 | 拖动选中文本移动，按住 Ctrl 复制 | 自动 `drag_moves_and_copies_text`；手工 L | ✅ |
-| 21 | ED-017 | 从系统拖入图片插入、`.md` 打开、其他文件插入链接 | 手工 L/W | ⚠ "拖入 `.md` 改为插入链接"的偏好未提供 |
+| 21 | ED-017 | 从系统拖入图片插入、`.md` 打开（偏好 `general.dropMarkdown` 可改为插入链接）、其他文件插入链接 | 手工 L/W | ✅ |
 | 22 | ED-017 | 从文件树拖入文档插入相对链接或图片 | 自动 `drag_moves_and_copies_text`（`edit.insertFileLink`） | ✅ |
 | 23 | ED-018 | Alt+Up/Down 移动段落、列表项、表格行 | 自动 `clear_scope_and_move`、`table_editing` | ✅ |
 | 24 | ED-020 | 光标闪烁 530 ms，空闲 30 s 后停止；打字时滚动跟随 | 手工 L；CPU 空闲 0% | ✅ |
@@ -236,4 +236,4 @@
 
 ## 汇总
 
-共 185 条：✅ 176、⚠ 9、❌ 0，通过率 95.1%。⚠ 项进入 `docs/ROADMAP.md`。
+共 185 条：✅ 177、⚠ 8、❌ 0，通过率 95.7%。⚠ 项进入 `docs/ROADMAP.md`。

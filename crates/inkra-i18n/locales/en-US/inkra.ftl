@@ -568,3 +568,6 @@ pref-view-showWhitespace = Show spaces and line ends
 welcome-start-writing = Start writing
 cmd-edit-moveText = Move Text
 cmd-edit-insertFileLink = Insert File Link
+pref-general-dropMarkdown = Dropped Markdown files
+pref-general-dropMarkdown--open = Open them
+pref-general-dropMarkdown--link = Insert a link

@@ -21,6 +21,7 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `general.trimTrailingOnSave` | bool | `false` | PR-013 | Remove trailing whitespace when saving (hard line breaks keep two spaces). |
 | `general.normalizeOnSave` | bool | `false` | MD-092 | Normalize when saving: pad tables, renumber ordered lists, trim trailing whitespace, end with one newline. |
 | `general.markdownExtensions` | string[] | `["md", "markdown", "mdown", "mkd", "mkdn", "mdwn", "mdtxt", "mdtext", "text", "txt", "rmd", "qmd"]` | PR-015 | File extensions treated as Markdown (file tree, open dialog, drops). |
+| `general.dropMarkdown` | `open` / `link` | `"open"` | ED-017 | A Markdown file dropped on the editor opens, or is inserted as a link. |
 | `general.saveToast` | bool | `true` | UI-041 | Show a short notice after saving. |
 | `general.checkUpdates` | bool | `true` | PR-020 | Check GitHub Releases for a newer version at startup (never downloads). |
 | `appearance.maxWidth` | number | `0` | WM-004 | Maximum width of the text column in pixels (0: the theme's). |

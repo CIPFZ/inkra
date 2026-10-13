@@ -851,7 +851,12 @@ impl Shell {
                 .map(str::to_ascii_lowercase)
                 .unwrap_or_default();
             if inkra_workspace::tree::markdown_exts().contains(&ext) {
-                self.invoke(ctx, "file.open", &json!({ "path": path }));
+                // ED-017: dropped Markdown files open, or become links if so set.
+                if self.engine.state.prefs.string("general.dropMarkdown") == "link" {
+                    self.invoke(ctx, "edit.insertFileLink", &json!({ "path": path }));
+                } else {
+                    self.invoke(ctx, "file.open", &json!({ "path": path }));
+                }
             } else if matches!(
                 ext.as_str(),
                 "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "svg" | "tif" | "tiff"
