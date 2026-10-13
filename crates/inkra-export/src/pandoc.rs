@@ -344,3 +344,42 @@ mod tests {
         assert_eq!(format("tex").map(|f| f.writer), Some("latex"));
     }
 }
+
+#[cfg(test)]
+mod pandoc_tests {
+    use super::*;
+
+    /// Runs only where Pandoc is installed (set `INKRA_PANDOC` or put it on PATH).
+    #[test]
+    fn docx_round_trip_with_images() {
+        let Some(pandoc) = find(&std::env::var("INKRA_PANDOC").unwrap_or_default()) else {
+            eprintln!("pandoc not found; skipped");
+            return;
+        };
+        let d = tempfile::tempdir().unwrap();
+        let png =
+            crate::raster::fills_png(4.0, 4.0, &[], 1.0, Some(inkra_layout::epaint::Color32::RED))
+                .unwrap();
+        std::fs::write(d.path().join("pic.png"), png).unwrap();
+        let doc = d.path().join("doc.md");
+        let src =
+            "# Report\n\nHello **world**.\n\n![pic](pic.png)\n\n```mermaid\npie\n\"a\" : 1\n```\n";
+        let md = normalize(src, Some(&doc), d.path(), &inkra_layout::Style::default());
+        let docx = d.path().join("out.docx");
+        export(&pandoc, &md, "docx", &docx, Some(d.path()), "").unwrap();
+        assert!(std::fs::metadata(&docx).unwrap().len() > 1000);
+        let back = d.path().join("back");
+        std::fs::create_dir_all(&back).unwrap();
+        let assets = back.join("assets");
+        let imported = import(&docx, Some(&pandoc), &assets).unwrap();
+        assert!(
+            imported.contains("# Report") && imported.contains("**world**"),
+            "{imported}"
+        );
+        assert!(imported.contains("assets"), "{imported}");
+        assert!(
+            std::fs::read_dir(assets.join("media")).unwrap().count() >= 2,
+            "both images extracted"
+        );
+    }
+}

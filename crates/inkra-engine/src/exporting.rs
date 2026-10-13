@@ -31,6 +31,8 @@ pub enum ExportFormat {
     Pandoc(String),
     /// The formula or diagram at the caret (PNG, or SVG by extension).
     Block,
+    /// A custom export command from preferences (EX-004).
+    Custom(usize),
 }
 
 impl ExportFormat {
@@ -42,6 +44,7 @@ impl ExportFormat {
             Self::Image => "png",
             Self::Pandoc(w) => inkra_export::pandoc::format(w).map_or("out", |f| f.ext),
             Self::Block => "png",
+            Self::Custom(_) => "out",
         }
     }
 
@@ -54,6 +57,7 @@ impl ExportFormat {
             Self::Image => "file.exportImage",
             Self::Pandoc(_) => "file.exportPandoc",
             Self::Block => "file.exportBlockImage",
+            Self::Custom(_) => "file.exportCustom",
         }
     }
 
@@ -61,6 +65,7 @@ impl ExportFormat {
     pub fn params(&self) -> Value {
         match self {
             Self::Pandoc(w) => serde_json::json!({ "format": w }),
+            Self::Custom(k) => serde_json::json!({ "index": k }),
             _ => serde_json::json!({}),
         }
     }
@@ -90,6 +95,16 @@ pub enum JobKind {
     },
     /// Print: a PDF in the temporary folder handed to the system.
     Print(Box<PdfExport>),
+    /// A custom command template run on the saved document (or a temporary
+    /// copy next to it when there are unsaved changes).
+    Custom {
+        /// Command template.
+        template: String,
+        /// The saved document, if it is up to date.
+        saved: Option<PathBuf>,
+        /// Folder for the temporary copy.
+        dir: PathBuf,
+    },
     /// Import a file as Markdown into `out`.
     Import {
         /// Source file.
@@ -157,6 +172,25 @@ pub fn run(job: &ExportJob) -> Result<JobResult, String> {
             let dir = doc_path.as_deref().and_then(Path::parent);
             let r = inkra_export::pandoc::export(pandoc, &md, writer, &job.out, dir, args);
             let _ = std::fs::remove_dir_all(&work);
+            r.map(|()| JobResult::Exported(vec![job.out.clone()]))
+        }
+        JobKind::Custom {
+            template,
+            saved,
+            dir,
+        } => {
+            let (input, temp) = match saved {
+                Some(p) => (p.clone(), None),
+                None => {
+                    let t = dir.join(format!(".inkra-export-{}.md", std::process::id()));
+                    std::fs::write(&t, &job.src).map_err(|e| e.to_string())?;
+                    (t.clone(), Some(t))
+                }
+            };
+            let r = inkra_export::pandoc::run_template(template, &input, &job.out);
+            if let Some(t) = temp {
+                let _ = std::fs::remove_file(t);
+            }
             r.map(|()| JobResult::Exported(vec![job.out.clone()]))
         }
         JobKind::Import { input, pandoc } => {
@@ -309,6 +343,22 @@ pub fn job(app: &AppState, format: &ExportFormat, out: PathBuf) -> Result<Export
             }))
         }
         ExportFormat::Block => return Err("not a document export".into()),
+        ExportFormat::Custom(k) => {
+            let c = custom_exports(app)
+                .into_iter()
+                .nth(*k)
+                .ok_or("no such export command")?;
+            let e = &app.editor;
+            JobKind::Custom {
+                template: c.template,
+                saved: e.path.clone().filter(|_| !e.doc.is_dirty()),
+                dir: e
+                    .path
+                    .as_ref()
+                    .and_then(|p| p.parent().map(Path::to_owned))
+                    .unwrap_or_else(std::env::temp_dir),
+            }
+        }
         ExportFormat::Pandoc(writer) => {
             let pandoc = pandoc(app)
                 .ok_or("Pandoc is not installed (https://pandoc.org/installing.html)")?;
@@ -402,6 +452,34 @@ fn export(cx: &mut CommandContext<'_>, p: &Value, format: ExportFormat) -> Comma
         }
     }
     Ok(Outcome::Done)
+}
+
+/// A custom export entry (`export.custom`: `Label|ext|command template`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomExport {
+    /// Menu label.
+    pub label: String,
+    /// Output extension.
+    pub ext: String,
+    /// Command template with `$input`, `$output`, `$outputDir`.
+    pub template: String,
+}
+
+/// The custom export entries from preferences.
+pub fn custom_exports(app: &AppState) -> Vec<CustomExport> {
+    app.prefs
+        .strings("export.custom")
+        .iter()
+        .filter_map(|s| {
+            let mut it = s.splitn(3, '|');
+            let (label, ext, template) = (it.next()?.trim(), it.next()?.trim(), it.next()?.trim());
+            (!label.is_empty() && !template.is_empty()).then(|| CustomExport {
+                label: label.to_owned(),
+                ext: ext.trim_start_matches('.').to_owned(),
+                template: template.to_owned(),
+            })
+        })
+        .collect()
 }
 
 /// The formula or diagram at the caret.
@@ -608,6 +686,45 @@ pub fn register(r: &mut CommandRegistry) {
         ),
         |cx, p| export(cx, p, ExportFormat::Image),
     ));
+    r.register(FnCommand::new(
+        spec(
+            "help.installPandoc",
+            Category::Help,
+            "EX-004",
+            "Open the Pandoc installation page.",
+        ),
+        |cx, _| {
+            cx.effects
+                .push(Effect::OpenUrl("https://pandoc.org/installing.html".into()));
+            Ok(Outcome::Done)
+        },
+    ));
+    r.register(
+        FnCommand::new(
+            params(
+                spec("file.exportCustom", File, "EX-004", "Run a custom export command from the `export.custom` preference."),
+                r#"{"type":"object","required":["index"],"properties":{"index":{"type":"integer","minimum":0},"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}"#,
+            ),
+            |cx, p| {
+                let k = p.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
+                let c = custom_exports(cx.app).into_iter().nth(k).ok_or_else(|| fail("file.exportCustom", "no such export command"))?;
+                let mut p = p.clone();
+                if path_param(&p).is_none() && !p.get("sameFolder").and_then(Value::as_bool).unwrap_or(false) {
+                    let name = suggested_name(cx.app, &c.ext);
+                    let dir = cx.app.editor.path.as_ref().and_then(|p| p.parent().map(Path::to_owned));
+                    cx.effects.push(Effect::ExportDialog { format: ExportFormat::Custom(k), name, dir });
+                    return Ok(Outcome::Done);
+                }
+                if p.get("sameFolder").and_then(Value::as_bool).unwrap_or(false)
+                    && let Some(doc) = cx.app.editor.path.clone()
+                {
+                    p["path"] = Value::String(doc.with_extension(&c.ext).to_string_lossy().into_owned());
+                }
+                export(cx, &p, ExportFormat::Custom(k))
+            },
+        )
+        .enabled(|cx| !custom_exports(cx.app).is_empty()),
+    );
     r.register(
         FnCommand::new(
             params(
@@ -761,6 +878,33 @@ mod tests {
                 .unwrap()
                 .contains("inkra-diagram")
         );
+    }
+
+    #[test]
+    fn custom_export_runs_the_template() {
+        let d = tempfile::tempdir().unwrap();
+        let mut e = crate::Engine::new(crate::Preferences::default());
+        e.state.editor = crate::editor::Editor::from_text("# Custom\n");
+        let cp = if cfg!(windows) {
+            "cmd /C copy $input $output"
+        } else {
+            "cp $input $output"
+        };
+        assert!(
+            e.state
+                .prefs
+                .set("export.custom", json!([format!("Copy|txt|{cp}"), "broken"]))
+        );
+        assert_eq!(custom_exports(&e.state).len(), 1);
+        let out = d.path().join("c.txt");
+        e.execute("file.exportCustom", &json!({ "index": 0, "path": out }))
+            .unwrap();
+        let effects = e.take_effects();
+        let [Effect::RunJob(job)] = effects.as_slice() else {
+            panic!("{effects:?}")
+        };
+        run(job).unwrap();
+        assert_eq!(std::fs::read_to_string(&out).unwrap(), "# Custom\n");
     }
 
     #[test]

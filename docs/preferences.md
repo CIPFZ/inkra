@@ -61,6 +61,7 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `export.image.scale` | number | `2` | EX-003 | Resolution multiplier for image export (1–3). |
 | `export.image.paged` | bool | `false` | EX-003 | Export one image per page instead of one long image. |
 | `export.pandocPath` | string | `""` | EX-004 | Pandoc executable (empty: search PATH). |
+| `export.custom` | string[] | `[]` | EX-004 | Custom export commands, each `Label\|extension\|command template` with `$input`, `$output` and `$outputDir`, e.g. `Word (reference)\|docx\|pandoc $input -o $output --reference-doc ref.docx`. |
 | `export.pandocArgs` | string | `""` | EX-004 | Extra Pandoc arguments, e.g. `--reference-doc ref.docx`. |
 | `markdown.mermaidCli` | string | `""` | MD-100 | Path of the Mermaid CLI (`mmdc`) used for diagram types Inkra does not draw itself (empty: off). |
 | `markdown.diagrams` | bool | `true` | MD-064 | Render ```` ```mermaid ```` blocks as diagrams (off: plain code blocks). |

@@ -15,6 +15,9 @@ pub enum Dynamic {
     Themes,
     /// Open windows (`view.switchWindow` with `{"window": …}`).
     Windows,
+    /// Custom export commands from preferences (`file.exportCustom` with
+    /// `{"index": …}`, EX-004).
+    CustomExports,
 }
 
 /// One entry of a menu.
@@ -192,6 +195,8 @@ pub const MENU_BAR: &[Menu] = &[
                         r#"{"format":"org"}"#,
                         "export-format-org",
                     ),
+                    c("help.installPandoc"),
+                    MenuItem::Dynamic(Dynamic::CustomExports),
                 ],
             ),
             c("file.pageSetup"),

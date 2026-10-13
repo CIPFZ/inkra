@@ -430,6 +430,13 @@ pub const PREFS: &[PrefSpec] = &[
         doc: "Pandoc executable (empty: search PATH).",
     },
     PrefSpec {
+        key: "export.custom",
+        default: r#"[]"#,
+        kind: PrefKind::StringList,
+        req: "EX-004",
+        doc: "Custom export commands, each `Label|extension|command template` with `$input`, `$output` and `$outputDir`, e.g. `Word (reference)|docx|pandoc $input -o $output --reference-doc ref.docx`.",
+    },
+    PrefSpec {
         key: "export.pandocArgs",
         default: r#""""#,
         kind: PrefKind::String,

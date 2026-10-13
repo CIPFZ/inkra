@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **171**
+Registered commands: **173**
 
 
 ## App
@@ -66,6 +66,7 @@ Registered commands: **171**
 | `file.clearRecent` | Clear Recent Files | 清除最近文件 |  |  | — | FS-002 | Forget the recent files list. |
 | `file.close` | Close | 关闭 | `Ctrl+W` | `⌘W` | — | FS-005 | Close the window (asks to save changes). |
 | `file.exportBlockImage` | Export Image… | 导出图片… |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-003 | Export the formula or diagram at the caret as PNG or SVG (by extension). |
+| `file.exportCustom` | Custom Export | 自定义导出 |  |  | `{"type":"object","required":["index"],"properties":{"index":{"type":"integer","minimum":0},"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-004 | Run a custom export command from the `export.custom` preference. |
 | `file.exportHtml` | HTML | HTML |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-001 | Export as HTML with the theme's styles (asks for the file unless `path` is given). |
 | `file.exportHtmlPlain` | HTML (without styles) | HTML（不含样式） |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-001 | Export as an HTML fragment without styles. |
 | `file.exportImage` | Image | 图片 |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-003 | Export as a PNG image (one long image, or one per page). |
@@ -108,6 +109,12 @@ Registered commands: **171**
 | `format.subscript` | Subscript | 下标 |  |  | — | ED-037 | Toggle ~subscript~ (needs MD-061). |
 | `format.superscript` | Superscript | 上标 |  |  | — | ED-036 | Toggle ^superscript^ (needs MD-062). |
 | `format.underline` | Underline | 下划线 | `Ctrl+U` | `⌘U` | — | ED-032 | Toggle <u>underline</u>. |
+
+## Help
+
+| Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
+|---|---|---|---|---|---|---|---|
+| `help.installPandoc` | Get Pandoc… | 获取 Pandoc… |  |  | — | EX-004 | Open the Pandoc installation page. |
 
 ## Paragraph
 

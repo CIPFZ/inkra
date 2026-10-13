@@ -93,10 +93,15 @@ impl Dialogs {
                     .add_filter("Documents", inkra_export::pandoc::IMPORT_EXTS)
                     .pick_file(),
                 Purpose::Export { format, .. } => {
+                    // The suggested name carries the extension (custom exports
+                    // define their own).
+                    let ext = name
+                        .as_deref()
+                        .and_then(|n| n.rsplit_once('.'))
+                        .map_or_else(|| format.ext().to_owned(), |(_, e)| e.to_owned());
                     if let Some(n) = name {
                         d = d.set_file_name(n);
                     }
-                    let ext = format.ext().to_owned();
                     let mut d = d.add_filter(ext.to_uppercase(), &[ext.as_str()]);
                     if *format == inkra_engine::exporting::ExportFormat::Block {
                         d = d.add_filter("SVG", &["svg"]);

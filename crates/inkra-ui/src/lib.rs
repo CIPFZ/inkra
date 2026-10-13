@@ -903,10 +903,15 @@ impl Shell {
             .iter()
             .map(|n| (n.clone(), n == current))
             .collect();
+        let custom_exports = inkra_engine::exporting::custom_exports(&self.engine.state)
+            .into_iter()
+            .map(|c| c.label)
+            .collect();
         menubar::MenuData {
             recent,
             windows,
             themes,
+            custom_exports,
         }
     }
 

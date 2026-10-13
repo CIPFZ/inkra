@@ -24,6 +24,8 @@ pub struct MenuData {
     pub windows: Vec<(String, u64, bool)>,
     /// Installed themes: `(name, is_current)`.
     pub themes: Vec<(String, bool)>,
+    /// Labels of custom export commands (EX-004).
+    pub custom_exports: Vec<String>,
 }
 
 /// Label of a command leaf.
@@ -144,6 +146,22 @@ fn items(
                             }
                         }
                     }
+                    Dynamic::CustomExports => {
+                        // Nothing (not even a placeholder) when none are set up.
+                        any = true;
+                        if !data.custom_exports.is_empty() {
+                            ui.separator();
+                        }
+                        for (k, label) in data.custom_exports.iter().enumerate() {
+                            if ui.button(label).clicked() {
+                                *out = Some(Invocation {
+                                    id: "file.exportCustom".into(),
+                                    params: json!({ "index": k }),
+                                });
+                                ui.close();
+                            }
+                        }
+                    }
                     Dynamic::Themes => {
                         for (name, current) in &data.themes {
                             any = true;
@@ -166,7 +184,7 @@ fn items(
                     let empty = match kind {
                         Dynamic::RecentFiles => "menu-recent-empty",
                         Dynamic::Themes => "menu-themes-empty",
-                        Dynamic::Windows => "menu-windows-empty",
+                        Dynamic::Windows | Dynamic::CustomExports => "menu-windows-empty",
                     };
                     ui.add_enabled(false, egui::Button::new(i18n.tr(empty)));
                 }
