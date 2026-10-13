@@ -155,3 +155,53 @@ fn remove_link_keeps_text() {
     tx(&mut e, t);
     assert_eq!(e.text(), "see docs now");
 }
+
+#[test]
+fn alerts_and_footnotes() {
+    let mut e = Editor::from_text("a\n\nline one\nline two\n\nb");
+    e.sel = Selection::caret(5);
+    let t = insert_alert(&e.doc, e.sel, "TIP");
+    tx(&mut e, Some(t));
+    assert_eq!(e.text(), "a\n\n> [!TIP]\n> line one\n> line two\n\nb");
+    let blocks = e.doc.ast().to_blocks();
+    assert!(matches!(
+        blocks[1].kind,
+        inkra_markdown::BlockKind::BlockQuote { alert: Some(_) }
+    ));
+    let mut e = Editor::from_text("See this[^1].\n\n[^1]: one");
+    e.sel = Selection::caret(3);
+    let t = insert_footnote(&e.doc, e.sel);
+    tx(&mut e, Some(t));
+    assert_eq!(e.text(), "See[^2] this[^1].\n\n[^1]: one\n\n[^2]: ");
+    assert_eq!(e.sel.head, e.text().len());
+}
+
+#[test]
+fn clear_scope_and_move() {
+    let mut e = Editor::from_text("a **bold** and `code` and [l](u) z");
+    e.sel = Selection::new(0, e.text().len());
+    let t = clear_format(&e.doc, e.sel);
+    tx(&mut e, t);
+    assert_eq!(e.text(), "a bold and code and l z");
+    let e = Editor::from_text("x **a *b* c** y");
+    let s1 = style_scope(&e.doc, Selection::caret(7)).unwrap();
+    assert_eq!(&e.text()[s1.range()], "*b*");
+    let s2 = style_scope(&e.doc, s1).unwrap();
+    assert_eq!(&e.text()[s2.range()], "**a *b* c**");
+    let mut e = Editor::from_text("one\n\ntwo\n\nthree");
+    e.sel = Selection::caret(6);
+    let t = move_block(&e.doc, e.sel, true);
+    tx(&mut e, t);
+    assert_eq!(e.text(), "two\n\none\n\nthree");
+    assert_eq!(e.sel.head, 1);
+    let mut e = Editor::from_text("- a\n- b\n- c");
+    e.sel = Selection::caret(2);
+    let t = move_block(&e.doc, e.sel, false);
+    tx(&mut e, t);
+    assert_eq!(e.text(), "- b\n- a\n- c");
+    let mut e = Editor::from_text("- a\n- b\n- c");
+    e.sel = Selection::caret(10);
+    let t = move_block(&e.doc, e.sel, true);
+    tx(&mut e, t);
+    assert_eq!(e.text(), "- a\n- c\n- b");
+}

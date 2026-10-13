@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **152**
+Registered commands: **160**
 
 
 ## App
@@ -50,6 +50,7 @@ Registered commands: **152**
 | `edit.replaceRange` | Replace Range | 替换范围 |  |  | `{"type":"object","required":["start","end","text"],"properties":{"start":{"type":"integer"},"end":{"type":"integer"},"text":{"type":"string"}}}` | ED-103 | Replace a source range with text and put the caret after it (completions). |
 | `edit.selectAll` | Select All | 全选 | `Ctrl+A` | `⌘A` | — | ED-011 | Select all (inside a code block: the block first). |
 | `edit.selectLine` | Select Line / Sentence | 选择当前行/句 | `Ctrl+L` | `⌘L` | — | ED-011 | Select the current line. |
+| `edit.selectStyleScope` | Select Style Scope | 选择样式范围 | `Ctrl+E` | `⌘E` | — | ED-021 | Select the formatting around the caret, then its parent, then the paragraph. |
 | `edit.selectWord` | Select Word | 选择当前词 | `Ctrl+D` | `⌘D` | — | ED-011 | Select the word at the caret. |
 | `edit.tab` | Tab | 制表 |  |  | `{"type":"object","properties":{"outdent":{"type":"boolean"}}}` | ED-014 | Tab / Shift+Tab: indent or outdent list items and code, or insert spaces. |
 | `edit.toggleSmartPunctuation` | Use Smart Punctuation | 使用智能标点 |  |  | — | ED-102 | Typographic quotes, dashes and ellipses while typing. |
@@ -81,6 +82,7 @@ Registered commands: **152**
 | Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
 |---|---|---|---|---|---|---|---|
 | `format.bold` | Bold | 加粗 | `Ctrl+B` | `⌘B` | — | ED-030 | Toggle **bold** on the selection (or insert `****`). |
+| `format.clear` | Clear Format | 清除样式 | `Ctrl+\` | `⌘\` | — | ED-041 | Remove all inline formatting in the selection. |
 | `format.code` | Code | 代码 | `Ctrl+Shift+`` | `⇧⌘`` | — | ED-033 | Toggle `inline code` (double backticks when the text has one). |
 | `format.comment` | Comment | 注释 |  |  | — | ED-038 | Wrap the selection in an HTML comment. |
 | `format.highlight` | Highlight | 高亮 |  |  | — | ED-035 | Toggle ==highlight== (needs MD-063). |
@@ -100,8 +102,10 @@ Registered commands: **152**
 
 | Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
 |---|---|---|---|---|---|---|---|
+| `paragraph.alert` | Alert | 提示框 |  |  | `{"type":"object","required":["kind"],"properties":{"kind":{"enum":["note","tip","important","warning","caution"]}}}` | MD-004 | Insert or convert to a GitHub alert box (note, tip, important, warning, caution). |
 | `paragraph.codeFences` | Code Block | 代码块 | `Ctrl+Shift+K` | `⇧⌘K` | `{"type":"object","properties":{"lang":{"type":"string"}}}` | ED-054 | Turn the paragraph or selection into a fenced code block. |
 | `paragraph.ensureTrailing` | New Paragraph at End | 在末尾新建段落 |  |  | — | ED-006 | Ensure an empty paragraph at the end and move there. |
+| `paragraph.footnoteDefinition` | Footnote | 脚注 |  |  | — | MD-010 | Insert a footnote reference at the caret and its definition at the end. |
 | `paragraph.frontMatter` | YAML Front Matter | YAML Front Matter |  |  | — | ED-065 | Insert YAML front matter at the top. |
 | `paragraph.heading1` | Heading 1 | 标题 1 | `Ctrl+1` | `⌘1` | — | ED-050 | Make the block(s) a heading of this level (again: back to paragraph). |
 | `paragraph.heading2` | Heading 2 | 标题 2 | `Ctrl+2` | `⌘2` | — | ED-050 | Make the block(s) a heading of this level (again: back to paragraph). |
@@ -112,10 +116,14 @@ Registered commands: **152**
 | `paragraph.headingDown` | Demote Heading | 降低标题级别 | `Ctrl+-` | `⌘-` | — | ED-052 | Demote: H1→H2, H6→paragraph. |
 | `paragraph.headingUp` | Promote Heading | 提升标题级别 | `Ctrl+=` | `⌘=` | — | ED-052 | Promote: H2→H1, paragraph→H6. |
 | `paragraph.hr` | Horizontal Rule | 水平线 |  |  | — | ED-063 | Insert a horizontal rule after the block. |
+| `paragraph.html` | HTML Block | HTML 块 |  |  | — | MD-014 | Insert an HTML block. |
 | `paragraph.indent` | Indent | 增加缩进 | `Ctrl+]` | `⌘]` | — | ED-061 | Indent the list item (nest it). |
 | `paragraph.insertAbove` | Insert Paragraph Above | 在上方插入段落 |  |  | — | ED-070 | Insert an empty paragraph before the block. |
 | `paragraph.insertBelow` | Insert Paragraph Below | 在下方插入段落 |  |  | — | ED-070 | Insert an empty paragraph after the block. |
+| `paragraph.linkReference` | Link Reference | 链接引用 |  |  | — | MD-015 | Insert a link reference definition `[id]: url`. |
 | `paragraph.mathBlock` | Math Block | 公式块 | `Ctrl+Shift+M` | `⇧⌘M` | — | ED-055 | Insert a `$$` math block. |
+| `paragraph.moveDown` | Move Down | 下移 | `Alt+Down` (outside tables) | `⌥↓` (outside tables) | — | ED-018 | Move the paragraph, list item or block down. |
+| `paragraph.moveUp` | Move Up | 上移 | `Alt+Up` (outside tables) | `⌥↑` (outside tables) | — | ED-018 | Move the paragraph, list item or block up. |
 | `paragraph.normal` | Paragraph | 段落 | `Ctrl+0` | `⌘0` | — | ED-051 | Make the block(s) plain paragraphs. |
 | `paragraph.orderedList` | Ordered List | 有序列表 | `Ctrl+Shift+[` | `⇧⌘[` | — | ED-057 | Toggle an ordered list. |
 | `paragraph.outdent` | Outdent | 减少缩进 | `Ctrl+[` | `⌘[` | — | ED-061 | Outdent the list item. |
@@ -221,7 +229,6 @@ These appear greyed out in menus.
 - `app.commandPalette` — Command Palette
 - `app.preferences` — Preferences…
 - `edit.emojiSymbols` — Emoji & Symbols
-- `edit.selectStyleScope` — Select Style Scope
 - `file.delete` — Delete
 - `file.exportHtml` — HTML
 - `file.exportHtmlPlain` — HTML (without styles)
@@ -234,7 +241,6 @@ These appear greyed out in menus.
 - `file.print` — Print…
 - `file.properties` — Properties
 - `file.rename` — Rename…
-- `format.clear` — Clear Format
 - `format.imageOps` — Image Operations…
 - `help.changelog` — Changelog
 - `help.checkUpdates` — Check for Updates
@@ -243,11 +249,5 @@ These appear greyed out in menus.
 - `help.quickStart` — Quick Start
 - `help.reportIssue` — Report Issue
 - `help.shortcuts` — Keyboard Shortcuts
-- `paragraph.alert` — Alert
-- `paragraph.footnoteDefinition` — Footnote
-- `paragraph.html` — HTML Block
-- `paragraph.linkReference` — Link Reference
-- `paragraph.moveDown` — Move Down
-- `paragraph.moveUp` — Move Up
 - `view.showWhitespace` — Show Formatting Marks
 - `view.toggleToolbar` — Toolbar

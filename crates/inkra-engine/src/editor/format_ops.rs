@@ -817,3 +817,298 @@ pub fn remove_link(doc: &Doc, sel: Selection) -> Option<Transaction> {
             .with_selection_after(Selection::caret(end)),
     )
 }
+
+/// Turns the paragraph at the caret into a GitHub alert, or inserts an empty
+/// one (MD-004). Inside a quote only the marker line is added.
+pub fn insert_alert(doc: &Doc, sel: Selection, kind: &str) -> Transaction {
+    let s = text(doc);
+    let nl = doc.newline();
+    let pos = sel.head;
+    let ls = line_start(&s, pos);
+    let le = line_end(&s, pos);
+    let line = &s[ls..le];
+    if line.trim().is_empty() {
+        return insert_block_after(
+            doc,
+            sel,
+            &format!("> [!{kind}]{nl}> "),
+            kind.len() + 7 + nl.len(),
+        );
+    }
+    // The paragraph's lines (lines up to the next blank one, both ways).
+    let mut start = ls;
+    while start > 0 {
+        let pls = line_start(&s, start - 1);
+        if s[pls..start].trim().is_empty() {
+            break;
+        }
+        start = pls;
+    }
+    let mut end = le;
+    while end < s.len() {
+        let nle = line_end(&s, end + 1);
+        if s[end..nle].trim().is_empty() {
+            break;
+        }
+        end = nle;
+    }
+    let body = &s[start..end];
+    let quoted = body.lines().all(|l| l.trim_start().starts_with('>'));
+    let new_body: String = if quoted {
+        body.to_owned()
+    } else {
+        body.split_inclusive('\n')
+            .map(|l| format!("> {l}"))
+            .collect()
+    };
+    let t = format!("> [!{kind}]{nl}{new_body}");
+    let caret = start + t.len();
+    Transaction::single(start..end, &t)
+        .with_selection_before(sel)
+        .with_selection_after(Selection::caret(caret))
+}
+
+/// Inserts `[^n]` at the caret (the first unused number) and `[^n]: ` at the end
+/// of the document, putting the caret into the definition (MD-010).
+pub fn insert_footnote(doc: &Doc, sel: Selection) -> Transaction {
+    let s = text(doc);
+    let nl = doc.newline();
+    let mut n = 1;
+    while s.contains(&format!("[^{n}]")) {
+        n += 1;
+    }
+    let reference = format!("[^{n}]");
+    let mut tail = String::new();
+    if !s.ends_with('\n') && !s.is_empty() {
+        tail.push_str(nl);
+    }
+    if !s.is_empty() {
+        tail.push_str(nl);
+    }
+    let def = format!("[^{n}]: ");
+    tail.push_str(&def);
+    let r = sel.range();
+    let end_pos = s.len() + reference.len() - (r.end - r.start) + tail.len();
+    Transaction::many(vec![
+        Edit {
+            range: r.clone(),
+            text: reference,
+        },
+        Edit {
+            range: s.len()..s.len(),
+            text: tail,
+        },
+    ])
+    .with_selection_before(sel)
+    .with_selection_after(Selection::caret(end_pos))
+}
+
+/// Removes inline markup in the selection (ED-041): emphasis, strong, strike,
+/// highlight, code and link syntax; the text stays.
+pub fn clear_format(doc: &Doc, sel: Selection) -> Option<Transaction> {
+    if sel.is_empty() {
+        return None;
+    }
+    let r = sel.range();
+    let mut edits: Vec<Edit> = Vec::new();
+    let ast = doc.ast();
+    let first = ast.first_starting_at_or_after(r.start).saturating_sub(1);
+    for bi in first..ast.len() {
+        let Some(top) = ast.get(bi) else { break };
+        if top.span().start > r.end {
+            break;
+        }
+        let delta = top.delta;
+        let abs = |x: &std::ops::Range<usize>| {
+            (x.start as isize + delta) as usize..(x.end as isize + delta) as usize
+        };
+        top.block.walk(&mut |b| {
+            for i in &b.inlines {
+                i.walk(&mut |n| {
+                    let span = abs(&n.span);
+                    if span.end <= r.start || span.start >= r.end {
+                        return;
+                    }
+                    match &n.kind {
+                        InlineKind::Emph { open, close }
+                        | InlineKind::Strong { open, close }
+                        | InlineKind::Strike { open, close }
+                        | InlineKind::Highlight { open, close }
+                        | InlineKind::Superscript { open, close }
+                        | InlineKind::Subscript { open, close } => {
+                            edits.push(Edit {
+                                range: abs(open),
+                                text: String::new(),
+                            });
+                            edits.push(Edit {
+                                range: abs(close),
+                                text: String::new(),
+                            });
+                        }
+                        InlineKind::Code { content, .. } => {
+                            let c = abs(content);
+                            edits.push(Edit {
+                                range: span.start..c.start,
+                                text: String::new(),
+                            });
+                            edits.push(Edit {
+                                range: c.end..span.end,
+                                text: String::new(),
+                            });
+                        }
+                        InlineKind::Link { text, .. } => {
+                            let t = abs(text);
+                            if t.start > span.start {
+                                edits.push(Edit {
+                                    range: span.start..t.start,
+                                    text: String::new(),
+                                });
+                                edits.push(Edit {
+                                    range: t.end..span.end,
+                                    text: String::new(),
+                                });
+                            }
+                        }
+                        _ => {}
+                    }
+                });
+            }
+        });
+    }
+    if edits.is_empty() {
+        return None;
+    }
+    edits.sort_by_key(|e| e.range.start);
+    edits.dedup_by(|a, b| a.range == b.range);
+    let removed_before = |p: usize| -> usize {
+        edits
+            .iter()
+            .filter(|e| e.range.end <= p)
+            .map(|e| e.range.len())
+            .sum()
+    };
+    let a = r.start - removed_before(r.start);
+    let b = r.end - removed_before(r.end);
+    Some(
+        Transaction::many(edits.clone())
+            .with_selection_before(sel)
+            .with_selection_after(Selection::new(a, b.max(a))),
+    )
+}
+
+/// Selects the innermost inline element around the caret (or the selection),
+/// then its parent, then the block (ED-021 "选择样式范围").
+pub fn style_scope(doc: &Doc, sel: Selection) -> Option<Selection> {
+    let r = sel.range();
+    let path = context::path(doc, r.start);
+    let leaf = path.last()?;
+    let delta = leaf.delta;
+    let abs = |x: &std::ops::Range<usize>| {
+        (x.start as isize + delta) as usize..(x.end as isize + delta) as usize
+    };
+    let mut best: Option<std::ops::Range<usize>> = None;
+    for i in &leaf.block.inlines {
+        i.walk(&mut |n| {
+            if matches!(
+                n.kind,
+                InlineKind::Text | InlineKind::SoftBreak | InlineKind::HardBreak
+            ) {
+                return;
+            }
+            let s = abs(&n.span);
+            let contains =
+                s.start <= r.start && r.end <= s.end && (s.start < r.start || r.end < s.end);
+            if contains && best.as_ref().is_none_or(|b| s.len() < b.len()) {
+                best = Some(s);
+            }
+        });
+    }
+    let target = best.or_else(|| {
+        let lines = &leaf.block.lines;
+        let (a, b) = (lines.first()?.span.start, lines.last()?.span.end);
+        let s = (a as isize + delta) as usize..(b as isize + delta) as usize;
+        (s.start < r.start || r.end < s.end).then_some(s)
+    })?;
+    Some(Selection::new(target.start, target.end))
+}
+
+/// Swaps the top-level block (or list item) at the caret with its neighbour
+/// (ED-018). The caret moves with the block.
+pub fn move_block(doc: &Doc, sel: Selection, up: bool) -> Option<Transaction> {
+    let s = text(doc);
+    let pos = sel.head;
+    // A list item swaps with a sibling item.
+    if let Some(info) = context::list_item(doc, pos) {
+        let k = info.index;
+        let other = if up { k.checked_sub(1)? } else { k + 1 };
+        let item_range = |i: usize| -> Option<std::ops::Range<usize>> {
+            let start = line_start(&s, info.siblings.get(i)?.start);
+            let end = match info.siblings.get(i + 1) {
+                Some(n) => line_start(&s, n.start),
+                None => {
+                    let e = info.list_span.end;
+                    if e < s.len() {
+                        line_end(&s, e) + 1
+                    } else {
+                        s.len()
+                    }
+                }
+            };
+            Some(start..end.min(s.len()))
+        };
+        let (a, b) = if up {
+            (item_range(other)?, item_range(k)?)
+        } else {
+            (item_range(k)?, item_range(other)?)
+        };
+        return Some(swap(&s, a, b, sel, up, doc.newline()));
+    }
+    let ast = doc.ast();
+    let i = ast.index_at(pos)?;
+    let j = if up { i.checked_sub(1)? } else { i + 1 };
+    if j >= ast.len() {
+        return None;
+    }
+    let range = |k: usize| {
+        line_start(&s, ast.start(k))..line_end(&s, ast.end(k).saturating_sub(1).max(ast.start(k)))
+    };
+    let (a, b) = if up {
+        (range(j), range(i))
+    } else {
+        (range(i), range(j))
+    };
+    Some(swap(&s, a, b, sel, up, doc.newline()))
+}
+
+/// Swaps adjacent ranges `a` < `b` (the text between them stays in place).
+fn swap(
+    s: &str,
+    a: std::ops::Range<usize>,
+    b: std::ops::Range<usize>,
+    sel: Selection,
+    up: bool,
+    nl: &str,
+) -> Transaction {
+    let ta = &s[a.clone()];
+    let tb = &s[b.clone()];
+    let gap = &s[a.end..b.start];
+    // Ranges that end without a newline (last item) get one when moved up.
+    let (ta2, tb2) = if !tb.ends_with('\n') && ta.ends_with('\n') {
+        (
+            ta.trim_end_matches(['\n', '\r']).to_owned(),
+            format!("{tb}{nl}"),
+        )
+    } else {
+        (ta.to_owned(), tb.to_owned())
+    };
+    let new = format!("{tb2}{gap}{ta2}");
+    // The moved block keeps the caret at the same offset inside it.
+    let caret = if up {
+        a.start + (sel.head - b.start)
+    } else {
+        a.start + tb2.len() + gap.len() + (sel.head - a.start)
+    };
+    Transaction::single(a.start..b.end, &new)
+        .with_selection_before(sel)
+        .with_selection_after(Selection::caret(caret.min(a.start + new.len())))
+}

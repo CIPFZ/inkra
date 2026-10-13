@@ -447,6 +447,119 @@ pub fn register(r: &mut CommandRegistry) {
             apply(cx, Some(tx))
         },
     ));
+    r.register(
+        FnCommand::new(
+            edits(spec(
+                "format.clear",
+                Format,
+                "ED-041",
+                "Remove all inline formatting in the selection.",
+            )),
+            |cx, _| {
+                let e = &cx.app.editor;
+                let tx = f::clear_format(&e.doc, e.sel);
+                apply(cx, tx)
+            },
+        )
+        .enabled(|cx| !cx.app.editor.sel.is_empty()),
+    );
+    r.register(FnCommand::new(
+        spec(
+            "edit.selectStyleScope",
+            Category::Edit,
+            "ED-021",
+            "Select the formatting around the caret, then its parent, then the paragraph.",
+        ),
+        |cx, _| {
+            let e = &mut cx.app.editor;
+            if let Some(s) = f::style_scope(&e.doc, e.sel) {
+                e.set_selection(s);
+            }
+            Ok(Outcome::Done)
+        },
+    ));
+    for (id, up, doc) in [
+        (
+            "paragraph.moveUp",
+            true,
+            "Move the paragraph, list item or block up.",
+        ),
+        (
+            "paragraph.moveDown",
+            false,
+            "Move the paragraph, list item or block down.",
+        ),
+    ] {
+        let run: fn(&mut CommandContext<'_>, &Value) -> CommandResult = if up {
+            |cx, _| {
+                let e = &cx.app.editor;
+                let tx = f::move_block(&e.doc, e.sel, true);
+                apply(cx, tx)
+            }
+        } else {
+            |cx, _| {
+                let e = &cx.app.editor;
+                let tx = f::move_block(&e.doc, e.sel, false);
+                apply(cx, tx)
+            }
+        };
+        let _ = up;
+        r.register(FnCommand::new(
+            edits(spec(id, Paragraph, "ED-018", doc)),
+            run,
+        ));
+    }
+    r.register(FnCommand::new(
+        edits(params(
+            spec("paragraph.alert", Paragraph, "MD-004", "Insert or convert to a GitHub alert box (note, tip, important, warning, caution)."),
+            r#"{"type":"object","required":["kind"],"properties":{"kind":{"enum":["note","tip","important","warning","caution"]}}}"#,
+        )),
+        |cx, p| {
+            let kind = p.get("kind").and_then(Value::as_str).unwrap_or("note").to_ascii_uppercase();
+            let e = &cx.app.editor;
+            let tx = f::insert_alert(&e.doc, e.sel, &kind);
+            apply(cx, Some(tx))
+        },
+    ));
+    r.register(FnCommand::new(
+        edits(spec(
+            "paragraph.footnoteDefinition",
+            Paragraph,
+            "MD-010",
+            "Insert a footnote reference at the caret and its definition at the end.",
+        )),
+        |cx, _| {
+            let e = &cx.app.editor;
+            let tx = f::insert_footnote(&e.doc, e.sel);
+            apply(cx, Some(tx))
+        },
+    ));
+    r.register(FnCommand::new(
+        edits(spec(
+            "paragraph.linkReference",
+            Paragraph,
+            "MD-015",
+            "Insert a link reference definition `[id]: url`.",
+        )),
+        |cx, _| {
+            let e = &cx.app.editor;
+            let tx = f::insert_block_after(&e.doc, e.sel, "[id]: https://", 1);
+            apply(cx, Some(tx))
+        },
+    ));
+    r.register(FnCommand::new(
+        edits(spec(
+            "paragraph.html",
+            Paragraph,
+            "MD-014",
+            "Insert an HTML block.",
+        )),
+        |cx, _| {
+            let e = &cx.app.editor;
+            let tx = f::insert_block_after(&e.doc, e.sel, "<div>\n\n</div>", 6);
+            apply(cx, Some(tx))
+        },
+    ));
     r.register(FnCommand::new(
         edits(spec(
             "paragraph.toc",
