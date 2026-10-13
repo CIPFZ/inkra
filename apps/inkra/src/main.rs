@@ -251,6 +251,9 @@ fn main() -> std::process::ExitCode {
     let mut engine = Engine::new(prefs);
     engine.state.paths = Some(paths.clone());
     engine.state.reduce_motion = reduce_motion();
+    if engine.state.reduce_motion {
+        log::info!("system asks for reduced motion: animations off (UI-033)");
+    }
     for p in engine.load_keybindings() {
         log::warn!("{p}");
     }
