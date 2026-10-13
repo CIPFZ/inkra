@@ -54,12 +54,14 @@ fn keys(page: Page) -> &'static [Option<&'static str>] {
             Some("general.autoReload"),
             Some("general.trimTrailingOnSave"),
             Some("general.normalizeOnSave"),
+            Some("general.saveToast"),
             None,
             Some("general.defaultExtension"),
             Some("general.defaultEncoding"),
             Some("general.defaultNewline"),
             None,
             Some("general.checkUpdates"),
+            Some("general.welcome"),
         ],
         Page::Appearance => &[
             Some("appearance.theme"),
@@ -70,7 +72,13 @@ fn keys(page: Page) -> &'static [Option<&'static str>] {
             Some("view.statusBar"),
             Some("view.wordCount"),
             Some("view.menuBar"),
+            Some("view.toolbar"),
             Some("appearance.rememberWindowSize"),
+            Some("appearance.uiFontSize"),
+            None,
+            Some("appearance.maxWidth"),
+            Some("appearance.centerWide"),
+            Some("appearance.autoHideScrollbar"),
             None,
             Some("sidebar.fontSize"),
             Some("sidebar.lineHeight"),
@@ -190,7 +198,8 @@ fn keys(page: Page) -> &'static [Option<&'static str>] {
 /// Number ranges (min, max, step) of numeric keys.
 fn range(key: &str) -> (f64, f64, f64) {
     match key {
-        "sidebar.fontSize" => (9.0, 24.0, 1.0),
+        "sidebar.fontSize" | "appearance.uiFontSize" => (9.0, 24.0, 1.0),
+        "appearance.maxWidth" => (0.0, 3000.0, 10.0),
         "sidebar.lineHeight" => (1.0, 2.5, 0.1),
         "editor.tabWidth" => (1.0, 8.0, 1.0),
         "editor.zoom" => (0.5, 3.0, 0.1),

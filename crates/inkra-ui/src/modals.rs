@@ -323,10 +323,19 @@ pub(crate) fn toasts(shell: &mut Shell, ctx: &egui::Context) {
         .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -32.0))
         .show(ctx, |ui| {
             for t in &shell.toasts {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                let r = egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.set_max_width(360.0);
                     ui.label(&t.text);
                 });
+                if let Some(f) = &t.open {
+                    let resp = r
+                        .response
+                        .interact(egui::Sense::click())
+                        .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    if resp.clicked() {
+                        crate::dialogs::open_external(&f.to_string_lossy());
+                    }
+                }
             }
         });
     let next = shell
@@ -789,4 +798,67 @@ pub(crate) fn image_dialog(shell: &mut Shell, ctx: &egui::Context) {
         Some(false) => {}
         None => shell.image_dialog = Some((img, alt, title, width)),
     }
+}
+
+/// The welcome panel (WM-005, off by default): the 64 px icon at the top left
+/// (UI-052), recent files and a few entry points. Returns the chosen command.
+pub(crate) fn welcome(shell: &mut Shell, ui: &mut egui::Ui) -> Option<(String, Value)> {
+    let i18n = shell.i18n.clone();
+    let tex = icon(shell, ui.ctx());
+    let recent: Vec<std::path::PathBuf> = shell
+        .engine
+        .state
+        .session
+        .recent
+        .iter()
+        .take(8)
+        .cloned()
+        .collect();
+    let mut out = None;
+    egui::Frame::new()
+        .inner_margin(egui::Margin::same(32))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if let Some(t) = &tex {
+                    ui.add(egui::Image::new(t).fit_to_exact_size(egui::vec2(64.0, 64.0)));
+                }
+                ui.vertical(|ui| {
+                    ui.heading("Inkra");
+                    ui.label(egui::RichText::new("墨刻").weak());
+                });
+            });
+            ui.add_space(16.0);
+            for (id, key) in [
+                ("file.new", "cmd-file-new"),
+                ("file.open", "cmd-file-open"),
+                ("file.openFolder", "cmd-file-openFolder"),
+                ("help.quickStart", "cmd-help-quickStart"),
+            ] {
+                if ui.link(i18n.tr(key)).clicked() {
+                    out = Some((id.to_owned(), Value::Null));
+                }
+            }
+            if !recent.is_empty() {
+                ui.add_space(16.0);
+                ui.strong(i18n.tr("menu-file-openRecent"));
+                for p in &recent {
+                    let name = p
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    if ui
+                        .link(name)
+                        .on_hover_text(p.display().to_string())
+                        .clicked()
+                    {
+                        out = Some(("file.openRecent".to_owned(), json!({ "path": p })));
+                    }
+                }
+            }
+            ui.add_space(16.0);
+            if ui.small_button(i18n.tr("welcome-start-writing")).clicked() {
+                out = Some((String::new(), Value::Null));
+            }
+        });
+    out
 }

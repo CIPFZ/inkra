@@ -323,6 +323,22 @@ impl Sidebar {
     ) -> Vec<Action> {
         let mut out = Vec::new();
         let view = engine.state.view.sidebar_view;
+        // FS-024: a search entry at the top of the sidebar.
+        if view != SidebarView::Search {
+            egui::Panel::top("inkra-sidebar-head")
+                .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(6, 4)))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        let r = ui.add(
+                            egui::Button::new(format!("🔍  {}", i18n.tr("sidebar-search")))
+                                .frame(false),
+                        );
+                        if r.on_hover_text(i18n.tr("cmd-search-global")).clicked() {
+                            out.push(Action::Invoke("search.global".into(), Value::Null));
+                        }
+                    });
+                });
+        }
         // View switcher at the bottom (FS-020 … FS-024).
         egui::Panel::bottom("inkra-sidebar-tabs")
             .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(6, 4)))

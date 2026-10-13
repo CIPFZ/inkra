@@ -21,7 +21,13 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `general.trimTrailingOnSave` | bool | `false` | PR-013 | Remove trailing whitespace when saving (hard line breaks keep two spaces). |
 | `general.normalizeOnSave` | bool | `false` | MD-092 | Normalize when saving: pad tables, renumber ordered lists, trim trailing whitespace, end with one newline. |
 | `general.markdownExtensions` | string[] | `["md", "markdown", "mdown", "mkd", "mkdn", "mdwn", "mdtxt", "mdtext", "text", "txt", "rmd", "qmd"]` | PR-015 | File extensions treated as Markdown (file tree, open dialog, drops). |
+| `general.saveToast` | bool | `true` | UI-041 | Show a short notice after saving. |
 | `general.checkUpdates` | bool | `true` | PR-020 | Check GitHub Releases for a newer version at startup (never downloads). |
+| `appearance.maxWidth` | number | `0` | WM-004 | Maximum width of the text column in pixels (0: the theme's). |
+| `appearance.centerWide` | bool | `true` | WM-004 | Center the text column in wide windows (otherwise it starts at the left). |
+| `appearance.autoHideScrollbar` | bool | `false` | WM-004 | Show the scrollbar only while scrolling or when the pointer is near it. |
+| `appearance.uiFontSize` | number | `13` | TH-007 | Font size of menus, sidebar headers and dialogs in points (system DPI scaling applies on top). |
+| `general.welcome` | bool | `false` | WM-005 | Show a welcome panel (recent files and shortcuts) in an empty window at startup. |
 | `appearance.rememberWindowSize` | bool | `true` | TH-008 | Reopen windows at their last size and position. |
 | `sidebar.fontSize` | number | `13` | TH-008 | Sidebar font size in points. |
 | `sidebar.lineHeight` | number | `1.6` | TH-008 | Sidebar row height as a multiple of the font size. |

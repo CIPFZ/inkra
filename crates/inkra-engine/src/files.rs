@@ -112,15 +112,24 @@ pub fn save_to(cx: &mut CommandContext<'_>, path: &Path) -> CommandResult {
     }
     if let Some(p) = cx.app.editor.path.clone() {
         cx.app.session.touch_recent(&p);
+        cx.effects.push(Effect::Saved(p));
     }
     Ok(Outcome::Done)
 }
 
 fn save(cx: &mut CommandContext<'_>, close_after: bool, quit: bool) -> CommandResult {
+    // FS-011: a read-only file is saved elsewhere.
+    let readonly = cx
+        .app
+        .editor
+        .path
+        .as_ref()
+        .is_some_and(|p| std::fs::metadata(p).is_ok_and(|m| m.permissions().readonly()));
     match cx.app.editor.path.clone() {
         Some(p)
-            if cx.app.meta.external != Some(ExternalChange::Deleted)
-                || p.parent().is_some_and(Path::exists) =>
+            if !readonly
+                && (cx.app.meta.external != Some(ExternalChange::Deleted)
+                    || p.parent().is_some_and(Path::exists)) =>
         {
             save_to(cx, &p)?;
             if close_after {

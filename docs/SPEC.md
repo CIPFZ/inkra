@@ -207,7 +207,7 @@ UI 线程只做：输入处理、增量解析、可见区域布局、绘制。�
 
 **AD-6 无 unsafe，平台特性走经审计的 crate**
 workspace 级 `#![forbid(unsafe_code)]`，macOS 的 Apple Event（Finder 双击打开）、Windows 注册表文件关联等通过独立 crate 或构建脚本处理。
-[回填 2026-10-12] 唯一例外：`apps/inkra/src/platform_windows.rs` 的两处 Win32 FFI（`AttachConsole` 使 GUI 子系统程序的 `--version` 在终端可见；`SetCurrentProcessExplicitAppUserModelID` 设置 UI-050 要求的 AppUserModelID）。该 crate 将 `unsafe_code` 由 `forbid` 降为 `deny`，仅在该模块 `allow`，`cargo xtask layering` 维护例外白名单。
+[回填 2026-10-12] 唯一例外：`apps/inkra/src/platform_windows.rs` 的 Win32 FFI（`AttachConsole` 使 GUI 子系统程序的 `--version` 在终端可见；`SetCurrentProcessExplicitAppUserModelID` 设置 UI-050 要求的 AppUserModelID；[回填 2026-10-13] `SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION)` 读取 UI-033 的"减少动画"设置）。该 crate 将 `unsafe_code` 由 `forbid` 降为 `deny`，仅在该模块 `allow`，`cargo xtask layering` 维护例外白名单。
 
 ### 2.4 数学与图表渲染策略（无 JS 运行时的关键难点）
 

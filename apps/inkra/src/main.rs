@@ -250,6 +250,7 @@ fn main() -> std::process::ExitCode {
     let i18n = I18n::new(&lang);
     let mut engine = Engine::new(prefs);
     engine.state.paths = Some(paths.clone());
+    engine.state.reduce_motion = reduce_motion();
     for p in engine.load_keybindings() {
         log::warn!("{p}");
     }
@@ -365,5 +366,28 @@ fn main() -> std::process::ExitCode {
             eprintln!("inkra: {e}");
             std::process::ExitCode::from(2)
         }
+    }
+}
+
+/// Whether the system asks for reduced motion (UI-033): Windows' animation
+/// setting, GNOME's `enable-animations`, macOS' Reduce Motion.
+fn reduce_motion() -> bool {
+    #[cfg(windows)]
+    {
+        platform_windows::reduce_motion()
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("defaults")
+            .args(["read", "com.apple.universalaccess", "reduceMotion"])
+            .output()
+            .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "1")
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("gsettings")
+            .args(["get", "org.gnome.desktop.interface", "enable-animations"])
+            .output()
+            .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "false")
     }
 }

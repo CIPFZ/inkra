@@ -555,3 +555,14 @@ image-dialog-alt = Alt text
 image-dialog-title = Title
 image-dialog-width = Width (px)
 image-dialog-natural = Natural size
+title-readonly = Read-only
+toast-saved = Saved { $name }
+pref-general-saveToast = Notify after saving
+pref-appearance-maxWidth = Text column width (px, 0 = theme)
+pref-appearance-centerWide = Center the text in wide windows
+pref-appearance-autoHideScrollbar = Hide the scrollbar when not scrolling
+pref-appearance-uiFontSize = Interface font size
+pref-general-welcome = Show the welcome panel in empty windows
+pref-view-toolbar = Show the formatting toolbar
+pref-view-showWhitespace = Show spaces and line ends
+welcome-start-writing = Start writing

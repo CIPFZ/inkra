@@ -59,6 +59,8 @@ pub struct EditorView {
     pub caret_screen: Option<Rect>,
     last_text_rect: Rect,
     scrollbar_drag: Option<f32>,
+    /// When the document last scrolled (auto-hiding scrollbar, WM-004).
+    last_scroll: f64,
     /// Duration of the last frame's editor work in milliseconds (debug overlay).
     pub last_ms: f32,
     /// Loaded images.
@@ -112,6 +114,7 @@ impl EditorView {
             caret_screen: None,
             last_text_rect: Rect::NOTHING,
             scrollbar_drag: None,
+            last_scroll: 0.0,
             last_ms: 0.0,
             images: Images::default(),
             blink: true,
@@ -319,12 +322,21 @@ impl EditorView {
         };
         let scrollbar_w = 10.0;
         let avail = (rect.width() - gutter - scrollbar_w - 2.0 * self.style.padding_x).max(80.0);
-        let col_w = if source {
-            avail
+        // WM-004: the text column width (preference or theme) and centering.
+        let prefs = &engine.state.prefs;
+        let pref_w = prefs.f64("appearance.maxWidth") as f32;
+        let max_w = if pref_w > 0.0 {
+            pref_w * self.zoom
         } else {
-            avail.min(self.style.max_width)
+            self.style.max_width
         };
-        let col_left = rect.left() + gutter + self.style.padding_x + (avail - col_w) / 2.0;
+        let col_w = if source { avail } else { avail.min(max_w) };
+        let center = prefs.bool("appearance.centerWide");
+        let col_left = rect.left()
+            + gutter
+            + self.style.padding_x
+            + if center { (avail - col_w) / 2.0 } else { 0.0 };
+        let auto_hide = prefs.bool("appearance.autoHideScrollbar");
         let text_rect = Rect::from_min_max(
             pos2(col_left, rect.top()),
             pos2(col_left + col_w, rect.bottom()),
@@ -395,7 +407,9 @@ impl EditorView {
         if let Some(pos) = self.pending_top.take() {
             let i = self.view.item_of(pos);
             let target = self.view.top(i) + pad - 8.0;
-            if engine.state.prefs.bool("editor.smoothScroll") && (target - self.scroll).abs() > 1.0
+            if engine.state.prefs.bool("editor.smoothScroll")
+                && !engine.state.reduce_motion
+                && (target - self.scroll).abs() > 1.0
             {
                 self.scroll_anim = Some((self.scroll, i, ctx.input(|inp| inp.time)));
             } else {
@@ -558,7 +572,13 @@ impl EditorView {
                 } else {
                     self.style.focus_dim_opacity
                 };
-                ctx.animate_value_with_time(self.id.with(("focus", it.src.start)), target, 0.15)
+                // UI-033: no fading when the system asks for reduced motion.
+                let secs = if engine.state.reduce_motion {
+                    0.0
+                } else {
+                    0.15
+                };
+                ctx.animate_value_with_time(self.id.with(("focus", it.src.start)), target, secs)
             })
             .collect();
         let mut deco_shapes = Vec::new();
@@ -788,7 +808,20 @@ impl EditorView {
         });
 
         // Scrollbar.
-        self.scrollbar(ui, rect, total, viewport_h, max_scroll);
+        let now = ctx.input(|i| i.time);
+        if wheel != 0.0 {
+            self.last_scroll = now;
+        }
+        let hover = ui.rect_contains_pointer(Rect::from_min_max(
+            pos2(rect.right() - 14.0, rect.top()),
+            rect.right_bottom(),
+        ));
+        if !auto_hide || hover || self.scrollbar_drag.is_some() || now - self.last_scroll < 1.2 {
+            self.scrollbar(ui, rect, total, viewport_h, max_scroll);
+            if auto_hide && !hover {
+                ctx.request_repaint_after(Duration::from_secs_f64(1.25));
+            }
+        }
         self.last_ms = t0.elapsed().as_secs_f32() * 1000.0;
         out
     }

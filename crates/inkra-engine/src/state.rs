@@ -123,6 +123,9 @@ pub struct AppState {
     pub style: inkra_layout::Style,
     /// The UI language in use (`zh-CN`, `en-US`), set by the host.
     pub language: String,
+    /// The system asks for reduced motion (UI-033): no animated scrolling or
+    /// fading.
+    pub reduce_motion: bool,
     /// The system uses a dark appearance (for the Auto theme).
     pub system_dark: bool,
 }
@@ -418,6 +421,8 @@ pub enum Effect {
     ConfirmDelete(std::path::PathBuf),
     /// Show the document properties (FS-009).
     ShowProperties,
+    /// A document was saved (UI-041 toast).
+    Saved(std::path::PathBuf),
     /// Put the image at this file path or URL on the clipboard as a bitmap.
     CopyImage(String),
     /// Open a file or URL with the system's default application.

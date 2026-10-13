@@ -62,6 +62,8 @@ const AUTOSAVE_SECS: f64 = 3.0;
 struct Toast {
     text: String,
     until: f64,
+    /// Clicking the toast opens this file (UI-041: "导出完成（点击打开）").
+    open: Option<PathBuf>,
 }
 
 /// UI state of one window.
@@ -146,6 +148,8 @@ pub struct Shell {
     mmdc_conf: String,
     theme_names_at: f64,
     jobs: jobs::Jobs,
+    welcome_dismissed: Vec<u64>,
+    ui_font_size: f32,
     prefs: prefs_window::PrefsWindow,
     rename: Option<String>,
     delete_confirm: Option<PathBuf>,
@@ -208,6 +212,8 @@ impl Shell {
             theme_names: Vec::new(),
             mmdc_conf: String::new(),
             jobs: Default::default(),
+            welcome_dismissed: Vec::new(),
+            ui_font_size: 13.0,
             prefs: Default::default(),
             rename: None,
             delete_confirm: None,
@@ -323,6 +329,7 @@ impl Shell {
         self.toasts.push(Toast {
             text,
             until: now + TOAST_SECS,
+            open: None,
         });
     }
 
@@ -458,6 +465,17 @@ impl Shell {
         self.toasts.push(Toast {
             text,
             until: now + TOAST_SECS,
+            open: None,
+        });
+    }
+
+    /// A toast that opens `file` when clicked.
+    fn toast_open(&mut self, ctx: &egui::Context, text: String, file: PathBuf) {
+        let now = ctx.input(|i| i.time);
+        self.toasts.push(Toast {
+            text,
+            until: now + TOAST_SECS,
+            open: Some(file),
         });
     }
 
@@ -638,6 +656,18 @@ impl Shell {
                 }
                 Effect::ConfirmDelete(path) => self.delete_confirm = Some(path),
                 Effect::ShowProperties => self.properties_open = true,
+                Effect::Saved(path) => {
+                    if self.engine.state.prefs.bool("general.saveToast") {
+                        let name = path
+                            .file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default();
+                        self.toast(
+                            ctx,
+                            self.i18n.tr_args("toast-saved", &[("name", name.into())]),
+                        );
+                    }
+                }
                 Effect::CopyImage(source) => {
                     let bytes = if source.starts_with("http://") || source.starts_with("https://") {
                         inkra_workspace::net::get(&source)
@@ -1045,9 +1075,16 @@ impl Shell {
                     .parent()
                     .and_then(|d| d.file_name())
                     .map(|n| n.to_string_lossy().into_owned());
+                // FS-011: files without write permission say so.
+                let ro = std::fs::metadata(p).is_ok_and(|m| m.permissions().readonly());
+                let ro = if ro {
+                    format!(" [{}]", self.i18n.tr("title-readonly"))
+                } else {
+                    String::new()
+                };
                 match folder {
-                    Some(f) => format!("{dirty}{name} - {f}"),
-                    None => format!("{dirty}{name}"),
+                    Some(f) => format!("{dirty}{name}{ro} - {f}"),
+                    None => format!("{dirty}{name}{ro}"),
                 }
             }
             None => format!("{dirty}{}", self.i18n.tr("untitled")),
@@ -1297,10 +1334,11 @@ impl Shell {
                         .and_then(|f| f.file_name())
                         .map(|n| n.to_string_lossy().into_owned())
                         .unwrap_or_default();
-                    self.toast(
-                        ctx,
-                        self.i18n.tr_args("export-done", &[("name", name.into())]),
-                    );
+                    let text = self.i18n.tr_args("export-done", &[("name", name.into())]);
+                    match files.first() {
+                        Some(f) => self.toast_open(ctx, text, f.clone()),
+                        None => self.toast(ctx, text),
+                    }
                     if job.open_after
                         && let Some(f) = files.first()
                     {
@@ -1323,8 +1361,30 @@ impl Shell {
         }
     }
 
+    /// TH-007: the size of interface text.
+    fn sync_ui_font(&mut self, ctx: &egui::Context) {
+        let size = self
+            .engine
+            .state
+            .prefs
+            .f64("appearance.uiFontSize")
+            .clamp(9.0, 24.0) as f32;
+        if (size - self.ui_font_size).abs() < 0.01 {
+            return;
+        }
+        self.ui_font_size = size;
+        let k = size / 13.0;
+        ctx.all_styles_mut(|st| {
+            st.text_styles = egui::style::default_text_styles()
+                .into_iter()
+                .map(|(ts, f)| (ts, egui::FontId::new((f.size * k).round(), f.family)))
+                .collect();
+        });
+    }
+
     fn frame_tasks(&mut self, ctx: &egui::Context) {
         self.sync_mermaid_cli();
+        self.sync_ui_font(ctx);
         self.poll_updates(ctx);
         self.poll_downloads(ctx);
         self.finish_jobs(ctx);
@@ -1688,6 +1748,21 @@ impl Shell {
                     for c in cmds {
                         self.invoke(&ctx, &c, &Value::Null);
                     }
+                }
+                // WM-005: the optional welcome panel in an empty, unsaved window.
+                let e = &self.engine.state.editor;
+                if self.engine.state.prefs.bool("general.welcome")
+                    && e.path.is_none()
+                    && e.doc.text().is_empty()
+                    && !self.welcome_dismissed.contains(&id)
+                {
+                    if let Some((cmd, params)) = modals::welcome(self, ui) {
+                        self.welcome_dismissed.push(id);
+                        if !cmd.is_empty() {
+                            self.invoke(&ctx, &cmd, &params);
+                        }
+                    }
+                    return;
                 }
                 let w = self.windows.entry(id).or_insert_with(WinUi::new);
                 let out = w
