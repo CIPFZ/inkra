@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **168**
+Registered commands: **171**
 
 
 ## App
@@ -26,6 +26,8 @@ Registered commands: **168**
 | `edit.copyAsHtmlCode` | HTML Code | HTML 代码 |  |  | — | ED-016 | Copy the HTML source of the selection as text. |
 | `edit.copyAsMarkdown` | Markdown | Markdown |  |  | — | ED-016 | Copy the selection as Markdown source. |
 | `edit.copyAsPlain` | Plain Text | 纯文本 |  |  | — | ED-016 | Copy the selection as plain text without Markdown syntax. |
+| `edit.copyBlockAsPng` | Copy as PNG | 复制为 PNG |  |  | — | MD-100 | Copy the formula or diagram at the caret as an image. |
+| `edit.copyBlockAsSvg` | Copy as SVG | 复制为 SVG |  |  | — | MD-100 | Copy the formula or diagram at the caret as SVG markup. |
 | `edit.cut` | Cut | 剪切 | `Ctrl+X` | `⌘X` | — | ED-016 | Cut the selection to the clipboard. |
 | `edit.deleteBackward` | Delete Backward | 向后删除 |  |  | `{"type":"object","properties":{"unit":{"enum":["char","word","line"]}}}` | ED-012 | Backspace by char, word or to line start. |
 | `edit.deleteForward` | Delete Forward | 向前删除 |  |  | `{"type":"object","properties":{"unit":{"enum":["char","word","line"]}}}` | ED-012 | Delete forward by char, word or to line end. |
@@ -63,6 +65,7 @@ Registered commands: **168**
 |---|---|---|---|---|---|---|---|
 | `file.clearRecent` | Clear Recent Files | 清除最近文件 |  |  | — | FS-002 | Forget the recent files list. |
 | `file.close` | Close | 关闭 | `Ctrl+W` | `⌘W` | — | FS-005 | Close the window (asks to save changes). |
+| `file.exportBlockImage` | Export Image… | 导出图片… |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-003 | Export the formula or diagram at the caret as PNG or SVG (by extension). |
 | `file.exportHtml` | HTML | HTML |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-001 | Export as HTML with the theme's styles (asks for the file unless `path` is given). |
 | `file.exportHtmlPlain` | HTML (without styles) | HTML（不含样式） |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-001 | Export as an HTML fragment without styles. |
 | `file.exportImage` | Image | 图片 |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-003 | Export as a PNG image (one long image, or one per page). |

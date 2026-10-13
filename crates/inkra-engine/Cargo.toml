@@ -26,6 +26,8 @@ log.workspace = true
 thiserror.workspace = true
 regex.workspace = true
 inkra-html.workspace = true
+inkra-math.workspace = true
+inkra-diagram.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

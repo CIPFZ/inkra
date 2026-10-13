@@ -575,6 +575,7 @@ impl Shell {
                     }
                     self.jobs.spawn(ctx, *job);
                 }
+                Effect::SetClipboardImage(png) => self.clipboard.set_png(&png),
                 Effect::ShowPageSetup => {
                     self.page_setup =
                         Some(modals::PageSetupForm::from_prefs(&self.engine.state.prefs));

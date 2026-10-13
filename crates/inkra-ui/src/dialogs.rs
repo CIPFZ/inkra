@@ -98,7 +98,9 @@ impl Dialogs {
                     }
                     let ext = format.ext().to_owned();
                     let mut d = d.add_filter(ext.to_uppercase(), &[ext.as_str()]);
-                    if ext == "png" {
+                    if *format == inkra_engine::exporting::ExportFormat::Block {
+                        d = d.add_filter("SVG", &["svg"]);
+                    } else if ext == "png" {
                         d = d.add_filter("JPEG", &["jpg", "jpeg"]);
                     }
                     d.save_file()

@@ -342,3 +342,6 @@ page-footer = 页脚
 page-background = 绘制主题背景
 page-template-help = 占位符：{"{{"}title{"}}"} {"{{"}page{"}}"} {"{{"}pages{"}}"} {"{{"}date{"}}"}
 import-offer = 将“{ $name }”导入为 Markdown？
+cmd-edit-copyBlockAsSvg = 复制为 SVG
+cmd-edit-copyBlockAsPng = 复制为 PNG
+cmd-file-exportBlockImage = 导出图片…

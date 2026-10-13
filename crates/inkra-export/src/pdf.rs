@@ -134,6 +134,8 @@ type Loaded = Option<LoadedImage>;
 pub(crate) struct ExportImages {
     pub doc: Option<PathBuf>,
     pub cache: RefCell<HashMap<String, Loaded>>,
+    /// Images taller than this are scaled down to fit a page (EX-002).
+    pub max_h: f32,
 }
 
 fn base64_decode(s: &str) -> Option<Vec<u8>> {
@@ -232,6 +234,7 @@ impl ExportImages {
         Self {
             doc,
             cache: RefCell::new(HashMap::new()),
+            max_h: f32::INFINITY,
         }
     }
 
@@ -253,7 +256,14 @@ impl ExportImages {
 
 impl ImageSizes for ExportImages {
     fn size(&self, src: &str) -> Option<[f32; 2]> {
-        self.get(src).map(|l| l.size)
+        self.get(src).map(|l| {
+            let [w, h] = l.size;
+            if h > self.max_h {
+                [w * self.max_h / h, self.max_h]
+            } else {
+                [w, h]
+            }
+        })
     }
 }
 
@@ -793,7 +803,8 @@ pub fn export_pdf(src: &str, o: &PdfExport) -> Result<Vec<u8>, String> {
     let mut faces = FaceTable::new(&defs);
     let mut fonts_store = Fonts::new(TextOptions::default(), defs);
     let mut fonts = fonts_store.with_pixels_per_point(1.0);
-    let images = ExportImages::new(o.doc_path.clone());
+    let mut images = ExportImages::new(o.doc_path.clone());
+    images.max_h = content_h * 0.92;
     let prep = prepare(src, o, content_w, &mut fonts, &mut faces, &images);
     let pages = paginate(&prep.items, content_h);
     let page_of = |y: f32| -> (usize, f32) {
@@ -867,34 +878,31 @@ pub fn export_pdf(src: &str, o: &PdfExport) -> Result<Vec<u8>, String> {
             }
             surface.pop();
             let header_h = p.header.map_or(0.0, |h| h.1);
-            let clipped = if let Some(clip) = rounded_rect(
-                Rect::from_min_size(
-                    pos2(ml - 2.0, mt - 2.0),
-                    inkra_layout::epaint::vec2(
-                        pg.width - ml - mr + 4.0,
-                        (p.b - p.a + header_h) * s + 4.0,
+            // The body is clipped below the repeated table header (if any);
+            // the header is drawn last, clipped to its band.
+            let band = |y0: f32, h: f32| {
+                rounded_rect(
+                    Rect::from_min_size(
+                        pos2(ml - 2.0, y0),
+                        inkra_layout::epaint::vec2(pg.width - ml - mr + 4.0, h),
                     ),
-                ),
-                0.0,
+                    0.0,
+                )
+            };
+            let body_top = if header_h > 0.0 {
+                mt + header_h * s
+            } else {
+                mt - 2.0
+            };
+            let clipped = if let Some(clip) = band(
+                body_top,
+                (p.b - p.a) * s + mt + header_h * s - body_top + 2.0,
             ) {
                 surface.push_clip_path(&clip, &FillRule::NonZero);
                 true
             } else {
                 false
             };
-            if let Some((hi, _)) = p.header {
-                let it = &prep.items[hi];
-                if let Some((h0, h1)) = it.table_header {
-                    surface.push_transform(&Transform::from_row(s, 0.0, 0.0, s, ml, mt - h0 * s));
-                    for op in it.ops.iter().filter(|op| {
-                        let (y0, y1) = op_y(op);
-                        y1 > h0 && y0 < h1 && !matches!(op, Op::Link { .. })
-                    }) {
-                        painter.draw(&mut surface, op);
-                    }
-                    surface.pop();
-                }
-            }
             for it in prep
                 .items
                 .iter()
@@ -947,6 +955,23 @@ pub fn export_pdf(src: &str, o: &PdfExport) -> Result<Vec<u8>, String> {
             }
             if clipped {
                 surface.pop();
+            }
+            if let Some((hi, _)) = p.header {
+                let it = &prep.items[hi];
+                if let Some((h0, h1)) = it.table_header
+                    && let Some(clip) = band(mt, header_h * s)
+                {
+                    surface.push_clip_path(&clip, &FillRule::NonZero);
+                    surface.push_transform(&Transform::from_row(s, 0.0, 0.0, s, ml, mt - h0 * s));
+                    for op in it.ops.iter().filter(|op| {
+                        let (y0, y1) = op_y(op);
+                        y1 > h0 && y0 < h1 && !matches!(op, Op::Link { .. })
+                    }) {
+                        painter.draw(&mut surface, op);
+                    }
+                    surface.pop();
+                    surface.pop();
+                }
             }
             surface.finish();
         }

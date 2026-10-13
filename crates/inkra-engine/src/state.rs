@@ -359,6 +359,8 @@ pub enum Effect {
         /// Starting folder.
         dir: Option<std::path::PathBuf>,
     },
+    /// Put a PNG image on the clipboard.
+    SetClipboardImage(Vec<u8>),
     /// Run an export, print or import job in the background.
     RunJob(Box<crate::exporting::ExportJob>),
     /// Show the page setup dialog (EX-002).

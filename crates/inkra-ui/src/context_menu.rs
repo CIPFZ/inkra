@@ -140,6 +140,17 @@ pub fn show(ui: &mut egui::Ui, engine: &mut Engine, i18n: &I18n) -> Vec<(String,
         });
         ui.separator();
     }
+    // MD-100: formulas and diagrams as images.
+    if inkra_engine::exporting::block_vector(&engine.state).is_some() {
+        for id in [
+            "edit.copyBlockAsSvg",
+            "edit.copyBlockAsPng",
+            "file.exportBlockImage",
+        ] {
+            cmd_button(ui, engine, i18n, id, &mut out);
+        }
+        ui.separator();
+    }
     if let Some(code) = code_text {
         custom(
             ui,

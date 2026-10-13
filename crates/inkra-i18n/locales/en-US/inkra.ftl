@@ -342,3 +342,6 @@ page-footer = Footer
 page-background = Print the theme background
 page-template-help = Placeholders: {"{{"}title{"}}"} {"{{"}page{"}}"} {"{{"}pages{"}}"} {"{{"}date{"}}"}
 import-offer = Import “{ $name }” as Markdown?
+cmd-edit-copyBlockAsSvg = Copy as SVG
+cmd-edit-copyBlockAsPng = Copy as PNG
+cmd-file-exportBlockImage = Export Image…

@@ -29,6 +29,8 @@ pub enum ExportFormat {
     Image,
     /// A Pandoc writer.
     Pandoc(String),
+    /// The formula or diagram at the caret (PNG, or SVG by extension).
+    Block,
 }
 
 impl ExportFormat {
@@ -39,6 +41,7 @@ impl ExportFormat {
             Self::Pdf => "pdf",
             Self::Image => "png",
             Self::Pandoc(w) => inkra_export::pandoc::format(w).map_or("out", |f| f.ext),
+            Self::Block => "png",
         }
     }
 
@@ -50,6 +53,7 @@ impl ExportFormat {
             Self::Pdf => "file.exportPdf",
             Self::Image => "file.exportImage",
             Self::Pandoc(_) => "file.exportPandoc",
+            Self::Block => "file.exportBlockImage",
         }
     }
 
@@ -304,6 +308,7 @@ pub fn job(app: &AppState, format: &ExportFormat, out: PathBuf) -> Result<Export
                 }),
             }))
         }
+        ExportFormat::Block => return Err("not a document export".into()),
         ExportFormat::Pandoc(writer) => {
             let pandoc = pandoc(app)
                 .ok_or("Pandoc is not installed (https://pandoc.org/installing.html)")?;
@@ -399,12 +404,170 @@ fn export(cx: &mut CommandContext<'_>, p: &Value, format: ExportFormat) -> Comma
     Ok(Outcome::Done)
 }
 
+/// The formula or diagram at the caret.
+pub enum BlockVector {
+    /// A display formula.
+    Math(std::sync::Arc<inkra_math::Rendered>),
+    /// A Mermaid diagram.
+    Diagram(std::sync::Arc<inkra_diagram::Scene>),
+}
+
+/// The display formula or Mermaid diagram containing the caret (MD-100: copy as
+/// SVG/PNG, export image).
+pub fn block_vector(app: &AppState) -> Option<BlockVector> {
+    let e = &app.editor;
+    let path = crate::editor::context::path(&e.doc, e.sel.head);
+    let text = e.doc.text();
+    path.iter().rev().find_map(|n| {
+        let content = || -> Option<String> {
+            let (a, z) = (n.block.lines.first()?, n.block.lines.last()?);
+            Some(
+                text.slice(n.abs(a.span.start)..n.abs(z.span.end))
+                    .into_owned(),
+            )
+        };
+        match &n.block.kind {
+            inkra_markdown::BlockKind::MathBlock { .. } => {
+                let tex = content()?;
+                Some(BlockVector::Math(inkra_math::render(
+                    &inkra_math::Request::new(&tex, true, app.style.size * 1.12),
+                )))
+            }
+            inkra_markdown::BlockKind::CodeBlock { fence: Some(f) } => {
+                let info = f
+                    .info
+                    .clone()
+                    .map(|r| text.slice(n.abs(r.start)..n.abs(r.end)).into_owned())?;
+                if !info.trim().eq_ignore_ascii_case("mermaid") {
+                    return None;
+                }
+                let src = format!("{}\n", content()?);
+                let pal = inkra_export::html::diagram_palette(&app.style);
+                inkra_diagram::render(&src, &pal)
+                    .as_ref()
+                    .as_ref()
+                    .ok()
+                    .cloned()
+                    .map(|s| BlockVector::Diagram(std::sync::Arc::new(s)))
+            }
+            _ => None,
+        }
+    })
+}
+
+/// SVG markup of a block.
+pub fn block_svg(b: &BlockVector) -> String {
+    match b {
+        BlockVector::Math(r) => inkra_export::svg::math_svg(&r.scene, ""),
+        BlockVector::Diagram(s) => inkra_export::svg::diagram_svg(s),
+    }
+}
+
+/// PNG of a block at 2x.
+pub fn block_png(app: &AppState, b: &BlockVector) -> Result<Vec<u8>, String> {
+    match b {
+        BlockVector::Math(r) => inkra_export::raster::math_png(&r.scene, app.style.fg, 2.0),
+        BlockVector::Diagram(s) => inkra_export::raster::diagram_png(s, 2.0, None),
+    }
+}
+
+fn register_blocks(r: &mut CommandRegistry) {
+    r.register(
+        FnCommand::new(
+            spec(
+                "edit.copyBlockAsSvg",
+                Category::Edit,
+                "MD-100",
+                "Copy the formula or diagram at the caret as SVG markup.",
+            ),
+            |cx, _| {
+                let b = block_vector(cx.app).ok_or_else(|| {
+                    fail("edit.copyBlockAsSvg", "no formula or diagram at the caret")
+                })?;
+                cx.effects.push(Effect::SetClipboard {
+                    text: block_svg(&b),
+                    html: None,
+                });
+                Ok(Outcome::Done)
+            },
+        )
+        .enabled(|cx| block_vector(cx.app).is_some()),
+    );
+    r.register(
+        FnCommand::new(
+            spec(
+                "edit.copyBlockAsPng",
+                Category::Edit,
+                "MD-100",
+                "Copy the formula or diagram at the caret as an image.",
+            ),
+            |cx, _| {
+                let b = block_vector(cx.app).ok_or_else(|| {
+                    fail("edit.copyBlockAsPng", "no formula or diagram at the caret")
+                })?;
+                let png = block_png(cx.app, &b).map_err(|e| fail("edit.copyBlockAsPng", e))?;
+                cx.effects.push(Effect::SetClipboardImage(png));
+                Ok(Outcome::Done)
+            },
+        )
+        .enabled(|cx| block_vector(cx.app).is_some()),
+    );
+    r.register(
+        FnCommand::new(
+            params(
+                spec(
+                    "file.exportBlockImage",
+                    Category::File,
+                    "EX-003",
+                    "Export the formula or diagram at the caret as PNG or SVG (by extension).",
+                ),
+                PATH_PARAMS,
+            ),
+            |cx, p| {
+                let b = block_vector(cx.app).ok_or_else(|| {
+                    fail(
+                        "file.exportBlockImage",
+                        "no formula or diagram at the caret",
+                    )
+                })?;
+                let Some(out) = path_param(p) else {
+                    let name = suggested_name(cx.app, "png");
+                    let dir = cx
+                        .app
+                        .editor
+                        .path
+                        .as_ref()
+                        .and_then(|p| p.parent().map(Path::to_owned));
+                    cx.effects.push(Effect::ExportDialog {
+                        format: ExportFormat::Block,
+                        name,
+                        dir,
+                    });
+                    return Ok(Outcome::Done);
+                };
+                let svg = out
+                    .extension()
+                    .is_some_and(|e| e.eq_ignore_ascii_case("svg"));
+                let bytes = if svg {
+                    block_svg(&b).into_bytes()
+                } else {
+                    block_png(cx.app, &b).map_err(|e| fail("file.exportBlockImage", e))?
+                };
+                std::fs::write(&out, bytes).map_err(|e| fail("file.exportBlockImage", e))?;
+                Ok(Outcome::Done)
+            },
+        )
+        .enabled(|cx| block_vector(cx.app).is_some()),
+    );
+}
+
 const PATH_PARAMS: &str =
     r#"{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}"#;
 
 /// Registers export, print and import commands.
 pub fn register(r: &mut CommandRegistry) {
     use Category::File;
+    register_blocks(r);
     r.register(FnCommand::new(
         params(spec("file.exportHtml", File, "EX-001", "Export as HTML with the theme's styles (asks for the file unless `path` is given)."), PATH_PARAMS),
         |cx, p| export(cx, p, ExportFormat::Html),
@@ -568,6 +731,36 @@ mod tests {
         };
         assert_eq!(md, d.path().join("page.md"));
         assert_eq!(std::fs::read_to_string(md).unwrap(), "## Imported");
+    }
+
+    #[test]
+    fn blocks_copy_and_export() {
+        let d = tempfile::tempdir().unwrap();
+        let mut e = crate::Engine::new(crate::Preferences::default());
+        e.state.editor = crate::editor::Editor::from_text(
+            "a\n\n$$\nx^2\n$$\n\n```mermaid\npie\n\"a\" : 1\n```\n",
+        );
+        e.state.editor.sel = inkra_doc::Selection::caret(0);
+        assert!(!e.is_enabled("edit.copyBlockAsSvg"));
+        e.state.editor.sel = inkra_doc::Selection::caret(7);
+        e.execute("edit.copyBlockAsSvg", &json!({})).unwrap();
+        assert!(
+            matches!(e.take_effects().as_slice(), [Effect::SetClipboard { text, .. }] if text.starts_with("<svg"))
+        );
+        let pie = e.state.editor.text().find("pie").unwrap();
+        e.state.editor.sel = inkra_doc::Selection::caret(pie + 1);
+        e.execute("edit.copyBlockAsPng", &json!({})).unwrap();
+        assert!(
+            matches!(e.take_effects().as_slice(), [Effect::SetClipboardImage(png)] if png.starts_with(b"\x89PNG"))
+        );
+        let out = d.path().join("pie.svg");
+        e.execute("file.exportBlockImage", &json!({ "path": out }))
+            .unwrap();
+        assert!(
+            std::fs::read_to_string(out)
+                .unwrap()
+                .contains("inkra-diagram")
+        );
     }
 
     #[test]

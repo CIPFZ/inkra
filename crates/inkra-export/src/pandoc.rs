@@ -176,27 +176,8 @@ pub fn normalize(
 }
 
 fn write_scene_png(scene: &inkra_diagram::Scene, file: &Path) -> Result<(), String> {
-    let k = 2.0;
-    let (w, h) = (
-        (scene.width * k).ceil() as u32,
-        (scene.height * k).ceil() as u32,
-    );
-    let mut pm = tiny_skia::Pixmap::new(w.max(1), h.max(1)).ok_or("diagram too large")?;
-    pm.fill(tiny_skia::Color::WHITE);
-    for f in &scene.fills {
-        let mut p = tiny_skia::Paint::default();
-        let [r, g, b, a] = f.color;
-        p.set_color_rgba8(r, g, b, a);
-        p.anti_alias = true;
-        pm.fill_path(
-            &f.path,
-            &p,
-            tiny_skia::FillRule::Winding,
-            tiny_skia::Transform::from_scale(k, k),
-            None,
-        );
-    }
-    pm.save_png(file).map_err(|e| e.to_string())
+    let png = crate::raster::diagram_png(scene, 2.0, Some(inkra_layout::epaint::Color32::WHITE))?;
+    std::fs::write(file, png).map_err(|e| e.to_string())
 }
 
 /// Runs Pandoc: `input` (Markdown text) to `out` in `writer`; `extra` are

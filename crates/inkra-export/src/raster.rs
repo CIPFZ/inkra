@@ -112,6 +112,8 @@ struct Raster<'a> {
     images: &'a ExportImages,
     glyphs: HashMap<(usize, u16), Option<tiny_skia::Path>>,
     decoded: HashMap<String, Option<Pixmap>>,
+    /// Drawing is limited to this mask.
+    clip: Option<tiny_skia::Mask>,
 }
 
 impl Raster<'_> {
@@ -159,6 +161,12 @@ impl Raster<'_> {
     }
 
     fn draw(&mut self, pm: &mut Pixmap, t: Transform, op: &Op) {
+        let c = self.clip.take();
+        self.draw_in(pm, t, op, c.as_ref());
+        self.clip = c;
+    }
+
+    fn draw_in(&mut self, pm: &mut Pixmap, t: Transform, op: &Op, clip: Option<&tiny_skia::Mask>) {
         match op {
             Op::Rect {
                 rect,
@@ -170,7 +178,7 @@ impl Raster<'_> {
                     return;
                 };
                 if fill.a() > 0 {
-                    pm.fill_path(&p, &paint(*fill), FillRule::Winding, t, None);
+                    pm.fill_path(&p, &paint(*fill), FillRule::Winding, t, clip);
                 }
                 if let Some((w, c)) = stroke {
                     pm.stroke_path(
@@ -207,7 +215,7 @@ impl Raster<'_> {
                     return;
                 };
                 if fill.a() > 0 {
-                    pm.fill_path(&p, &paint(*fill), FillRule::Winding, t, None);
+                    pm.fill_path(&p, &paint(*fill), FillRule::Winding, t, clip);
                 }
                 if let Some((w, col)) = stroke {
                     pm.stroke_path(
@@ -223,7 +231,7 @@ impl Raster<'_> {
                 }
             }
             Op::Path { path, color } => {
-                pm.fill_path(path, &paint(*color), FillRule::Winding, t, None)
+                pm.fill_path(path, &paint(*color), FillRule::Winding, t, clip)
             }
             Op::Text {
                 face,
@@ -239,7 +247,7 @@ impl Raster<'_> {
                 for g in glyphs {
                     if let Some(path) = self.glyph(*face, g.gid) {
                         let gt = t.pre_concat(Transform::from_row(k, 0.0, 0.0, k, g.x, *baseline));
-                        pm.fill_path(&path, &p, FillRule::Winding, gt, None);
+                        pm.fill_path(&path, &p, FillRule::Winding, gt, clip);
                     }
                 }
             }
@@ -254,7 +262,7 @@ impl Raster<'_> {
                         quality: tiny_skia::FilterQuality::Bicubic,
                         ..Default::default()
                     };
-                    pm.draw_pixmap(0, 0, img.as_ref(), &pp, it, None);
+                    pm.draw_pixmap(0, 0, img.as_ref(), &pp, it, clip);
                 }
             }
             Op::Link { .. } => {}
@@ -333,6 +341,7 @@ pub fn export_image(src: &str, o: &ImageExport, out: &Path) -> Result<Vec<PathBu
             images: &images,
             glyphs: HashMap::new(),
             decoded: HashMap::new(),
+            clip: None,
         };
         let base = Transform::from_row(s, 0.0, 0.0, s, pad * s, pad * s);
         draw_items(&mut r, &mut pm, base, &prep.items, top, bottom + 1.0);
@@ -358,6 +367,7 @@ pub fn export_image(src: &str, o: &ImageExport, out: &Path) -> Result<Vec<PathBu
         images: &images,
         glyphs: HashMap::new(),
         decoded: HashMap::new(),
+        clip: None,
     };
     let mut written = Vec::new();
     for (n, p) in pages.iter().enumerate() {
@@ -366,9 +376,39 @@ pub fn export_image(src: &str, o: &ImageExport, out: &Path) -> Result<Vec<PathBu
         pm.fill(tiny_skia::Color::from_rgba8(bg.r(), bg.g(), bg.b(), 255));
         let header_h = p.header.map_or(0.0, |h| h.1);
         let base = Transform::from_row(k * ps, 0.0, 0.0, k * ps, ml * k, (mt + header_h * ps) * k);
+        // As in PDF: the body is clipped below the repeated header, which is
+        // drawn last in its own band.
+        let (pw, ph) = (pm.width(), pm.height());
+        let band = |y0: f32, h: f32| -> Option<tiny_skia::Mask> {
+            let mut m = tiny_skia::Mask::new(pw, ph)?;
+            let r = tiny_skia::Rect::from_xywh(
+                (ml - 2.0) * k,
+                y0 * k,
+                (pg.width - ml - mr + 4.0) * k,
+                h.max(0.1) * k,
+            )?;
+            m.fill_path(
+                &PathBuilder::from_rect(r),
+                FillRule::Winding,
+                false,
+                Transform::identity(),
+            );
+            Some(m)
+        };
+        let body_top = if header_h > 0.0 {
+            mt + header_h * ps
+        } else {
+            mt - 2.0
+        };
+        r.clip = band(
+            body_top,
+            (p.b - p.a) * ps + mt + header_h * ps - body_top + 2.0,
+        );
+        draw_items(&mut r, &mut pm, base, &prep.items, p.a, p.b);
         if let Some((hi, _)) = p.header
             && let Some((h0, h1)) = prep.items[hi].table_header
         {
+            r.clip = band(mt, header_h * ps);
             let ht = Transform::from_row(k * ps, 0.0, 0.0, k * ps, ml * k, (mt - h0 * ps) * k);
             for op in prep.items[hi].ops.iter().filter(|op| {
                 let (y0, y1) = op_y(op);
@@ -377,12 +417,76 @@ pub fn export_image(src: &str, o: &ImageExport, out: &Path) -> Result<Vec<PathBu
                 r.draw(&mut pm, ht, op);
             }
         }
-        draw_items(&mut r, &mut pm, base, &prep.items, p.a, p.b);
+        r.clip = None;
         let file = dir.join(format!("{stem}-{}.{ext}", n + 1));
         encode(&pm, &file, o.jpeg)?;
         written.push(file);
     }
     Ok(written)
+}
+
+/// PNG bytes of vector fills (formulas, diagrams) at `scale`, on `bg` (or
+/// transparent).
+pub fn fills_png(
+    width: f32,
+    height: f32,
+    fills: &[(tiny_skia_path::Path, Color32)],
+    scale: f32,
+    bg: Option<Color32>,
+) -> Result<Vec<u8>, String> {
+    let (w, h) = (
+        (width * scale).ceil().max(1.0) as u32,
+        (height * scale).ceil().max(1.0) as u32,
+    );
+    let mut pm = Pixmap::new(w, h).ok_or("image too large")?;
+    if let Some(b) = bg {
+        pm.fill(tiny_skia::Color::from_rgba8(b.r(), b.g(), b.b(), 255));
+    }
+    for (path, c) in fills {
+        pm.fill_path(
+            path,
+            &paint(*c),
+            FillRule::Winding,
+            Transform::from_scale(scale, scale),
+            None,
+        );
+    }
+    pm.encode_png().map_err(|e| e.to_string())
+}
+
+/// PNG of a formula; uncolored ink uses `color`.
+pub fn math_png(scene: &inkra_math::Scene, color: Color32, scale: f32) -> Result<Vec<u8>, String> {
+    let fills: Vec<_> = scene
+        .fills
+        .iter()
+        .map(|f| {
+            (
+                f.path.clone(),
+                f.color
+                    .map_or(color, |[r, g, b]| Color32::from_rgb(r, g, b)),
+            )
+        })
+        .collect();
+    fills_png(scene.width, scene.height, &fills, scale, None)
+}
+
+/// PNG of a diagram.
+pub fn diagram_png(
+    scene: &inkra_diagram::Scene,
+    scale: f32,
+    bg: Option<Color32>,
+) -> Result<Vec<u8>, String> {
+    let fills: Vec<_> = scene
+        .fills
+        .iter()
+        .map(|f| {
+            (
+                f.path.clone(),
+                Color32::from_rgba_unmultiplied(f.color[0], f.color[1], f.color[2], f.color[3]),
+            )
+        })
+        .collect();
+    fills_png(scene.width, scene.height, &fills, scale, bg)
 }
 
 #[cfg(test)]

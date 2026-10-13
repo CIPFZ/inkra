@@ -42,6 +42,24 @@ impl Clipboard {
         }
     }
 
+    /// Puts a PNG image on the clipboard.
+    pub fn set_png(&mut self, png: &[u8]) {
+        let Ok(img) = image::load_from_memory(png) else {
+            return;
+        };
+        let rgba = img.to_rgba8();
+        let (w, h) = rgba.dimensions();
+        let Some(c) = self.get() else { return };
+        let data = arboard::ImageData {
+            width: w as usize,
+            height: h as usize,
+            bytes: std::borrow::Cow::Owned(rgba.into_raw()),
+        };
+        if let Err(e) = c.set_image(data) {
+            log::warn!("clipboard image write failed: {e}");
+        }
+    }
+
     /// A bitmap on the clipboard, saved as a temporary PNG named
     /// `image-YYYYMMDDHHmmssSSS.png` (ED-092).
     pub fn image_png(&mut self) -> Option<std::path::PathBuf> {

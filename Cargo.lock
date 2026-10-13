@@ -2038,12 +2038,14 @@ dependencies = [
 name = "inkra-engine"
 version = "0.1.0"
 dependencies = [
+ "inkra-diagram",
  "inkra-doc",
  "inkra-export",
  "inkra-html",
  "inkra-i18n",
  "inkra-layout",
  "inkra-markdown",
+ "inkra-math",
  "inkra-text",
  "inkra-workspace",
  "log",
