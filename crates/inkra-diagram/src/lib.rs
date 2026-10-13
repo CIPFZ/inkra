@@ -8,6 +8,7 @@
 //! last good rendering.
 
 pub mod draw;
+pub mod external;
 pub mod flowchart;
 pub mod pie;
 pub mod sequence;
@@ -159,6 +160,12 @@ pub fn kind(src: &str) -> Result<Kind, String> {
         "pie" => Ok(Kind::Pie),
         w => Err(w.to_owned()),
     }
+}
+
+/// Whether an error means the diagram type is not built in (so the external
+/// renderer may help).
+pub fn is_unsupported(e: &Error) -> bool {
+    e.message.starts_with("diagram type")
 }
 
 /// Parses, lays out and draws a diagram (uncached).
