@@ -238,6 +238,26 @@ impl EditorView {
         let ctx = ui.ctx().clone();
         let rect = ui.available_rect_before_wrap();
         let resp = ui.interact(rect, self.id, Sense::click_and_drag());
+        // UI-030: the document for assistive technology (text and caret line).
+        ctx.accesskit_node_builder(self.id, |n| {
+            let ed = &engine.state.editor;
+            let t = ed.doc.text();
+            n.set_role(egui::accesskit::Role::MultilineTextInput);
+            n.set_label(ed.path.as_ref().and_then(|p| p.file_name()).map_or_else(
+                || "Document".to_owned(),
+                |f| f.to_string_lossy().into_owned(),
+            ));
+            let shown = if t.len() <= 256 * 1024 {
+                t.to_string()
+            } else {
+                t.slice(t.line_range(t.byte_to_line(ed.sel.head)))
+                    .into_owned()
+            };
+            n.set_value(shown);
+            let (line, _) = t.byte_to_line_col(ed.sel.head);
+            let col = t.slice(t.line_to_byte(line)..ed.sel.head).chars().count();
+            n.set_description(format!("{}:{}", line + 1, col + 1));
+        });
         ui.painter().rect_filled(rect, 0.0, self.style.bg);
         if self.images.poll(&ctx) {
             ctx.request_repaint();

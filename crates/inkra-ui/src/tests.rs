@@ -741,3 +741,17 @@ fn m7_rename_and_properties_of_the_current_file() {
     h.get_by_label_contains("new.md");
     h.get_by_label("Words");
 }
+
+#[test]
+fn m7_document_is_exposed_to_assistive_technology() {
+    let h = live_harness("# Hello\n\nworld\n");
+    let node = h.get_by_role(egui::accesskit::Role::MultilineTextInput);
+    assert_eq!(
+        node.accesskit_node().value().as_deref(),
+        Some("# Hello\n\nworld\n")
+    );
+    assert!(
+        node.accesskit_node().description().is_some(),
+        "caret line and column"
+    );
+}
