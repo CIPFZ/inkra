@@ -6,7 +6,7 @@
 - TH-007：在 Windows/macOS 的 150% / 200% 系统缩放下实测（Linux X11 分数缩放已验证）。
 - PR-035：Windows 上无系统 Hunspell 词典时可下载其他语言词典（目前回退到内置 en_US）。
 - UI-001 / NF-006：macOS 系统菜单栏与 dmg 在真机上验证。
-- UI-033：在开启"减少动画"的系统上实测。
+- UI-033：GNOME 与 macOS 上实测（Windows 已验证）。
 - NF-006：Wayland 实测；Flatpak 清单；Windows arm64 构建。
 - 性能：Windows（虚拟 GPU）冷启动 ~390 ms，高于 300 ms 预算；DX12 设备创建约占 330 ms，需在实体机上复测并评估延迟创建表面。
 - 内存：Windows 空文档工作集 211 MB / 专用 376 MB，主要来自 GPU 驱动；需在实体机上用 VMMap 拆分并评估 GL 后端、较小的帧延迟与字体图集；Linux 匿名内存 57 MB（其中系统 CJK 字体 19 MB 读入内存，`forbid(unsafe)` 下无法 mmap）。
