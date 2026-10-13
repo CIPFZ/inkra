@@ -20,6 +20,7 @@ mod modals;
 #[cfg(target_os = "macos")]
 pub mod native_menu;
 pub mod perf;
+pub mod prefs_window;
 pub mod quick_open;
 pub mod sidebar;
 pub mod status_bar;
@@ -144,6 +145,7 @@ pub struct Shell {
     mmdc_conf: String,
     theme_names_at: f64,
     jobs: jobs::Jobs,
+    prefs: prefs_window::PrefsWindow,
     updates: Option<std::sync::mpsc::Receiver<UpdateResult>>,
     update_available: Option<(String, String)>,
     page_setup: Option<modals::PageSetupForm>,
@@ -200,6 +202,7 @@ impl Shell {
             theme_names: Vec::new(),
             mmdc_conf: String::new(),
             jobs: Default::default(),
+            prefs: Default::default(),
             updates: None,
             update_available: None,
             page_setup: None,
@@ -606,6 +609,16 @@ impl Shell {
                     self.jobs.spawn(ctx, *job);
                 }
                 Effect::SetClipboardImage(png) => self.clipboard.set_png(&png),
+                Effect::ShowPreferences => self.prefs.open = true,
+                Effect::SettingsDialog { import } => {
+                    let purpose = if import {
+                        dialogs::Purpose::ImportSettings
+                    } else {
+                        dialogs::Purpose::ExportSettings
+                    };
+                    self.dialogs
+                        .open(ctx, purpose, None, Some("inkra-settings.json".into()));
+                }
                 Effect::ShowPageSetup => {
                     self.page_setup =
                         Some(modals::PageSetupForm::from_prefs(&self.engine.state.prefs));
@@ -840,6 +853,13 @@ impl Shell {
                     let mut p = format.params();
                     p["path"] = json!(path);
                     self.invoke(ctx, format.command(), &p);
+                }
+                (dialogs::Purpose::ImportSettings, Some(path)) => {
+                    self.invoke(ctx, "app.importSettings", &json!({ "path": path }));
+                    self.toast(ctx, self.i18n.tr("prefs-imported"));
+                }
+                (dialogs::Purpose::ExportSettings, Some(path)) => {
+                    self.invoke(ctx, "app.exportSettings", &json!({ "path": path }));
                 }
                 (dialogs::Purpose::Import, Some(path)) => {
                     self.invoke(ctx, "file.import", &json!({ "path": path }));
@@ -1343,6 +1363,8 @@ impl Shell {
             });
         }
 
+        self.prefs_viewport(&ctx);
+
         // Root window.
         let root = self.root;
         self.engine.state.activate(root);
@@ -1365,6 +1387,50 @@ impl Shell {
     }
 
     /// The UI of one window (`id` is active).
+    /// The Preferences window in its own viewport (SPEC chapter 9).
+    fn prefs_viewport(&mut self, ctx: &egui::Context) {
+        if !self.prefs.open {
+            return;
+        }
+        let vid = egui::ViewportId::from_hash_of("inkra-preferences");
+        // Near the main window (the OS may place it elsewhere).
+        let at = ctx
+            .input(|i| i.viewport().outer_rect)
+            .map_or(egui::pos2(120.0, 120.0), |r| r.min + egui::vec2(60.0, 60.0));
+        let builder = egui::ViewportBuilder::default()
+            .with_title(self.i18n.tr("prefs-title"))
+            .with_position(at)
+            .with_app_id("io.inkra.Inkra")
+            .with_inner_size([860.0, 620.0])
+            .with_min_inner_size([620.0, 420.0]);
+        let themes = self.theme_names.clone();
+        let os = self.os;
+        let root = self.root;
+        ctx.show_viewport_immediate(vid, builder, |vui, _class| {
+            let escape = vui.ctx().input(|i| i.key_pressed(egui::Key::Escape));
+            if vui.ctx().input(|i| i.viewport().close_requested()) || (escape && self.prefs.idle())
+            {
+                self.prefs.open = false;
+            }
+            // Settings act on the main window's document.
+            self.engine.state.activate(root);
+            let reqs = self
+                .prefs
+                .ui(vui, &mut self.engine, &self.i18n, &themes, os);
+            let vctx = vui.ctx().clone();
+            for r in reqs {
+                match r {
+                    prefs_window::Request::Invoke(id, p) => self.invoke(&vctx, &id, &p),
+                    prefs_window::Request::SaveKeymap => {
+                        if let Err(e) = self.engine.save_keybindings() {
+                            self.toast(&vctx, format!("✕ {e}"));
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     fn window_ui(&mut self, ui: &mut egui::Ui, id: u64) {
         let ctx = ui.ctx().clone();
         // Close requests from the OS (FS-005).

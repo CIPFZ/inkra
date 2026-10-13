@@ -665,3 +665,39 @@ fn m5_opened_file_keeps_caret_at_start() {
         h.state().engine.state.editor.sel.head
     );
 }
+
+#[test]
+fn every_command_has_a_title_in_both_languages() {
+    let engine = Engine::new(Default::default());
+    for lang in ["en-US", "zh-CN"] {
+        let i18n = I18n::new(lang);
+        let missing: Vec<&str> = engine
+            .registry
+            .iter()
+            .map(|c| c.spec().id)
+            .filter(|id| !i18n.has(&inkra_engine::command::title_key(id)))
+            .collect();
+        assert!(missing.is_empty(), "{lang}: {missing:?}");
+    }
+}
+
+#[test]
+fn preferences_window_changes_settings() {
+    let mut h = harness("en-US");
+    h.get_by_label("File").click();
+    h.run();
+    h.get_by_label_contains("Preferences").click();
+    h.run();
+    h.get_by_label("Save automatically").click();
+    h.run();
+    assert!(h.state().engine.state.prefs.bool("general.autoSave"));
+    h.get_by_label("Editor").click();
+    h.run();
+    h.get_by_label("Auto-pair Markdown symbols").click();
+    h.run();
+    assert!(h.state().engine.state.prefs.bool("editor.autoPairMarkdown"));
+    assert!(
+        h.state().engine.state.editor.prefs.pair_markdown,
+        "applied to the open document"
+    );
+}

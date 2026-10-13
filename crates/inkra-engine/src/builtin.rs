@@ -114,6 +114,119 @@ pub fn register_all(r: &mut CommandRegistry) {
     ));
     r.register(FnCommand::new(
         spec(
+            "app.preferences",
+            Category::App,
+            "PR-001",
+            "Open the Preferences window.",
+        ),
+        |cx, _| {
+            cx.effects.push(Effect::ShowPreferences);
+            Ok(Outcome::Done)
+        },
+    ));
+    r.register(FnCommand::new(
+        {
+            let mut s = spec(
+                "app.exportSettings",
+                Category::App,
+                "PR-002",
+                "Write the settings to a JSON file (asks where unless `path` is given).",
+            );
+            s.params = Some(r#"{"type":"object","properties":{"path":{"type":"string"}}}"#);
+            s
+        },
+        |cx, p| {
+            let Some(path) = p.get("path").and_then(serde_json::Value::as_str) else {
+                cx.effects.push(Effect::SettingsDialog { import: false });
+                return Ok(Outcome::Done);
+            };
+            let text =
+                serde_json::to_string_pretty(cx.app.prefs.raw()).unwrap_or_else(|_| "{}".into());
+            std::fs::write(path, format!("{text}\n")).map_err(|e| {
+                crate::command::CommandError::Failed {
+                    id: "app.exportSettings".into(),
+                    msg: e.to_string(),
+                }
+            })?;
+            Ok(Outcome::Done)
+        },
+    ));
+    r.register(FnCommand::new(
+        {
+            let mut s = spec(
+                "app.importSettings",
+                Category::App,
+                "PR-002",
+                "Merge settings from a JSON file (asks for it unless `path` is given).",
+            );
+            s.params = Some(r#"{"type":"object","properties":{"path":{"type":"string"}}}"#);
+            s
+        },
+        |cx, p| {
+            let Some(path) = p.get("path").and_then(serde_json::Value::as_str) else {
+                cx.effects.push(Effect::SettingsDialog { import: true });
+                return Ok(Outcome::Done);
+            };
+            let fail = |msg: String| crate::command::CommandError::Failed {
+                id: "app.importSettings".into(),
+                msg,
+            };
+            let text = std::fs::read_to_string(path).map_err(|e| fail(e.to_string()))?;
+            let rejected = cx.app.prefs.import(&text).map_err(fail)?;
+            for k in rejected {
+                log::warn!("imported settings: invalid value for `{k}`");
+            }
+            cx.app.save_prefs();
+            cx.app.apply_prefs();
+            cx.effects.push(Effect::RootChanged);
+            Ok(Outcome::Done)
+        },
+    ));
+    r.register(FnCommand::new(
+        spec(
+            "app.resetSettings",
+            Category::App,
+            "PR-021",
+            "Reset every setting to its default.",
+        ),
+        |cx, _| {
+            cx.app.prefs.reset();
+            cx.app.save_prefs();
+            cx.app.apply_prefs();
+            cx.effects.push(Effect::RootChanged);
+            Ok(Outcome::Done)
+        },
+    ));
+    r.register(FnCommand::new(
+        {
+            let mut s = spec("app.openFolder", Category::App, "PR-021", "Open the configuration, themes, keybindings or logs location in the file manager.");
+            s.params = Some(r#"{"type":"object","required":["which"],"properties":{"which":{"enum":["config","themes","keybindings","logs"]}}}"#);
+            s
+        },
+        |cx, p| {
+            let Some(paths) = cx.app.paths.clone() else { return Ok(Outcome::Done) };
+            let target = match p.get("which").and_then(serde_json::Value::as_str).unwrap_or("config") {
+                "themes" => paths.themes_dir(),
+                "keybindings" => {
+                    let f = paths.keybindings_file();
+                    if !f.exists() {
+                        let _ = std::fs::create_dir_all(&paths.config);
+                        let _ = std::fs::write(&f, "[]\n");
+                    }
+                    f
+                }
+                "logs" => paths.logs_dir(),
+                _ => paths.config.clone(),
+            };
+            if target.extension().is_none() {
+                let _ = std::fs::create_dir_all(&target);
+            }
+            cx.effects.push(Effect::OpenUrl(target.to_string_lossy().into_owned()));
+            Ok(Outcome::Done)
+        },
+    ));
+    r.register(FnCommand::new(
+        spec(
             "help.checkUpdates",
             Category::Help,
             "PR-020",

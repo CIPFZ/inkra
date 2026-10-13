@@ -576,6 +576,13 @@ impl Keymap {
         out
     }
 
+    /// Puts a (default) binding back, with its context.
+    pub fn restore(&mut self, b: Binding) {
+        self.bindings
+            .retain(|x| !(x.chord == b.chord && x.when == b.when));
+        self.bindings.insert(0, b);
+    }
+
     /// Adds a binding (taking precedence over existing ones for the same chord).
     pub fn bind(&mut self, chord: KeyChord, command: &str, params: Value) {
         self.bindings

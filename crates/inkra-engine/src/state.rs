@@ -131,6 +131,21 @@ impl AppState {
         }
     }
 
+    /// Applies every preference to the open windows (after import or reset).
+    pub fn apply_prefs(&mut self) {
+        let _ = self.reload_theme();
+        let o = crate::markdown_options(&self.prefs);
+        let ep = crate::edit_prefs(&self.prefs);
+        self.editor.doc.set_options(o.clone());
+        self.editor.prefs = ep.clone();
+        for w in &mut self.others {
+            w.editor.doc.set_options(o.clone());
+            w.editor.prefs = ep.clone();
+        }
+        crate::viewing::view_from_prefs(&mut self.view, &self.prefs);
+        inkra_workspace::tree::set_markdown_exts(&self.prefs.strings("general.markdownExtensions"));
+    }
+
     /// Sets a preference and saves the file.
     pub fn set_pref(&mut self, key: &str, value: serde_json::Value) -> bool {
         let ok = self.prefs.set(key, value);
@@ -387,6 +402,13 @@ pub enum Effect {
     RunJob(Box<crate::exporting::ExportJob>),
     /// Show the page setup dialog (EX-002).
     ShowPageSetup,
+    /// Show the Preferences window.
+    ShowPreferences,
+    /// Ask for a settings file to import or a place to export to (PR-002).
+    SettingsDialog {
+        /// Import (else export).
+        import: bool,
+    },
     /// Look for a newer release (PR-020); `manual` reports "up to date" too.
     CheckUpdates {
         /// Asked for by the user.

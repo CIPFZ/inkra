@@ -970,6 +970,24 @@ impl Preferences {
     pub fn raw(&self) -> &Map<String, Value> {
         &self.values
     }
+
+    /// Forgets every known key (PR-021 "reset settings"); unknown keys stay.
+    pub fn reset(&mut self) {
+        self.values.retain(|k, _| spec(k).is_none());
+    }
+
+    /// Merges a settings file (PR-002): known keys with valid values replace
+    /// the current ones, unknown keys are kept. Returns the keys rejected.
+    pub fn import(&mut self, text: &str) -> Result<Vec<String>, String> {
+        let other = Self::from_json(text)?;
+        let mut rejected = Vec::new();
+        for (k, v) in other.values {
+            if !self.set(&k, v) {
+                rejected.push(k);
+            }
+        }
+        Ok(rejected)
+    }
 }
 
 fn backup_path(path: &Path) -> PathBuf {

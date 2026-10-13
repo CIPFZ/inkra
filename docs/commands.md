@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **180**
+Registered commands: **185**
 
 
 ## App
@@ -12,8 +12,13 @@ Registered commands: **180**
 | Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
 |---|---|---|---|---|---|---|---|
 | `app.about` | About Inkra | 关于 Inkra |  |  | — | UI-052 | Show the About dialog. |
+| `app.exportSettings` | Export Settings… | 导出设置… |  |  | `{"type":"object","properties":{"path":{"type":"string"}}}` | PR-002 | Write the settings to a JSON file (asks where unless `path` is given). |
+| `app.importSettings` | Import Settings… | 导入设置… |  |  | `{"type":"object","properties":{"path":{"type":"string"}}}` | PR-002 | Merge settings from a JSON file (asks for it unless `path` is given). |
+| `app.openFolder` | Open Folder | 打开文件夹 |  |  | `{"type":"object","required":["which"],"properties":{"which":{"enum":["config","themes","keybindings","logs"]}}}` | PR-021 | Open the configuration, themes, keybindings or logs location in the file manager. |
 | `app.openUrl` | Open Link | 打开链接 |  |  | `{"type":"object","required":["url"],"properties":{"url":{"type":"string"}}}` | MD-033 | Open a link (internal anchors scroll, files open, URLs go to the browser). |
+| `app.preferences` | Preferences… | 偏好设置… | `Ctrl+,` | `⌘,` | — | PR-001 | Open the Preferences window. |
 | `app.quit` | Quit | 退出 | `Ctrl+Q` | `⌘Q` | — | FS-005 | Quit the application, closing all windows. |
+| `app.resetSettings` | Reset Settings | 重置设置 |  |  | — | PR-021 | Reset every setting to its default. |
 | `app.setClipboard` | Copy Text | 复制文本 |  |  | `{"type":"object","required":["text"],"properties":{"text":{"type":"string"}}}` | ED-016 | Put text on the clipboard. |
 | `app.setPreference` | Set Preference | 设置偏好 |  |  | `{"type":"object","required":["key","value"],"properties":{"key":{"type":"string"},"value":{}}}` | PR-001 | Set a preference (validated against the preference table) and save. |
 
@@ -252,7 +257,6 @@ Registered commands: **180**
 These appear greyed out in menus.
 
 - `app.commandPalette` — Command Palette
-- `app.preferences` — Preferences…
 - `edit.emojiSymbols` — Emoji & Symbols
 - `file.delete` — Delete
 - `file.moveTo` — Move To…
