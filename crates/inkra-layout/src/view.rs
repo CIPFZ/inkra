@@ -488,6 +488,13 @@ impl ViewLayout {
                     }
                 });
             }
+            if matches!(b.kind, inkra_markdown::BlockKind::Table { .. })
+                && let Some(ws) = cx.images.column_widths(item.src.start)
+            {
+                for w in ws {
+                    w.to_bits().hash(&mut h);
+                }
+            }
             let active = cx.caret >= item.src.start && cx.caret <= item.src.end;
             active.hash(&mut h);
             if active {

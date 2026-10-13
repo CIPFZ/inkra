@@ -88,6 +88,8 @@ pub enum Overlay {
         rect: Rect,
         /// Absolute source range.
         span: Range<usize>,
+        /// Column widths.
+        cols: Vec<f32>,
     },
 }
 

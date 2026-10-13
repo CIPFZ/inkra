@@ -13,10 +13,17 @@ use crate::block::{BlockLayout, Deco, Hit, HitAction, Overlay};
 use crate::run::{RunSpec, SourceMap};
 use crate::style::Style;
 
-/// Image dimensions known to the host (ED-090).
+/// Display-only facts known to the host that are not in the source: loaded
+/// image sizes (ED-090) and table column widths set by dragging (ED-084).
 pub trait ImageSizes {
     /// Intrinsic size of the image `src` (as written in the document), if loaded.
     fn size(&self, src: &str) -> Option<[f32; 2]>;
+
+    /// Column widths of the table starting at `table_start`, if the user resized it.
+    fn column_widths(&self, table_start: usize) -> Option<Vec<f32>> {
+        let _ = table_start;
+        None
+    }
 }
 
 /// No images known.
@@ -393,7 +400,19 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                     out.caret_range = Some(0..item.src.len());
                 }
                 BlockKind::Table { aligns, .. } => {
-                    let (h, fr) = table(cx, b, delta, aligns, x, y, w, base, fonts, &mut out);
+                    let (h, fr, cols) = table(
+                        cx,
+                        b,
+                        delta,
+                        aligns,
+                        x,
+                        y,
+                        w,
+                        base,
+                        item.src.start,
+                        fonts,
+                        &mut out,
+                    );
                     let grid_w = out
                         .decos
                         .iter()
@@ -405,6 +424,7 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                     out.overlays.push(Overlay::Table {
                         rect: Rect::from_min_max(pos2(x, y), pos2(grid_w, y + h)),
                         span: item.src.clone(),
+                        cols,
                     });
                     content_h = h;
                     first_row_h = fr;
@@ -707,9 +727,10 @@ fn table(
     y: f32,
     w: f32,
     base: usize,
+    table_start: usize,
     fonts: &mut FontsView<'_>,
     out: &mut BlockLayout,
-) -> (f32, f32) {
+) -> (f32, f32, Vec<f32>) {
     let style = cx.style;
     let text = cx.doc.text();
     let ncols = aligns.len().max(1);
@@ -740,9 +761,23 @@ fn table(
         cells.push(out_row);
     }
     // ED-080: a column is at most as wide as the editor column (its cells wrap);
-    // a table wider than the column scrolls horizontally in the view.
-    for c in &mut col_w {
-        *c = c.min(w.max(60.0));
+    // a table wider than the column scrolls horizontally in the view. Widths set
+    // by dragging a column border win (ED-084, display only).
+    match cx
+        .images
+        .column_widths(table_start)
+        .filter(|v| v.len() == col_w.len())
+    {
+        Some(v) => {
+            for (c, d) in col_w.iter_mut().zip(v) {
+                *c = d.clamp(40.0, w.max(60.0) * 3.0);
+            }
+        }
+        None => {
+            for c in &mut col_w {
+                *c = c.min(w.max(60.0));
+            }
+        }
     }
     // Wrapped cells are taller: measure them at their column width.
     for row in &mut cells {
@@ -820,5 +855,5 @@ fn table(
     }
     out.caret_range = Some(0..(b.span.end - b.span.start));
     let _ = Pos2::ZERO;
-    (ty - y, first_row)
+    (ty - y, first_row, col_w)
 }
