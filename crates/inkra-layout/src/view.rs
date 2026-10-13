@@ -96,6 +96,8 @@ pub struct ViewLayout {
     /// Sum of height changes of items above the viewport since last taken.
     pub height_shift_above: f32,
     anchor_limit: f32,
+    math_numbers: HashMap<usize, u32>,
+    math_refs: Vec<(String, String)>,
 }
 
 impl Default for ViewLayout {
@@ -121,6 +123,8 @@ impl ViewLayout {
             cache: HashMap::default(),
             frame: HashMap::default(),
             height_shift_above: 0.0,
+            math_numbers: HashMap::new(),
+            math_refs: Vec::new(),
             anchor_limit: 0.0,
         }
     }
@@ -147,6 +151,53 @@ impl ViewLayout {
         self.anchor_limit = viewport_top;
         if self.cache.len() > 20_000 {
             self.cache.clear();
+        }
+    }
+
+    /// Assigns equation numbers to display math blocks (MD-008): `1` numbers
+    /// AMS environments (`equation`, `align`, …), `2` every block; `\tag`s and
+    /// `\label`s feed `\ref`/`\eqref`.
+    fn number_equations(&mut self, doc: &Doc, mode: u8) {
+        self.math_numbers.clear();
+        self.math_refs.clear();
+        let mut n = 0u32;
+        let text = doc.text();
+        for it in &self.live {
+            let Some((b, delta)) = it.block(doc) else {
+                continue;
+            };
+            let inkra_markdown::BlockKind::MathBlock { open, close } = &b.kind else {
+                continue;
+            };
+            let abs = |r: &std::ops::Range<usize>| {
+                (r.start as isize + delta) as usize..(r.end as isize + delta) as usize
+            };
+            let stop = close.as_ref().map_or(it.src.end, |c| abs(c).start);
+            let start = abs(open).end;
+            if stop <= start {
+                continue;
+            }
+            let tex = text.slice(start..stop).into_owned();
+            if mode == 0 && !tex.contains("\\label") {
+                continue;
+            }
+            let p = inkra_math::parse::parse(&tex);
+            let numbered =
+                !p.notag && p.tag.is_none() && (mode == 2 || mode == 1 && p.numbered_env);
+            let shown = if let Some((t, _)) = &p.tag {
+                Some(t.clone())
+            } else if numbered {
+                n += 1;
+                self.math_numbers.insert(it.src.start, n);
+                Some(n.to_string())
+            } else {
+                None
+            };
+            if let Some(s) = shown {
+                for l in &p.labels {
+                    self.math_refs.push((l.clone(), s.clone()));
+                }
+            }
         }
     }
 
@@ -199,6 +250,7 @@ impl ViewLayout {
                 }
                 if geometry_or_doc_changed {
                     self.live = live::flatten(doc);
+                    self.number_equations(doc, style.math_numbering);
                 } else {
                     // Only the virtual empty line moved.
                     self.live.retain(|it| it.top != usize::MAX);
@@ -456,6 +508,8 @@ impl ViewLayout {
                     quote_continues: quotes,
                     images: cx.images,
                     syntax_theme: cx.syntax_theme,
+                    math_numbers: &self.math_numbers,
+                    math_refs: &self.math_refs,
                 };
                 (key, Arc::new(live::leaf::layout(item, &lcx, fonts)))
             }
@@ -487,6 +541,13 @@ impl ViewLayout {
                             .hash(&mut h);
                     }
                 });
+            }
+            if matches!(b.kind, inkra_markdown::BlockKind::MathBlock { .. }) {
+                self.math_numbers.get(&item.src.start).hash(&mut h);
+            }
+            // References can appear in any inline formula.
+            if !self.math_refs.is_empty() {
+                self.math_refs.hash(&mut h);
             }
             if matches!(b.kind, inkra_markdown::BlockKind::Table { .. })
                 && let Some(ws) = cx.images.column_widths(item.src.start)

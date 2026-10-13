@@ -64,6 +64,9 @@ pub struct Style {
     pub statusbar_fg: Color32,
     /// Alert (`> [!NOTE]`) backgrounds use the alert colors at this opacity.
     pub alert_bg_alpha: f32,
+    /// Equation numbering (MD-068): 0 off, 1 AMS environments, 2 all blocks.
+    /// A rendering option set from preferences, not by themes.
+    pub math_numbering: u8,
     /// Body font size in points.
     pub size: f32,
     /// Monospace font size in points.
@@ -165,6 +168,7 @@ impl Default for Style {
             sidebar_active_bg: rgb(0xe4, 0xe1, 0xd8),
             statusbar_fg: rgb(0x99, 0x99, 0x99),
             alert_bg_alpha: 0.08,
+            math_numbering: 0,
             size: 16.0,
             mono_size: 14.0,
             line_height: 1.6,

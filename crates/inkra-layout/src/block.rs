@@ -37,6 +37,13 @@ pub enum Deco {
         /// Image source as written in the document.
         src: String,
     },
+    /// A formula (painted by the host from the scene).
+    Math {
+        /// Rectangle (block-local); the scene is drawn at its top-left.
+        rect: Rect,
+        /// The formula.
+        math: crate::run::MathScene,
+    },
     /// A circle.
     Circle {
         /// Center (block-local).

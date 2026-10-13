@@ -20,11 +20,51 @@ pub struct Seg {
     pub atomic: bool,
 }
 
+/// A rendered formula (or other vector object) to paint; compared by key.
+#[derive(Debug, Clone)]
+pub struct MathScene {
+    /// The scene.
+    pub scene: std::sync::Arc<inkra_math::Scene>,
+    /// Identity of the scene (request hash), for texture caching.
+    pub key: u64,
+    /// Default ink color.
+    pub color: epaint::Color32,
+}
+
+impl PartialEq for MathScene {
+    fn eq(&self, o: &Self) -> bool {
+        self.key == o.key && self.color == o.color
+    }
+}
+
+impl Eq for MathScene {}
+
+impl std::hash::Hash for MathScene {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.key.hash(h);
+        self.color.hash(h);
+    }
+}
+
+/// An object (inline math) drawn in space reserved inside a run: the reserved
+/// width ends at the placeholder character at byte `at`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct InlineObject {
+    /// Byte offset (in the run text) of the placeholder after the reserved space.
+    pub at: usize,
+    /// Reserved width in points (as bits for hashing).
+    pub width_bits: u32,
+    /// What to draw.
+    pub math: MathScene,
+}
+
 /// Mapping between a run's text and the source; segments are in text order.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct SourceMap {
     /// Segments.
     pub segs: Vec<Seg>,
+    /// Inline objects in the run.
+    pub objects: Vec<InlineObject>,
 }
 
 impl SourceMap {

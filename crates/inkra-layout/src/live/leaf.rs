@@ -53,6 +53,10 @@ pub struct LiveCx<'a> {
     pub images: &'a dyn ImageSizes,
     /// syntect theme for code blocks.
     pub syntax_theme: &'a str,
+    /// Automatic equation numbers by math block start (MD-008).
+    pub math_numbers: &'a std::collections::HashMap<usize, u32>,
+    /// Label → equation number for `\ref`/`\eqref`.
+    pub math_refs: &'a [(String, String)],
 }
 
 const PLACEHOLDER: [f32; 2] = [240.0, 135.0];
@@ -73,6 +77,7 @@ fn sole_image(b: &Block) -> Option<&inkra_markdown::Inline> {
 
 /// Lays out one live item.
 pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> BlockLayout {
+    super::inline::set_math_refs(cx.math_refs);
     let style = cx.style;
     let text = cx.doc.text();
     let base = item.src.start;
@@ -347,6 +352,75 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                     first_row_h = content_h;
                     out.caret_range = None;
                 }
+                BlockKind::MathBlock { open, close } if !active => {
+                    // MD-008: the formula, centered, with its equation number.
+                    let tex = math_source(text, abs(open), close.as_ref().map(abs), item.src.end);
+                    let mut req = inkra_math::Request::new(
+                        &tex,
+                        true,
+                        (em * super::inline::MATH_SCALE).round(),
+                    );
+                    req.number = cx.math_numbers.get(&item.src.start).copied();
+                    req.refs = cx.math_refs.to_vec();
+                    let r = inkra_math::render(&req);
+                    let ms = super::inline::math_scene(&req, fmt.color);
+                    let sc = &r.scene;
+                    let top = y + 0.35 * em;
+                    let fx = if sc.width <= w {
+                        x + (w - sc.width) / 2.0
+                    } else {
+                        x
+                    };
+                    out.decos.push(Deco::Math {
+                        rect: Rect::from_min_size(pos2(fx, top), vec2(sc.width, sc.height)),
+                        math: ms,
+                    });
+                    if let Some(tag) = &r.tag {
+                        let tx = x + w - tag.width;
+                        let ty = top + sc.baseline - tag.baseline;
+                        let key = ms_key(&req) ^ 0x7a67;
+                        out.decos.push(Deco::Math {
+                            rect: Rect::from_min_size(
+                                pos2(tx.max(fx + sc.width + em), ty),
+                                vec2(tag.width, tag.height),
+                            ),
+                            math: crate::run::MathScene {
+                                scene: tag.clone(),
+                                key,
+                                color: fmt.color,
+                            },
+                        });
+                    }
+                    let mut h = sc.height + 0.7 * em;
+                    if let Some(e) = r.errors.first() {
+                        // Unsupported commands are shown in red in the formula; the
+                        // first problem is spelled out below it.
+                        let mut ef = fmt;
+                        ef.size = (em * 0.8).round();
+                        ef.color = Color32::from_rgb(220, 38, 38);
+                        let mut bl = Builder::new(text, base, delta, None, style, w);
+                        bl.push(e, &ef, None, true);
+                        let (eh, _) = galley_height(fonts, &bl.job);
+                        out.runs.push(RunSpec {
+                            job: bl.job,
+                            pos: vec2(x, top + sc.height + 2.0),
+                            map: bl.map,
+                        });
+                        h += eh + 2.0;
+                    }
+                    // Clicking the formula puts the caret at the end of the block,
+                    // which opens its source (ED-002).
+                    let mut m = SourceMap::default();
+                    m.atomic(0..0, item.src.len()..item.src.len());
+                    out.runs.push(RunSpec {
+                        job: empty_job(&fmt, w),
+                        pos: vec2(x + w - 1.0, top),
+                        map: m,
+                    });
+                    content_h = h;
+                    first_row_h = h;
+                    out.caret_range = Some(0..item.src.len());
+                }
                 BlockKind::HtmlBlock { .. }
                 | BlockKind::FrontMatter { .. }
                 | BlockKind::MathBlock { .. } => {
@@ -398,6 +472,32 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                     content_h = rect.height();
                     first_row_h = fr + pad;
                     out.caret_range = Some(0..item.src.len());
+                    // While editing a formula its rendering is previewed below the
+                    // source (MD-008).
+                    if let BlockKind::MathBlock { open, close } = &b.kind {
+                        let tex =
+                            math_source(text, abs(open), close.as_ref().map(abs), item.src.end);
+                        let mut req = inkra_math::Request::new(
+                            &tex,
+                            true,
+                            (em * super::inline::MATH_SCALE).round(),
+                        );
+                        req.number = cx.math_numbers.get(&item.src.start).copied();
+                        req.refs = cx.math_refs.to_vec();
+                        let ms = super::inline::math_scene(&req, fmt.color);
+                        let sc = ms.scene.clone();
+                        let top = y + content_h + 0.4 * em;
+                        let fx = if sc.width <= w {
+                            x + (w - sc.width) / 2.0
+                        } else {
+                            x
+                        };
+                        out.decos.push(Deco::Math {
+                            rect: Rect::from_min_size(pos2(fx, top), vec2(sc.width, sc.height)),
+                            math: ms,
+                        });
+                        content_h += sc.height + 0.8 * em;
+                    }
                 }
                 BlockKind::Table { aligns, .. } => {
                     let (h, fr, cols) = table(
@@ -579,7 +679,72 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
     }
     out.decos.extend(decos_after);
     out.height = height;
+    place_objects(&mut out, fonts);
     out
+}
+
+/// The TeX source between `$$` delimiters.
+fn math_source(
+    text: &inkra_text::Text,
+    open: Range<usize>,
+    close: Option<Range<usize>>,
+    end: usize,
+) -> String {
+    let stop = close.map_or(end, |c| c.start);
+    if stop <= open.end {
+        return String::new();
+    }
+    text.slice(open.end..stop).trim().to_owned()
+}
+
+fn ms_key(req: &inkra_math::Request) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    req.hash(&mut h);
+    h.finish()
+}
+
+/// Turns the inline objects of every run into decorations at the positions
+/// the text layout reserved for them.
+fn place_objects(out: &mut BlockLayout, fonts: &mut FontsView<'_>) {
+    let mut decos = Vec::new();
+    for run in &out.runs {
+        if run.map.objects.is_empty() {
+            continue;
+        }
+        let g = fonts.layout_job(run.job.clone());
+        for obj in &run.map.objects {
+            let ci = crate::run::char_index(&run.job.text, obj.at);
+            // Walk rows: each glyph is one char; a row ending in `\n` skips it.
+            let mut k = 0usize;
+            let mut found = None;
+            'rows: for r in &g.rows {
+                for gl in &r.row.glyphs {
+                    if k == ci {
+                        found = Some((r.pos, gl.pos));
+                        break 'rows;
+                    }
+                    k += 1;
+                }
+                if r.ends_with_newline {
+                    k += 1;
+                }
+            }
+            let Some((rp, gp)) = found else { continue };
+            let w = f32::from_bits(obj.width_bits);
+            let sc = &obj.math.scene;
+            let baseline = run.pos.y + rp.y + gp.y;
+            let left = run.pos.x + rp.x + gp.x - w;
+            decos.push(Deco::Math {
+                rect: Rect::from_min_size(
+                    pos2(left, baseline - sc.baseline),
+                    vec2(sc.width, sc.height),
+                ),
+                math: obj.math.clone(),
+            });
+        }
+    }
+    out.decos.extend(decos);
 }
 
 fn empty_job(fmt: &Fmt, w: f32) -> LayoutJob {

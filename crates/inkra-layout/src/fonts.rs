@@ -239,6 +239,32 @@ fn load(path: &str, index: u32) -> Option<FontData> {
     }
 }
 
+/// The system CJK font, read once and shared with the math engine (CJK inside
+/// `\text{…}`).
+pub fn cjk_font_data() -> Option<(&'static [u8], u32)> {
+    static DATA: std::sync::OnceLock<Option<(&'static [u8], u32)>> = std::sync::OnceLock::new();
+    *DATA.get_or_init(|| {
+        let Some((path, index)) = find_cjk_font() else {
+            log::warn!("no system CJK font found; CJK text will render as boxes");
+            return None;
+        };
+        match std::fs::read(path) {
+            Ok(bytes) => {
+                log::info!("CJK fallback font: {path}");
+                // Lives for the whole program; leaked once so egui and the math
+                // engine share one copy.
+                let data: &'static [u8] = Box::leak(bytes.into_boxed_slice());
+                inkra_math::font::set_fallback_fonts(vec![(data, index)]);
+                Some((data, index))
+            }
+            Err(e) => {
+                log::warn!("cannot read font {path}: {e}");
+                None
+            }
+        }
+    })
+}
+
 /// Font definitions: egui's emoji fallbacks, the bundled Inter / JetBrains Mono
 /// families (also used for the UI) and a system CJK fallback when available.
 pub fn definitions() -> FontDefinitions {
@@ -253,14 +279,11 @@ pub fn definitions() -> FontDefinitions {
         .map(|s| (*s).to_owned())
         .collect();
     let mut cjk = Vec::new();
-    if let Some((path, index)) = find_cjk_font() {
-        if let Some(d) = load(path, index) {
-            defs.font_data.insert("cjk".into(), Arc::new(d));
-            cjk.push("cjk".to_owned());
-            log::info!("CJK fallback font: {path}");
-        }
-    } else {
-        log::warn!("no system CJK font found; CJK text will render as boxes");
+    if let Some((bytes, index)) = cjk_font_data() {
+        let mut d = FontData::from_static(bytes);
+        d.index = index;
+        defs.font_data.insert("cjk".into(), Arc::new(d));
+        cjk.push("cjk".to_owned());
     }
     let mut cjk_bold = Vec::new();
     if let Some((path, index)) = CJK_BOLD

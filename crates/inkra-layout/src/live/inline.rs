@@ -11,7 +11,39 @@ use epaint::{Color32, Stroke};
 use inkra_markdown::ast::{Inline, InlineKind, LinkSyntax};
 use inkra_text::Text;
 
-use crate::run::SourceMap;
+use crate::run::{InlineObject, MathScene, SourceMap};
+
+/// Formula size relative to the surrounding text (STIX Two Math has a smaller
+/// x-height than the body faces).
+pub const MATH_SCALE: f32 = 1.12;
+
+thread_local! {
+    /// Label → number of the document being laid out (`\eqref` in inline math).
+    static REFS: std::cell::RefCell<Vec<(String, String)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Sets the equation references used by inline math laid out on this thread.
+pub fn set_math_refs(refs: &[(String, String)]) {
+    REFS.with(|r| {
+        let mut r = r.borrow_mut();
+        if r.as_slice() != refs {
+            *r = refs.to_vec();
+        }
+    });
+}
+
+/// Typesets a formula (cached) as a paintable scene.
+pub fn math_scene(req: &inkra_math::Request, color: Color32) -> MathScene {
+    use std::hash::{Hash, Hasher};
+    let r = inkra_math::render(req);
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    req.hash(&mut h);
+    MathScene {
+        scene: r.scene.clone(),
+        key: h.finish(),
+        color,
+    }
+}
 use crate::style::Style;
 
 /// Inline text format.
@@ -176,6 +208,39 @@ impl<'a> Builder<'a> {
         }
     }
 
+    /// Reserves space for an object (inline math) mapped atomically to `src`:
+    /// two invisible word joiners, the second carrying the object's width as
+    /// letter spacing and a line height tall enough for it.
+    pub fn push_object(&mut self, math: MathScene, fmt: &Fmt, src: Range<usize>) {
+        const WJ: &str = "\u{2060}";
+        let start = self.job.text.len();
+        let f0 = fmt.text_format();
+        self.job.text.push_str(WJ);
+        let mid = self.job.text.len();
+        self.job.sections.push(LayoutSection {
+            leading_space: 0.0,
+            byte_range: ByteIndex(start)..ByteIndex(mid),
+            format: f0,
+        });
+        let mut f1 = fmt.text_format();
+        f1.extra_letter_spacing = math.scene.width;
+        f1.line_height = Some(fmt.line_height.max(math.scene.height + 2.0));
+        self.job.text.push_str(WJ);
+        let end = self.job.text.len();
+        self.job.sections.push(LayoutSection {
+            leading_space: 0.0,
+            byte_range: ByteIndex(mid)..ByteIndex(end),
+            format: f1,
+        });
+        let rel = src.start.saturating_sub(self.base)..src.end.saturating_sub(self.base);
+        self.map.atomic(start..end, rel);
+        self.map.objects.push(InlineObject {
+            at: mid,
+            width_bits: math.scene.width.to_bits(),
+            math,
+        });
+    }
+
     /// Appends the source text of absolute range `r`.
     pub fn push_src(&mut self, r: Range<usize>, fmt: &Fmt) {
         if r.is_empty() {
@@ -336,11 +401,20 @@ impl<'a> Builder<'a> {
                 f.size = (fmt.size * 0.9).round();
                 self.push_src(span, &f);
             }
-            InlineKind::Math { .. } => {
-                let mut f = *fmt;
-                f.color = style.source.math;
-                f.italic = true;
-                self.push_src(span, &f);
+            InlineKind::Math { content } => {
+                if active {
+                    let mut f = *fmt;
+                    f.color = style.source.math;
+                    self.push_src(span, &f);
+                } else {
+                    let tex = self.text.slice(self.abs_range(content)).into_owned();
+                    let mut req =
+                        inkra_math::Request::new(&tex, false, (fmt.size * MATH_SCALE).round());
+                    if tex.contains("ref") {
+                        req.refs = REFS.with(|r| r.borrow().clone());
+                    }
+                    self.push_object(math_scene(&req, fmt.color), fmt, span);
+                }
             }
             InlineKind::FootnoteRef { label } => {
                 if active {
