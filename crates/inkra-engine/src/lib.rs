@@ -6,6 +6,7 @@
 //! preferences, theme loading, key bindings and the menu model. It has no GUI
 //! dependency so that the CLI can drive it headlessly.
 
+pub mod analysis;
 pub mod builtin;
 pub mod command;
 pub mod editing;

@@ -2045,10 +2045,13 @@ name = "inkra-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "inkra-doc",
  "inkra-engine",
  "inkra-export",
  "inkra-markdown",
  "inkra-workspace",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

@@ -12,8 +12,13 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+inkra-doc.workspace = true
+serde_json.workspace = true
 inkra-engine.workspace = true
 inkra-export.workspace = true
 inkra-markdown.workspace = true
 inkra-workspace.workspace = true
 anyhow.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
