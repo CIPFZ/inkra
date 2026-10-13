@@ -172,6 +172,81 @@ fn emoji_and_symbols_picker_types_the_choice() {
 }
 
 #[test]
+fn failed_exports_show_the_whole_error() {
+    let mut h = editor_harness("# Doc\n");
+    let ctx = h.ctx.clone();
+    let bad = std::env::temp_dir().join("inkra-no-such-dir/sub/x.html");
+    h.state_mut()
+        .invoke(&ctx, "file.exportHtml", &serde_json::json!({ "path": bad }));
+    for _ in 0..100 {
+        h.step();
+        if h.query_by_label("Export failed").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    h.get_by_label("Export failed");
+    h.get_by_label("Copy");
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert!(h.query_by_label("Export failed").is_none());
+}
+
+#[test]
+fn integrated_title_bar_renames_on_file_name_click() {
+    let d = tempfile::tempdir().unwrap();
+    let p = d.path().join("t.md");
+    std::fs::write(&p, "x\n").unwrap();
+    let mut sh = shell("en-US");
+    sh.engine
+        .state
+        .prefs
+        .set("appearance.titleBar", serde_json::json!("integrated"));
+    sh.engine
+        .execute("file.open", &serde_json::json!({ "path": p }))
+        .unwrap();
+    sh.engine.take_effects();
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(|ui, shell: &mut Shell| shell.ui(ui), sh);
+    h.run();
+    h.get_by_label("Minimize");
+    // The title "t.md - <folder> - Inkra" is centered; its file name starts it.
+    let title = format!(
+        "t.md - {} - Inkra",
+        d.path().file_name().unwrap().to_string_lossy()
+    );
+    let w = h.ctx.fonts_mut(|f| {
+        f.layout_no_wrap(
+            title.clone(),
+            egui::FontId::proportional(13.0),
+            egui::Color32::WHITE,
+        )
+        .size()
+        .x
+    });
+    let x = 450.0 - w / 2.0 + 8.0;
+    h.event(egui::Event::PointerMoved(egui::pos2(x, 15.0)));
+    h.event(egui::Event::PointerButton {
+        pos: egui::pos2(x, 15.0),
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: Default::default(),
+    });
+    h.event(egui::Event::PointerButton {
+        pos: egui::pos2(x, 15.0),
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: Default::default(),
+    });
+    h.run();
+    assert!(
+        h.state().rename_open(),
+        "clicking the file name opens the rename dialog"
+    );
+}
+
+#[test]
 fn reloading_the_window_applies_the_language() {
     let mut h = harness("en-US");
     h.state_mut()

@@ -317,6 +317,11 @@ impl Shell {
         self.quit_requested
     }
 
+    /// Whether the rename dialog is open.
+    pub fn rename_open(&self) -> bool {
+        self.rename.is_some()
+    }
+
     /// Whether the About dialog is open.
     pub fn about_open(&self) -> bool {
         self.about_open
@@ -1983,6 +1988,7 @@ impl Shell {
             let data = self.menu_data();
             let title = format!("{} - Inkra", self.title_of(&self.engine.state.editor));
             let fg = self.engine.state.style.statusbar_fg;
+            let mut rename = false;
             egui::Panel::top("inkra-menubar").show(ui, |ui| {
                 ui.horizontal(|ui| {
                     if bar {
@@ -1995,14 +2001,18 @@ impl Shell {
                         invocation =
                             menubar::show(ui, &mut self.engine, i18n, self.os, &data, |ui| {
                                 if bar {
-                                    titlebar::controls(ui, &title, fg, i18n);
+                                    rename = titlebar::controls(ui, &title, fg, i18n);
                                 }
                             });
                     } else if bar {
-                        titlebar::controls(ui, &title, fg, i18n);
+                        rename = titlebar::controls(ui, &title, fg, i18n);
                     }
                 });
             });
+            // FS-008: clicking the file name renames a saved document.
+            if rename && self.engine.state.editor.path.is_some() {
+                self.invoke(&ctx, "file.rename", &Value::Null);
+            }
             if let Some(inv) = invocation {
                 self.invoke(&ctx, &inv.id, &inv.params);
             }

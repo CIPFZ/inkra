@@ -336,7 +336,68 @@ fn linux(root: &Path, release: &Path, out: &Path) -> Result<Vec<PathBuf>, String
     } else {
         eprintln!("dist: appimagetool not found, no AppImage");
     }
+    // Flatpak: a manifest around the installed tree; built into a bundle when
+    // flatpak-builder is installed.
+    let manifest = out.join("io.inkra.Inkra.yml");
+    std::fs::write(&manifest, flatpak_manifest(&staging.join(&name))).map_err(io)?;
+    if have("flatpak-builder") {
+        files.push(flatpak(&manifest, out)?);
+    } else {
+        eprintln!(
+            "dist: flatpak-builder not found, wrote {} only",
+            manifest.display()
+        );
+        files.push(manifest);
+    }
     Ok(files)
+}
+
+/// A Flatpak manifest (NF-006) that installs the prebuilt tree at `tree`.
+fn flatpak_manifest(tree: &Path) -> String {
+    format!(
+        r#"app-id: io.inkra.Inkra
+runtime: org.freedesktop.Platform
+runtime-version: "24.08"
+sdk: org.freedesktop.Sdk
+command: inkra
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --filesystem=home
+  - --share=network
+modules:
+  - name: inkra
+    buildsystem: simple
+    build-commands:
+      - cp -R bin share /app/
+    sources:
+      - type: dir
+        path: {tree}
+"#,
+        tree = tree.display()
+    )
+}
+
+fn flatpak(manifest: &Path, out: &Path) -> Result<PathBuf, String> {
+    let build = target_dir().join("flatpak-build");
+    let repo = target_dir().join("flatpak-repo");
+    let mut c = Command::new("flatpak-builder");
+    c.arg("--force-clean")
+        .arg("--repo")
+        .arg(&repo)
+        .arg(&build)
+        .arg(manifest);
+    run("flatpak-builder", c)?;
+    let bundle = out.join(format!("inkra-{VERSION}-{}.flatpak", arch()));
+    let mut b = Command::new("flatpak");
+    b.arg("build-bundle")
+        .arg(&repo)
+        .arg(&bundle)
+        .arg("io.inkra.Inkra");
+    run("flatpak", b)?;
+    Ok(bundle)
 }
 
 // ---- Windows ----

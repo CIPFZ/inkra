@@ -32,8 +32,10 @@ enum Button {
 }
 
 /// The right part of the bar: drag area with the title, then the buttons.
-/// Call inside the bar after the menus.
-pub(crate) fn controls(ui: &mut egui::Ui, title: &str, fg: Color32, i18n: &I18n) {
+/// Call inside the bar after the menus. Returns true when the file name in the
+/// title was clicked (FS-008: rename).
+pub(crate) fn controls(ui: &mut egui::Ui, title: &str, fg: Color32, i18n: &I18n) -> bool {
+    let mut rename = false;
     let ctx = ui.ctx().clone();
     let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
     let full = ui.max_rect();
@@ -48,11 +50,6 @@ pub(crate) fn controls(ui: &mut egui::Ui, title: &str, fg: Color32, i18n: &I18n)
     );
     if drag.width() > 0.0 {
         let r = ui.interact(drag, ui.id().with("titlebar-drag"), Sense::click_and_drag());
-        if r.double_clicked() {
-            ctx.send_viewport_cmd(ViewportCommand::Maximized(!maximized));
-        } else if r.drag_started() {
-            ctx.send_viewport_cmd(ViewportCommand::StartDrag);
-        }
         // The title is centered in the window when it fits, else in the area.
         let font = egui::FontId::proportional(13.0);
         let galley = ui.painter().layout_no_wrap(title.to_owned(), font, fg);
@@ -61,6 +58,25 @@ pub(crate) fn controls(ui: &mut egui::Ui, title: &str, fg: Color32, i18n: &I18n)
             x = drag.left() + 8.0;
         }
         let y = full.top() + (h - galley.size().y) / 2.0;
+        // The file name part of the title (before " - ").
+        let name_w = title.split(" - ").next().map_or(0.0, |n| {
+            ui.painter()
+                .layout_no_wrap(n.to_owned(), egui::FontId::proportional(13.0), fg)
+                .size()
+                .x
+        });
+        let name_rect = Rect::from_min_size(pos2(x, y), vec2(name_w, galley.size().y)).expand(2.0);
+        let on_name = |p: Option<Pos2>| p.is_some_and(|p| name_rect.contains(p));
+        if r.clicked() && on_name(r.interact_pointer_pos()) {
+            rename = true;
+        } else if r.double_clicked() {
+            ctx.send_viewport_cmd(ViewportCommand::Maximized(!maximized));
+        } else if r.drag_started() {
+            ctx.send_viewport_cmd(ViewportCommand::StartDrag);
+        }
+        if on_name(r.hover_pos()) {
+            ctx.set_cursor_icon(CursorIcon::PointingHand);
+        }
         ui.painter()
             .with_clip_rect(drag.shrink2(vec2(4.0, 0.0)))
             .galley(pos2(x, y), galley, fg);
@@ -74,12 +90,14 @@ pub(crate) fn controls(ui: &mut egui::Ui, title: &str, fg: Color32, i18n: &I18n)
             vec2(btn_w, h),
         );
         let r = ui.interact(rect, ui.id().with(("titlebar-btn", k)), Sense::click());
-        let r = r.on_hover_text(i18n.tr(match b {
+        let label = i18n.tr(match b {
             Button::Minimize => "titlebar-minimize",
             Button::Maximize if maximized => "titlebar-restore",
             Button::Maximize => "titlebar-maximize",
             Button::Close => "titlebar-close",
-        }));
+        });
+        r.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &label));
+        let r = r.on_hover_text(&label);
         let mut color = fg;
         if r.hovered() {
             let bg = if b == Button::Close {
@@ -109,6 +127,7 @@ pub(crate) fn controls(ui: &mut egui::Ui, title: &str, fg: Color32, i18n: &I18n)
         Rect::from_min_max(avail.min, pos2(full.right(), full.top() + h)),
         Sense::hover(),
     );
+    rename
 }
 
 fn paint_glyph(p: &egui::Painter, c: Pos2, b: Button, maximized: bool, s: Stroke) {
@@ -136,7 +155,8 @@ fn paint_glyph(p: &egui::Painter, c: Pos2, b: Button, maximized: bool, s: Stroke
     }
 }
 
-/// Resizing from the window edges of an undecorated window.
+/// The frame of an undecorated window: a hairline border, and resizing from
+/// the window edges.
 pub(crate) fn resize_edges(ctx: &egui::Context) {
     use egui::ResizeDirection as D;
     let (maximized, fullscreen) = ctx.input(|i| {
@@ -148,10 +168,21 @@ pub(crate) fn resize_edges(ctx: &egui::Context) {
     if maximized || fullscreen {
         return;
     }
+    let screen = ctx.content_rect();
+    // A hairline frame where the system would draw the window border.
+    ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        egui::Id::new("inkra-window-frame"),
+    ))
+    .rect_stroke(
+        screen,
+        0.0,
+        Stroke::new(1.0, Color32::from_black_alpha(60)),
+        egui::StrokeKind::Inside,
+    );
     let Some(p) = ctx.input(|i| i.pointer.hover_pos()) else {
         return;
     };
-    let screen = ctx.content_rect();
     let m = 5.0;
     let (l, r, t, b) = (
         p.x - screen.left() < m,

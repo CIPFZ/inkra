@@ -52,14 +52,17 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 见 `docs/acceptance/m6.md`：134 页 PDF 0.32 s；书签、可搜索文字、内外链接、表头重复；docx 往返。
 
 ### M7
-见 `docs/acceptance/m7.md` 与 `docs/acceptance/behavior-checklist.md`（185 条，通过率 98.4%）。
+见 `docs/acceptance/m7.md` 与 `docs/acceptance/behavior-checklist.md`（203 条，通过率 98.0%）。
+
+### SPEC 审计补齐（2026-10-13）
+逐章对照 SPEC 第 3～10 章补齐遗漏：主题字段全部生效与系统字体（TH-001/TH-006）、Windows 一体化标题栏（TH-008）、`\[ \]`/`\( \)` 公式与 `\eqref` 跳转、行内公式提示、HTML 样式子集与 `<details>` 折叠、跨文件锚点链接、会话恢复侧边栏/滚动/全屏、关闭最后窗口保持运行、快捷导出、导出错误对话框、Emoji 与符号、AccessKit 块节点、对话框 Enter、重新加载窗口、打字延迟基准与 p95 门槛、1 MB 随机输入测试、XWayland 回退、arm64/universal 打包参数、Flatpak 清单。行为清单扩充到 203 条（✅ 199、⚠ 4，98.0%）。
 
 ## 进行中
 - [ ] ROADMAP 中的 ⚠ 项与预算问题（Windows 内存与冷启动）
 
 ## 已知问题
 - 增量解析器修复：表格从段落中拆分出来的块不能作为重新同步点（proptest 发现，已加回归测试）。
-- 标题栏文件名点击重命名（FS-008）无法在系统原生标题栏上实现，改由 文件 → 重命名（FS-010，P1）提供。
+- 标题栏文件名点击重命名（FS-008）：一体化标题栏（Windows 默认）点击文件名打开重命名框；系统原生标题栏上无法实现，改由 文件 → 重命名（FS-010）提供。
 - Windows GUI 子系统下 `inkra --version` 的输出出现在 cmd 提示符之后（系统行为）；脚本场景可用 `inkra-cli`。
 - egui-winit 在剪贴板无文本时不产生粘贴事件；Inkra 自行接管 winit 事件循环捕获 `Ctrl+V`（`apps/inkra/src/main.rs` 的 `Hooked`）。
 - Wayland 下窗口图标依赖安装 `.desktop` 与 hicolor 图标：`cargo xtask dist` 的 tar.gz/deb/rpm/AppImage 均已包含；Wayland 未实测。

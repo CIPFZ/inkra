@@ -5,6 +5,35 @@ All notable changes to Inkra are documented here. The format follows
 
 ## [Unreleased]
 
+### SPEC audit follow-ups
+- Themes: installed font families by name (`fonts.body/heading/mono`),
+  `fonts.cjk_latin_spacing`, `colors.toolbar_bg`, `headings.auto_number`,
+  `layout.radius/image_radius/task_done`, `[diagram]` colors and a
+  `syntax.tmTheme` beside the theme; the CJK fallback follows the system
+  language and a missing CJK font is reported.
+- Windows: integrated title bar (menus, title and window buttons in one row,
+  drag, double-click, edge resizing); `appearance.titleBar` switches back.
+- Editor: code block language picker, `\[ \]` / `\( \)` math delimiters,
+  clickable `\eqref`, a hint when `$…$` is typed with inline math off,
+  `<details>` folding and the `background-color` / `font-size` style subset in
+  HTML, strict emphasis option, `other.md#heading` links opening in the current
+  window, Emoji & Symbols picker, smooth typewriter scrolling.
+- Files: copy file path, reveal in sidebar and move to in the File menu,
+  deleted-file marker in the title, keep running after the last window
+  (`general.lastWindowClosed`), session restore of sidebar, scroll position
+  and fullscreen, startup folder, word count on hover.
+- Export: quick export next to the document (`file.quickExport`), image
+  background color, an error dialog with Pandoc's full output and a progress
+  note while exporting.
+- Preferences: About page, settings import/export on General, theme folder
+  button, "Reload window" for the interface and spelling languages.
+- Accessibility: visible blocks as AccessKit nodes with roles and heading
+  levels; Enter confirms dialogs; localized file dialog filters.
+- Quality: typing-latency benchmark with a p95 regression gate, a 1 MB random
+  input parser test; `cargo xtask dist --target` for arm64 MSI and a universal
+  dmg; a Flatpak manifest; XWayland fallback (`INKRA_WAYLAND=1` for native
+  Wayland).
+
 ### M7 — Polish and 1.0
 - Preferences window with every setting of SPEC chapter 9, search, import /
   export / reset, and a keymap editor (record, conflicts, reset);

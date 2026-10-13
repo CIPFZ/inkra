@@ -234,6 +234,29 @@
 | 184 | CM-002 | `inkra-cli convert/inspect/lint/fmt/run/commands` 与退出码 | 自动 `inspect_lint_fmt_run_convert` | ✅ |
 | 185 | CM-004 | `--new`、`--source-mode`、`--theme`、`--config`、`--version`、`--measure-startup`、`--no-session` | 手工 L/W | ✅ |
 
+## 11. SPEC 审计补充（2026-10-13）
+
+| # | 需求 | 可观察行为 | 验证 | 结果 |
+|---|---|---|---|---|
+| 186 | TH-001 | 主题字段全部生效：`fonts.mono`、`cjk_latin_spacing`、`toolbar_bg`、`auto_number`、`radius`/`image_radius`、`task_done`、`[diagram]`、`syntax.tmTheme` | 自动 `every_documented_field_is_read`；手工 L 截图（`ui_shot --themes`） | ✅ |
+| 187 | TH-006 | 主题可写系统已安装字体（fontdb 枚举）；CJK 回退按系统语言；无 CJK 字体时提示 | 手工 L 截图（Open Sans / DejaVu Sans Mono） | ✅ |
+| 188 | TH-008 | Windows 一体化标题栏：拖动移动、双击最大化/还原、边缘调整大小、按钮悬停与关闭询问保存；点击文件名重命名（FS-008） | 手工 W 截图；自动 `integrated_title_bar_renames_on_file_name_click` | ✅ |
+| 189 | MD-002 | 标题自动编号只显示不写入 | 自动 `theme_numbers_headings_without_writing_them` | ✅ |
+| 190 | MD-006 | 完成任务按主题变灰/删除线 | 手工 L 截图 | ✅ |
+| 191 | MD-008/035 | `\\[ \\]` 块与 `\\( \\)` 行内公式（偏好）；`\\eqref` 可 Ctrl+点击跳转；首次输入 `$…$` 提示开启 | 自动 `bracket_blocks_and_paren_inlines`、`eqref_in_inline_math_links_to_its_label`、`typing_a_dollar_pair_suggests_inline_math_once` | ✅ |
+| 192 | MD-014 | HTML 块 `background-color`/`font-size`；`<details>` 点击折叠展开 | 自动 `details_summary_folds_and_unfolds` | ✅ |
+| 193 | MD-033 | `other.md#锚点` 在当前窗口打开并跳到标题；有未保存修改时新开窗口 | 自动 `linked_files_open_in_the_current_window_at_the_anchor` | ✅ |
+| 194 | FS-005 | 关闭最后一个窗口可保持运行（`general.lastWindowClosed`） | 自动 `closing_the_last_window_can_keep_the_app_running` | ✅ |
+| 195 | FS-006 | 恢复侧边栏开闭、滚动位置、全屏 | 自动 `session_restores_sidebar_scroll_and_caret` | ✅ |
+| 196 | EX-003/005 | 快捷导出到同目录同名；图片背景色 | 自动 `export_commands_build_jobs_that_run` | ✅ |
+| 197 | EX-004 | 导出失败显示完整错误输出（可复制）；导出中显示进度 | 自动 `failed_exports_show_the_whole_error` | ✅ |
+| 198 | UI-001 | Emoji 与符号选择器（搜索、点击或 Enter 输入） | 自动 `emoji_and_symbols_picker_types_the_choice` | ✅ |
+| 199 | UI-030 | 可见块作为 AccessKit 子节点（标题级别、段落文本） | 自动 `m7_document_is_exposed_to_assistive_technology` | ✅ |
+| 200 | PR-001 | "重新加载窗口"即时应用界面语言与拼写语言 | 自动 `reloading_the_window_applies_the_language` | ✅ |
+| 201 | NF-001 | 打字延迟基准（10 万字，p95 7.7 ms）与 p95 回归门槛 | `cargo xtask bench` | ✅ |
+| 202 | NF-002 | 1 MB 随机字节与随机标点输入解析不 panic | 自动 `one_megabyte_of_random_input_never_panics` | ✅ |
+| 203 | NF-006 | Wayland 会话默认经 XWayland（拖放可用），`INKRA_WAYLAND=1` 强制原生 | 手工 L（日志确认后端选择）；原生 Wayland 未实测 | ⚠ 未实测原生 Wayland |
+
 ## 汇总
 
-共 185 条：✅ 182、⚠ 3、❌ 0，通过率 98.4%。⚠ 项进入 `docs/ROADMAP.md`。
+共 203 条：✅ 199、⚠ 4、❌ 0，通过率 98.0%。⚠ 项进入 `docs/ROADMAP.md`。
