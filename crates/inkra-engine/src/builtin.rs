@@ -90,6 +90,15 @@ pub fn register_all(r: &mut CommandRegistry) {
     ));
     r.register(FnCommand::new(
         spec(
+            "help.thirdParty",
+            Category::Help,
+            "NF-011",
+            "Open the list of third-party software and licenses.",
+        ),
+        |cx, _| crate::help::open(cx, Topic::ThirdParty),
+    ));
+    r.register(FnCommand::new(
+        spec(
             "help.changelog",
             Category::Help,
             "UI-052",

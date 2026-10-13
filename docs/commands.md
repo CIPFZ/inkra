@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **204**
+Registered commands: **205**
 
 
 ## App
@@ -136,6 +136,7 @@ Registered commands: **204**
 | `help.quickStart` | Quick Start | 快速入门 |  |  | — | UI-052 | Open the Quick Start guide. |
 | `help.reportIssue` | Report Issue | 报告问题 |  |  | — | UI-052 | Open the issue tracker in the browser. |
 | `help.shortcuts` | Keyboard Shortcuts | 快捷键参考 |  |  | — | UI-020 | Open the list of commands and keyboard shortcuts. |
+| `help.thirdParty` | Third-party Licenses | 第三方许可 |  |  | — | NF-011 | Open the list of third-party software and licenses. |
 
 ## Format
 

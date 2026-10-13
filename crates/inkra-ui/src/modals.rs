@@ -271,11 +271,13 @@ pub(crate) fn about_dialog(shell: &mut Shell, ctx: &egui::Context) {
     }
     let icon = icon(shell, ctx);
     let i18n = shell.i18n.clone();
+    let mut action = None;
     let response = egui::Modal::new(egui::Id::new("inkra-about")).show(ctx, |ui| {
         ui.set_width(320.0);
         ui.vertical_centered(|ui| {
+            // UI-052: the 256 px icon.
             if let Some(icon) = &icon {
-                ui.add(egui::Image::new(icon).fit_to_exact_size(egui::vec2(128.0, 128.0)));
+                ui.add(egui::Image::new(icon).fit_to_exact_size(egui::vec2(256.0, 256.0)));
             }
             ui.heading(i18n.tr("app-name"));
             ui.label(i18n.tr("app-name-zh"));
@@ -285,13 +287,25 @@ pub(crate) fn about_dialog(shell: &mut Shell, ctx: &egui::Context) {
             ));
             ui.weak(i18n.tr("app-tagline"));
             ui.weak(i18n.tr("about-license"));
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                if ui.link(i18n.tr("cmd-help-thirdParty")).clicked() {
+                    action = Some("help.thirdParty");
+                }
+                if ui.link(i18n.tr("cmd-help-checkUpdates")).clicked() {
+                    action = Some("help.checkUpdates");
+                }
+            });
             ui.add_space(8.0);
             ui.button(i18n.tr("dialog-ok")).clicked()
         })
         .inner
     });
-    if response.inner || response.should_close() {
+    if response.inner || response.should_close() || action.is_some() {
         shell.about_open = false;
+    }
+    if let Some(id) = action {
+        shell.invoke(ctx, id, &Value::Null);
     }
 }
 

@@ -579,3 +579,4 @@ pref-export-html-math--mathml = MathML
 link-hint-ctrl-click = Ctrl+单击打开
 link-hint-click = 单击打开
 link-blocked = 不会从链接启动程序：{ $path }
+cmd-help-thirdParty = 第三方许可

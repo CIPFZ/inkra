@@ -20,6 +20,8 @@ pub enum Topic {
     Shortcuts,
     /// Change log.
     Changelog,
+    /// Third-party licenses.
+    ThirdParty,
 }
 
 impl Topic {
@@ -56,6 +58,10 @@ impl Topic {
                 include_str!("../../../docs/keybindings.md"),
             ),
             (Self::Changelog, _) => ("Changelog.md", include_str!("../../../CHANGELOG.md")),
+            (Self::ThirdParty, _) => (
+                "Third-party Software.md",
+                include_str!("../../../docs/third-party.md"),
+            ),
         }
     }
 }
@@ -112,6 +118,7 @@ mod tests {
             Topic::Themes,
             Topic::Shortcuts,
             Topic::Changelog,
+            Topic::ThirdParty,
         ] {
             for lang in ["zh-CN", "en-US"] {
                 assert!(
