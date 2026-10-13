@@ -38,6 +38,56 @@ pub fn register(r: &mut CommandRegistry) {
     use Category::Edit;
     r.register(FnCommand::new(
         edits(with_params(
+            spec("edit.moveText", Edit, "ED-017", "Move (or with `copy`, copy) the text `from..to` to position `at` (drag and drop)."),
+            r#"{"type":"object","required":["from","to","at"],"properties":{"from":{"type":"integer"},"to":{"type":"integer"},"at":{"type":"integer"},"copy":{"type":"boolean"}}}"#,
+        )),
+        |cx, p| {
+            let n = |k: &str| p.get(k).and_then(Value::as_u64).map(|v| v as usize);
+            let (Some(from), Some(to), Some(at)) = (n("from"), n("to"), n("at")) else {
+                return Ok(Outcome::Done);
+            };
+            let e = &mut cx.app.editor;
+            let len = e.doc.text().len();
+            let (from, to, at) = (from.min(len), to.min(len), at.min(len));
+            if from >= to || (from..=to).contains(&at) {
+                return Ok(Outcome::Done);
+            }
+            let text = e.doc.text().slice(from..to).into_owned();
+            let copy = p.get("copy").and_then(Value::as_bool).unwrap_or(false);
+            let mut edits = vec![inkra_doc::Edit { range: at..at, text: text.clone() }];
+            if !copy {
+                edits.push(inkra_doc::Edit { range: from..to, text: String::new() });
+            }
+            edits.sort_by_key(|x| x.range.start);
+            // The moved text stays selected at its new place.
+            let start = if copy || at < from { at } else { at - (to - from) };
+            let tx = inkra_doc::Transaction::many(edits).with_selection_before(e.sel).with_selection_after(Selection::new(start, start + text.len()));
+            e.apply(tx, UndoPolicy::NewGroup);
+            done(cx)
+        },
+    ));
+    r.register(FnCommand::new(
+        edits(with_params(
+            spec("edit.insertFileLink", Edit, "ED-017", "Insert a link to a file at `at` (an image for picture files), relative to the document when possible."),
+            r#"{"type":"object","required":["path"],"properties":{"path":{"type":"string"},"at":{"type":"integer"}}}"#,
+        )),
+        |cx, p| {
+            let Some(path) = p.get("path").and_then(Value::as_str).map(std::path::PathBuf::from) else {
+                return Ok(Outcome::Done);
+            };
+            let e = &mut cx.app.editor;
+            let at = p.get("at").and_then(Value::as_u64).map_or(e.sel.head, |v| v as usize).min(e.doc.text().len());
+            let rel = inkra_workspace::assets::markdown_src(e.path.as_deref(), &path, true);
+            let name = path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            let image = path.extension().and_then(|x| x.to_str()).is_some_and(|x| matches!(x.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "bmp"));
+            let text = if image { format!("![{name}]({rel})") } else { format!("[{name}]({rel})") };
+            let tx = inkra_doc::Transaction::single(at..at, &text).with_selection_before(e.sel).with_selection_after(Selection::caret(at + text.len()));
+            e.apply(tx, UndoPolicy::NewGroup);
+            done(cx)
+        },
+    ));
+    r.register(FnCommand::new(
+        edits(with_params(
             spec("edit.replaceRange", Edit, "ED-103", "Replace a source range with text and put the caret after it (completions)."),
             r#"{"type":"object","required":["start","end","text"],"properties":{"start":{"type":"integer"},"end":{"type":"integer"},"text":{"type":"string"}}}"#,
         )),

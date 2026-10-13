@@ -566,3 +566,5 @@ pref-general-welcome = 空窗口显示欢迎面板
 pref-view-toolbar = 显示工具栏
 pref-view-showWhitespace = 显示空格与换行符
 welcome-start-writing = 开始写作
+cmd-edit-moveText = 移动文本
+cmd-edit-insertFileLink = 插入文件链接

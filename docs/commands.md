@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **201**
+Registered commands: **203**
 
 
 ## App
@@ -42,11 +42,13 @@ Registered commands: **201**
 | `edit.find` | Find | 查找 | `Ctrl+F` | `⌘F` | — | ED-110 | Open the find bar (pre-filled with the selection). |
 | `edit.findNext` | Find Next | 查找下一个 | `F3` | `F3` | — | ED-110 | Select the next match. |
 | `edit.findPrev` | Find Previous | 查找上一个 | `Shift+F3` | `⇧F3` | — | ED-110 | Select the previous match. |
+| `edit.insertFileLink` | Insert File Link | 插入文件链接 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"},"at":{"type":"integer"}}}` | ED-017 | Insert a link to a file at `at` (an image for picture files), relative to the document when possible. |
 | `edit.insertText` | Insert Text | 插入文本 |  |  | `{"type":"object","required":["text"],"properties":{"text":{"type":"string"}}}` | ED-010 | Type text at the caret (with auto-pairing). |
 | `edit.jumpBottom` | Jump to Bottom | 跳转到底部 | `Ctrl+End` | `⌘↘` | — | ED-020 | Move the caret to the end of the document. |
 | `edit.jumpSelection` | Jump to Selection | 跳转到所选内容 | `Ctrl+J` | `⌘J` | — | ED-020 | Scroll the selection into view. |
 | `edit.jumpTop` | Jump to Top | 跳转到顶部 | `Ctrl+Home` | `⌘↖` | — | ED-020 | Move the caret to the start of the document. |
 | `edit.lineEnding` | Line Ending | 换行符 |  |  | `{"type":"object","required":["style"],"properties":{"style":{"enum":["lf","crlf"]}}}` | ED-106 | Convert all line endings to LF or CRLF. |
+| `edit.moveText` | Move Text | 移动文本 |  |  | `{"type":"object","required":["from","to","at"],"properties":{"from":{"type":"integer"},"to":{"type":"integer"},"at":{"type":"integer"},"copy":{"type":"boolean"}}}` | ED-017 | Move (or with `copy`, copy) the text `from..to` to position `at` (drag and drop). |
 | `edit.newline` | New Line | 换行 |  |  | `{"type":"object","properties":{"soft":{"type":"boolean"}}}` | ED-013 | Insert a line break; continues lists, quotes and code indentation. |
 | `edit.paste` | Paste | 粘贴 | `Ctrl+V` | `⌘V` | `{"type":"object","properties":{"text":{"type":"string"},"html":{"type":"string"},"files":{"type":"array","items":{"type":"string"}}}}` | ED-016 | Paste: images, files, HTML (converted to Markdown) or text (ED-016 rules). |
 | `edit.pastePlain` | Paste as Plain Text | 粘贴为纯文本 | `Ctrl+Shift+V` | `⇧⌘V` | `{"type":"object","properties":{"text":{"type":"string"},"html":{"type":"string"},"files":{"type":"array","items":{"type":"string"}}}}` | ED-016 | Paste as plain text without conversion. |

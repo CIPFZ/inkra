@@ -205,3 +205,31 @@ fn clear_scope_and_move() {
     tx(&mut e, t);
     assert_eq!(e.text(), "- a\n- c\n- b");
 }
+
+#[test]
+fn drag_moves_and_copies_text() {
+    use serde_json::json;
+    let mut e = crate::Engine::new(crate::Preferences::default());
+    e.state.editor = Editor::from_text("one two three");
+    e.execute("edit.moveText", &json!({ "from": 0, "to": 4, "at": 13 }))
+        .unwrap();
+    assert_eq!(e.state.editor.text(), "two threeone ");
+    assert_eq!(&e.state.editor.text()[e.state.editor.sel.range()], "one ");
+    e.execute(
+        "edit.moveText",
+        &json!({ "from": 0, "to": 3, "at": 13, "copy": true }),
+    )
+    .unwrap();
+    assert_eq!(e.state.editor.text(), "two threeone two");
+    // Dropping onto itself does nothing.
+    e.execute("edit.moveText", &json!({ "from": 0, "to": 3, "at": 2 }))
+        .unwrap();
+    assert_eq!(e.state.editor.text(), "two threeone two");
+    e.state.editor = Editor::from_text("x");
+    e.execute(
+        "edit.insertFileLink",
+        &json!({ "path": "/tmp/pic.png", "at": 1 }),
+    )
+    .unwrap();
+    assert_eq!(e.state.editor.text(), "x![pic](/tmp/pic.png)");
+}

@@ -566,3 +566,5 @@ pref-general-welcome = Show the welcome panel in empty windows
 pref-view-toolbar = Show the formatting toolbar
 pref-view-showWhitespace = Show spaces and line ends
 welcome-start-writing = Start writing
+cmd-edit-moveText = Move Text
+cmd-edit-insertFileLink = Insert File Link

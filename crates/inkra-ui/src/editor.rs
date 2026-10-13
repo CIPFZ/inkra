@@ -72,6 +72,10 @@ pub struct EditorView {
     completion_dismissed: Option<usize>,
     col_handles: Vec<Rect>,
     col_drag: Option<(usize, usize)>,
+    /// Selected text being dragged (ED-017): selection, press position, drop target.
+    text_drag: Option<(Selection, usize, Option<usize>)>,
+    /// The last state of `text_drag` (read when the button is released).
+    text_drag_last: Option<(Selection, usize, Option<usize>)>,
     /// Image width being dragged (ED-093): display width so far.
     image_drag: Option<f32>,
     /// A reorder grip being dragged: table start, column?, index.
@@ -124,6 +128,8 @@ impl EditorView {
             col_handles: Vec::new(),
             col_drag: None,
             image_drag: None,
+            text_drag: None,
+            text_drag_last: None,
             grip_drag: None,
             pending_top: None,
             scroll_anim: None,
@@ -704,6 +710,28 @@ impl EditorView {
         let now = ctx.input(|i| i.time);
         let window_focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
         self.caret_screen = caret_rect.map(|r| r.translate(offset));
+        // ED-017: where dragged text would be dropped.
+        if let Some((_, _, Some(at))) = self.text_drag {
+            let lcx = Ctx {
+                doc: &engine.state.editor.doc,
+                style: &self.style,
+                caret: engine.state.editor.sel.head,
+                images: &self.images,
+                syntax_theme: &self.syntax_theme,
+            };
+            let view = &mut self.view;
+            if let Some(r) = ctx.fonts_mut(|fonts| view.caret_rect(at, &lcx, fonts)) {
+                let mut shapes = Vec::new();
+                inkra_render::paint_caret(
+                    &mut shapes,
+                    r.translate(offset),
+                    Vec2::ZERO,
+                    self.style.accent,
+                    2.0,
+                );
+                ui.painter().extend(shapes);
+            }
+        }
         if focused
             && window_focused
             && let Some(r) = self.caret_screen
@@ -1473,9 +1501,15 @@ impl EditorView {
                 out.commands
                     .push(("app.openUrl".into(), json!({ "url": url })));
             }
+            let in_selection =
+                !e.sel.is_empty() && e.sel.range().contains(&at) && at != e.sel.range().start;
             if shift {
                 e.sel = Selection::new(e.sel.anchor, at);
                 self.drag_anchor = Some(Selection::caret(e.sel.anchor));
+            } else if in_selection {
+                // ED-017: pressing inside the selection may start dragging it.
+                self.text_drag = Some((e.sel, at, None));
+                self.drag_anchor = None;
             } else {
                 e.set_selection(Selection::caret(at));
                 self.drag_anchor = Some(Selection::caret(at));
@@ -1543,9 +1577,52 @@ impl EditorView {
             self.last_activity = ctx.input(|i| i.time);
             ctx.request_repaint();
         }
+        if let Some((sel, start, _)) = self.text_drag {
+            self.text_drag_last = self.text_drag;
+            if primary_down && resp.dragged() {
+                let p = self.doc_pos(screen, rect, text_rect);
+                let at = self.hit(ctx, engine, p);
+                self.text_drag = Some((sel, start, Some(at)));
+                self.text_drag_last = self.text_drag;
+                ctx.set_cursor_icon(if command {
+                    egui::CursorIcon::Copy
+                } else {
+                    egui::CursorIcon::Grabbing
+                });
+                ctx.request_repaint();
+            }
+            if released {
+                self.text_drag = None;
+                let e = &mut engine.state.editor;
+                match self.text_drag_target(sel, start) {
+                    // Dropped elsewhere: move (Ctrl/Option: copy).
+                    Some(to) => out.commands.push(("edit.moveText".into(), json!({ "from": sel.range().start, "to": sel.range().end, "at": to, "copy": command }))),
+                    // A click inside the selection places the caret.
+                    None => e.set_selection(Selection::caret(start)),
+                }
+                let _ = e;
+            }
+        }
+        // ED-017: a file dragged from the sidebar tree becomes a link or image.
+        if let Some(path) = resp.dnd_release_payload::<std::path::PathBuf>() {
+            let p = self.doc_pos(screen, rect, text_rect);
+            let at = self.hit(ctx, engine, p);
+            out.commands.push((
+                "edit.insertFileLink".into(),
+                json!({ "path": *path, "at": at }),
+            ));
+        }
         if released {
             self.drag_anchor = None;
         }
+    }
+
+    /// Where a dragged selection would land (`None`: inside itself or not moved).
+    fn text_drag_target(&self, sel: Selection, _start: usize) -> Option<usize> {
+        let (_, _, to) = self.text_drag_last?;
+        let to = to?;
+        let r = sel.range();
+        (to < r.start || to > r.end).then_some(to)
     }
 
     fn handle_keys(
