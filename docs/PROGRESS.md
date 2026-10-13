@@ -59,15 +59,13 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 
 ## 已知问题
 - 增量解析器修复：表格从段落中拆分出来的块不能作为重新同步点（proptest 发现，已加回归测试）。
-- 第二个及以后的窗口（egui immediate viewport）不记忆位置尺寸；根窗口由 eframe persistence 记忆。
 - 标题栏文件名点击重命名（FS-008）无法在系统原生标题栏上实现，改由 文件 → 重命名（FS-010，P1）提供。
 - Windows GUI 子系统下 `inkra --version` 的输出出现在 cmd 提示符之后（系统行为）；脚本场景可用 `inkra-cli`。
 - egui-winit 在剪贴板无文本时不产生粘贴事件；Inkra 自行接管 winit 事件循环捕获 `Ctrl+V`（`apps/inkra/src/main.rs` 的 `Hooked`）。
-- egui 内置界面主题暂为默认外观，品牌主题（Paper/Ink）随 M3 TH-001～TH-003 交付。
-- Wayland 下窗口图标依赖安装 `.desktop` 与 hicolor 图标（`apps/inkra/linux/`），打包在 M7。
+- Wayland 下窗口图标依赖安装 `.desktop` 与 hicolor 图标：`cargo xtask dist` 的 tar.gz/deb/rpm/AppImage 均已包含；Wayland 未实测。
 
 ## 开放问题（需产品负责人决策）
-1. **启动预算与 Windows 渲染后端**：SPEC 2.1 规定 Windows 默认 DX12；在测试机上 DX12 驱动初始化即占 ~330 ms，冷启动 ~400 ms，超出 300 ms 预算；GL 后端 ~260 ms 达标但稳定性不如 DX12。当前保持 DX12 默认（可用 `WGPU_BACKEND=gl` 覆盖），需决策是否改为"GL 优先、DX12 回退"或放宽该项预算。
+1. **启动预算与 Windows 渲染后端**：SPEC 2.1 规定 Windows 默认 DX12；在测试机上 DX12 驱动初始化即占 ~330 ms，冷启动 ~400 ms，超出 300 ms 预算；GL 后端 ~260 ms 达标但稳定性不如 DX12。当前保持 DX12 默认（Windows 构建保留 GL 后端，可用 `WGPU_BACKEND=gl` 覆盖），需决策是否改为"GL 优先、DX12 回退"或放宽该项预算。M7 启动日志分解见 ROADMAP。
 
 ## 回填到 SPEC 的决策
 - 2026-10-12：2.2 层内子层（L1a/L1b、L3a/L3b）、i18n 横切、apps 与 xtask 的位置

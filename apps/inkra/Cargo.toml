@@ -37,7 +37,8 @@ anyhow.workspace = true
 # Only the graphics backends each platform uses (binary size, SPEC 2.5).
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
-wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "wgsl", "dx12"] }
+# GL stays available as the fallback (`WGPU_BACKEND=gl`, PROGRESS open question 1).
+wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "wgsl", "dx12", "gles"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "wgsl", "metal"] }
