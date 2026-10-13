@@ -23,11 +23,13 @@ fn fail(id: &str, e: impl std::fmt::Display) -> CommandError {
     }
 }
 
+/// A path parameter in canonical form, so it compares equal to the paths of
+/// open documents (on Windows both lose the `\\?\` prefix).
 fn path_param(p: &Value, key: &str) -> Option<PathBuf> {
     p.get(key)
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty())
-        .map(PathBuf::from)
+        .map(|s| inkra_workspace::paths::canonical(Path::new(s)))
 }
 
 fn show(cx: &mut CommandContext<'_>, view: SidebarView, toggle: bool) -> CommandResult {
@@ -284,6 +286,7 @@ pub fn register(r: &mut CommandRegistry) {
             let path = path_param(p, "path").ok_or_else(|| fail("sidebar.rename", "no path"))?;
             let name = p.get("name").and_then(Value::as_str).unwrap_or_default();
             let to = fileops::rename(&path, name.trim()).map_err(|e| fail("sidebar.rename", e))?;
+            let to = inkra_workspace::paths::canonical(&to);
             retarget_open_documents(cx.app, &path, &to);
             cx.effects.push(Effect::RevealInTree(to));
             Ok(Outcome::Done)
@@ -298,6 +301,7 @@ pub fn register(r: &mut CommandRegistry) {
             let path = path_param(p, "path").ok_or_else(|| fail("sidebar.move", "no path"))?;
             let dest = path_param(p, "dest").ok_or_else(|| fail("sidebar.move", "no destination"))?;
             let to = fileops::move_into(&path, &dest).map_err(|e| fail("sidebar.move", e))?;
+            let to = inkra_workspace::paths::canonical(&to);
             retarget_open_documents(cx.app, &path, &to);
             cx.effects.push(Effect::RevealInTree(to));
             Ok(Outcome::Done)
@@ -388,7 +392,7 @@ mod tests {
     #[test]
     fn rename_and_move_follow_open_documents() {
         let d = tempfile::tempdir().unwrap();
-        let r = d.path().canonicalize().unwrap();
+        let r = inkra_workspace::paths::canonical(d.path());
         std::fs::create_dir_all(r.join("sub")).unwrap();
         std::fs::write(r.join("a.md"), "# A").unwrap();
         let mut e = Engine::new(Preferences::new());

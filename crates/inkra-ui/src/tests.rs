@@ -537,7 +537,7 @@ fn m4_outline_click_jumps_to_heading() {
 #[test]
 fn m4_quick_open_and_file_tree_move() {
     let d = tempfile::tempdir().unwrap();
-    let r = d.path().canonicalize().unwrap();
+    let r = inkra_workspace::paths::canonical(d.path());
     std::fs::create_dir_all(r.join("notes/deep")).unwrap();
     for i in 0..300 {
         std::fs::write(r.join(format!("notes/n{i}.md")), format!("# {i}\n")).unwrap();
