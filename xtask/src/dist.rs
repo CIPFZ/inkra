@@ -341,7 +341,7 @@ fn wxs(release: &Path, root: &Path) -> String {
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*" Name="Inkra" Language="1033" Version="{VERSION}" Manufacturer="Inkra" UpgradeCode="6B8C3B5E-6F4E-4C3A-9F7B-1E7C2A9D4B10">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" Description="Inkra Markdown editor" />
-    <MajorUpgrade DowngradeErrorMessage="A newer version of Inkra is already installed." />
+    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of Inkra is already installed." />
     <MediaTemplate EmbedCab="yes" />
     <Icon Id="InkraIcon" SourceFile="{icon}" />
     <Property Id="ARPPRODUCTICON" Value="InkraIcon" />
