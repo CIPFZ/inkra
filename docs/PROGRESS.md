@@ -1,11 +1,12 @@
 # Inkra 开发进度
 
 更新时间：2026-10-13
-当前里程碑：M5 数学、图表、脚注、TOC、Alerts（M0～M4 已完成）
+当前里程碑：M6 导出与导入（M0～M5 已完成）
 CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 测试机均通过；macOS 仅做交叉 `cargo clippy --target aarch64-apple-darwin`，未实机运行；无 GitHub 远程仓库，Actions 未实际运行）
 
 ## 已完成的需求编号
 - M0：AD-3（命令注册表）、CM-001（框架 + 3 个样例命令）、PR-001、PR-003、PR-018（键）、UI-001（菜单骨架，macOS muda 原生菜单）、UI-002、UI-010（默认快捷键表）、UI-050、NF-002（命令边界 catch_unwind）、NF-008、CM-004（`--version` / `--help` / `--measure-startup` / `--config` 等参数解析）
+- M5：MD-008（数学块、自动编号、`\tag`/`\label`/`\eqref`）、MD-035（行内公式）、MD-004、MD-010、MD-013、MD-014、MD-039/040、MD-064、MD-068、MD-078、MD-100～MD-102（Mermaid flowchart/sequence/pie、mmdc 兜底、主题配色）、ED-018、ED-041、ED-102～ED-105、PR-031/032/035/036/041
 - M4：ED-080～ED-085（表格呈现、单元格编辑、工具条、命令、拖拽列宽与重排、源码对齐）、FS-020～FS-025（大纲、文章列表、文件树、当前文件定位、搜索入口、字数详情）、FS-030（快速打开）、FS-031（全局搜索）、PR-011（`current` 选项）、PR-014、PR-038、PR-039、PR-043、窗口状态记忆
 - M3：ED-001～ED-006、ED-012～ED-014（实时模式语义）、ED-016 规则 1（粘贴位图）、ED-020、ED-030/031/033/034/039/040、ED-050/051/052/053/054/056～061/063/070、ED-090/091/092（本地图片、相对路径、`./<doc>.assets/` 复制）、ED-130（右键菜单 P0 项，表格菜单随 M4）、FS-001～FS-008、FS-040（视图菜单：侧边栏、源码模式、专注、打字机、状态栏、菜单栏、全屏、总在最前、缩放 50%～300%、性能叠层）、TH-001～TH-003（六个原创主题 + Auto + 热重载）、WM-001、WM-002、WM-003、MD-075、PR-010～PR-012、PR-016、PR-017、PR-030
 - M2：ED-010（输入、IME 预编辑与候选窗定位）、ED-011（拖拽/Shift 扩展/双击词/三击块/Ctrl+A 两段式）、ED-012（源码模式下按字/词/行首删除）、ED-013（源码模式换行延续：列表、任务、引用、代码缩进、空项退出、嵌套空项先提升）、ED-014、ED-015、ED-016（复制 Markdown+HTML、粘贴 HTML→Markdown、URL 粘贴为链接、纯文本粘贴、AI 公式分隔符转换、文件列表）、ED-020（闪烁 530 ms、自动滚动留 2 行边距、PageUp/Down）、ED-100、ED-101（自动续写与有序列表重编号）、ED-110、ED-111、ED-120（切换命令与状态栏按钮）、ED-121（等宽、行号、Markdown 高亮、软换行）、FS-025（状态栏字数，基础）、FS-040（性能叠层）
@@ -42,8 +43,11 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 ### M4
 见 `docs/acceptance/m4.md`：全部验收项通过（快速打开 1 万文件 2 ms；全局搜索 1 万文件首批 1 ms）。
 
+### M5
+见 `docs/acceptance/m5.md`：数学语料 233 个公式、图表语料 35 个全部渲染。
+
 ## 进行中
-- [ ] M5：inkra-math（TeX 子集排版、自动编号）、inkra-diagram（flowchart/sequence/pie）、脚注气泡、`[TOC]`、Alerts、HTML 块子集、emoji 补全、智能标点、拼写检查
+- [ ] M6：HTML 导出（含样式 / 不含样式）、PDF（krilla，分页、书签、链接、页眉页脚）、图片导出、Pandoc 桥接与导入、页面设置、打印
 
 ## 已知问题
 - 增量解析器修复：表格从段落中拆分出来的块不能作为重新同步点（proptest 发现，已加回归测试）。
@@ -66,6 +70,7 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 - 2026-10-12：附录 D-1 依赖系统 CJK 字体
 - 2026-10-12：PR-018 键名 `general.language`
 - 2026-10-13：ED-020 光标 30 s 无输入后停止闪烁（空闲 CPU 0%）
+- 2026-10-13：数学字体选用 STIX Two Math（OFL，SPEC 2.1 允许的两者之一）
 - 2026-10-13：PR-011 键 `general.openFileIn` 增加 `current`
 - 2026-10-13：TH-002 字体名映射到随包字体（Inter / Source Serif 4 / JetBrains Mono），用户主题目录格式，选择主题时同步 Auto 明暗槽位
 
@@ -84,4 +89,4 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 - 语料：`cargo xtask corpus` 拉取固定提交的 7 个仓库到 `target/corpus`（不入库）。
 
 ## 下次会话从这里继续
-- M5：先做 inkra-math（自研 TeX 子集解析与排版，字体用 Latin Modern Math / STIX Two Math（OFL）），再做图表与其余扩展。
+- M6：新建 inkra-export：HTML 生成器（与复制为 HTML 共用），然后 krilla PDF（复用 inkra-layout 的块布局做分页，公式/图表矢量嵌入）。

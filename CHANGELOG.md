@@ -5,6 +5,23 @@ All notable changes to Inkra are documented here. The format follows
 
 ## [Unreleased]
 
+### M5 — Math, diagrams and extensions
+- Math: own TeX engine on the OpenType MATH table of STIX Two Math — fractions,
+  radicals, big operators with limits, stretchy delimiters (variants and
+  assemblies), matrices, cases, aligned/gathered, accents, braces, colors, boxes,
+  `\text` with CJK; inline and display math, AMS/all numbering, `\tag`,
+  `\label`/`\eqref`; unsupported commands in red. 233-formula corpus.
+- Diagrams: Mermaid flowchart (all node shapes, edge styles, labels, chains, `&`,
+  subgraphs, styles; layered layout), sequence (participants, actors, six arrows,
+  notes, blocks, activations, autonumber) and pie; theme palette; parse errors with
+  line numbers over the last good rendering; optional `mmdc` for other types.
+- Footnotes numbered by first reference with hover bubbles and jumps; `[TOC]`;
+  HTML block subset and inline HTML formatting; SVG images (resvg).
+- Emoji shortcodes (gemoji) and completion; heading-link and footnote completion;
+  smart punctuation; spell checking (spellbook, en_US) with suggestions.
+- Commands: alerts, footnotes, link references, HTML blocks, clear format, style
+  scope, move paragraph/list item.
+
 ### M4 — Tables, sidebar and search
 - Tables: aligned source rewrite (CJK width 2), Tab/Shift+Tab/Enter navigation,
   `|` escaping, protected pipes, toolbar and table menu, insert/delete/move rows and
