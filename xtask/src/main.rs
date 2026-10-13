@@ -262,8 +262,8 @@ fn p95(path: &Path) -> Option<f64> {
     Some(per[k])
 }
 
-/// `cargo xtask bench [--save]` (NF-001): runs the criterion benchmarks (parser
-/// and typing latency); with a saved `reference` baseline, fails when a
+/// `cargo xtask bench [--save]` (NF-001, TS-006): runs the criterion benchmarks
+/// (parser, typing latency, PDF and HTML export); with a saved `reference` baseline, fails when a
 /// benchmark's p95 got more than 20 % slower. `--save` records the current
 /// numbers as the reference.
 fn bench(save: bool) -> Result<(), String> {
@@ -273,7 +273,11 @@ fn bench(save: bool) -> Result<(), String> {
     let has_reference = std::fs::read_dir(&crit)
         .map(|rd| rd.flatten().any(|e| e.path().join("reference").is_dir()))
         .unwrap_or(false);
-    for (pkg, name) in [("inkra-markdown", "parse"), ("inkra-layout", "typing")] {
+    for (pkg, name) in [
+        ("inkra-markdown", "parse"),
+        ("inkra-layout", "typing"),
+        ("inkra-export", "export"),
+    ] {
         let mut c = cargo();
         c.args(["bench", "-p", pkg, "--bench", name, "--"]);
         if save {
