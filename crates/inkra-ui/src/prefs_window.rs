@@ -75,6 +75,7 @@ fn keys(page: Page) -> &'static [Option<&'static str>] {
             Some("view.menuBar"),
             Some("view.toolbar"),
             Some("appearance.rememberWindowSize"),
+            Some("appearance.titleFullPath"),
             Some("appearance.uiFontSize"),
             None,
             Some("appearance.maxWidth"),

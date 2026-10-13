@@ -580,3 +580,4 @@ link-hint-ctrl-click = Ctrl+click to open
 link-hint-click = Click to open
 link-blocked = Programs are not opened from links: { $path }
 cmd-help-thirdParty = Third-party Licenses
+pref-appearance-titleFullPath = Show the full path in the title bar

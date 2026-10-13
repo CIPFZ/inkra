@@ -171,6 +171,13 @@ pub const PREFS: &[PrefSpec] = &[
         doc: "Check GitHub Releases for a newer version at startup (never downloads).",
     },
     PrefSpec {
+        key: "appearance.titleFullPath",
+        default: r#"false"#,
+        kind: PrefKind::Bool,
+        req: "FS-008",
+        doc: "Show the document's full path in the title bar.",
+    },
+    PrefSpec {
         key: "appearance.maxWidth",
         default: r#"0"#,
         kind: PrefKind::Number,

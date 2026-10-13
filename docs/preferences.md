@@ -24,6 +24,7 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `general.dropMarkdown` | `open` / `link` | `"open"` | ED-017 | A Markdown file dropped on the editor opens, or is inserted as a link. |
 | `general.saveToast` | bool | `true` | UI-041 | Show a short notice after saving. |
 | `general.checkUpdates` | bool | `true` | PR-020 | Check GitHub Releases for a newer version at startup (never downloads). |
+| `appearance.titleFullPath` | bool | `false` | FS-008 | Show the document's full path in the title bar. |
 | `appearance.maxWidth` | number | `0` | WM-004 | Maximum width of the text column in pixels (0: the theme's). |
 | `appearance.centerWide` | bool | `true` | WM-004 | Center the text column in wide windows (otherwise it starts at the left). |
 | `appearance.autoHideScrollbar` | bool | `false` | WM-004 | Show the scrollbar only while scrolling or when the pointer is near it. |

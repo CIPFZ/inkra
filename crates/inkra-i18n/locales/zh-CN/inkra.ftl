@@ -4,7 +4,7 @@
 app-name = Inkra
 app-name-zh = 墨刻
 app-tagline = 原生、轻量的所见即所得 Markdown 编辑器
-untitled = Untitled
+untitled = 未命名
 about-title = 关于 Inkra
 about-version = 版本 { $version }
 about-license = 以 MIT OR Apache-2.0 许可证发布
@@ -580,3 +580,4 @@ link-hint-ctrl-click = Ctrl+单击打开
 link-hint-click = 单击打开
 link-blocked = 不会从链接启动程序：{ $path }
 cmd-help-thirdParty = 第三方许可
+pref-appearance-titleFullPath = 在标题栏显示完整路径

@@ -1112,6 +1112,10 @@ impl Shell {
                 } else {
                     String::new()
                 };
+                // FS-008: optionally the full path instead of the folder name.
+                if self.engine.state.prefs.bool("appearance.titleFullPath") {
+                    return format!("{dirty}{}{ro}", p.display());
+                }
                 match folder {
                     Some(f) => format!("{dirty}{name}{ro} - {f}"),
                     None => format!("{dirty}{name}{ro}"),
