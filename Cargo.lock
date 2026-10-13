@@ -1915,6 +1915,12 @@ dependencies = [
 [[package]]
 name = "inkra-diagram"
 version = "0.1.0"
+dependencies = [
+ "proptest",
+ "tiny-skia",
+ "tiny-skia-path",
+ "ttf-parser",
+]
 
 [[package]]
 name = "inkra-doc"
@@ -2000,6 +2006,7 @@ dependencies = [
  "inkra-text",
  "log",
  "proptest",
+ "tiny-skia-path",
 ]
 
 [[package]]

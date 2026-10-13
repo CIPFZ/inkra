@@ -12,4 +12,10 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+ttf-parser.workspace = true
+tiny-skia-path.workspace = true
 
+
+[dev-dependencies]
+proptest.workspace = true
+tiny-skia = { workspace = true, features = ["png-format"] }
