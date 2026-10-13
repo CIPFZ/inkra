@@ -17,6 +17,27 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `appearance.themeAuto` | bool | `false` | TH-002 | Follow the system light/dark setting (Auto theme). |
 | `appearance.lightTheme` | string | `"Paper"` | TH-002 | Theme used by Auto in light mode. |
 | `appearance.darkTheme` | string | `"Ink"` | TH-002 | Theme used by Auto in dark mode. |
+| `general.defaultNewline` | `lf` / `crlf` | `"lf"` | PR-016 | Line ending of new documents (existing files keep theirs). |
+| `general.trimTrailingOnSave` | bool | `false` | PR-013 | Remove trailing whitespace when saving (hard line breaks keep two spaces). |
+| `general.normalizeOnSave` | bool | `false` | MD-092 | Normalize when saving: pad tables, renumber ordered lists, trim trailing whitespace, end with one newline. |
+| `general.markdownExtensions` | string[] | `["md", "markdown", "mdown", "mkd", "mkdn", "mdwn", "mdtxt", "mdtext", "text", "txt", "rmd", "qmd"]` | PR-015 | File extensions treated as Markdown (file tree, open dialog, drops). |
+| `general.checkUpdates` | bool | `true` | PR-020 | Check GitHub Releases for a newer version at startup (never downloads). |
+| `appearance.rememberWindowSize` | bool | `true` | TH-008 | Reopen windows at their last size and position. |
+| `sidebar.fontSize` | number | `13` | TH-008 | Sidebar font size in points. |
+| `sidebar.lineHeight` | number | `1.6` | TH-008 | Sidebar row height as a multiple of the font size. |
+| `editor.firstLineIndent` | bool | `false` | PR-034 | Indent the first line of each paragraph by two characters. |
+| `editor.copyAs` | `markdown` / `plain` | `"markdown"` | PR-037 | What Copy puts in text/plain: the Markdown source or plain text. |
+| `editor.ctrlWheelZoom` | bool | `true` | PR-039 | Ctrl + mouse wheel zooms the document. |
+| `editor.linkClick` | `ctrlClick` / `click` | `"ctrlClick"` | PR-040 | Open links with Ctrl+click or a plain click. |
+| `editor.cursorBlink` | bool | `true` | PR-042 | Blink the caret. |
+| `editor.smoothScroll` | bool | `true` | PR-042 | Animate scrolling to a position (outline, search hits). |
+| `editor.spellcheckDictionary` | string | `""` | PR-035 | Personal dictionary file (empty: `dictionary.txt` in the configuration folder). |
+| `view.wordCount` | bool | `true` | PR-043 | Show the word count in the status bar. |
+| `image.maxWidthFollowsEditor` | bool | `true` | TH-008 | Limit image width to the text column (otherwise images may extend into the margins up to the window). |
+| `image.showTitle` | bool | `false` | TH-008 | Show an image's title under it as a caption. |
+| `markdown.codeLineNumbers` | bool | `false` | MD-071 | Show line numbers in code blocks. |
+| `markdown.codeWrap` | bool | `false` | MD-072 | Wrap long lines in code blocks instead of scrolling them. |
+| `markdown.preserveBlankLines` | bool | `false` | MD-074 | Show runs of blank lines as extra space (exported as `<br>`). |
 | `image.insertAction` | `assets` / `folder` / `none` | `"assets"` | ED-092 | Inserted images: copy to `./<name>.assets/`, copy to `image.copyFolder`, or keep the original path. |
 | `image.copyFolder` | string | `""` | ED-092 | Target folder pattern for `folder` (supports `${filename}`, `${filepath}`). |
 | `image.applyToLocal` | bool | `false` | ED-092 | Also copy inserted local image files (pasted bitmaps are always saved). |

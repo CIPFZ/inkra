@@ -6,6 +6,7 @@ pub mod context;
 pub mod find;
 pub mod format_ops;
 pub mod live_ops;
+pub mod normalize;
 pub mod ops;
 pub mod table;
 

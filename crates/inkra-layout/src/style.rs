@@ -76,6 +76,18 @@ pub struct Style {
     /// Layout for print/export: HTML comments are hidden (MD-040). Change
     /// `version` along with it.
     pub print: bool,
+    /// Wrap code block lines (MD-072); otherwise wide code scrolls.
+    pub code_wrap: bool,
+    /// Line numbers in code blocks (MD-071).
+    pub code_line_numbers: bool,
+    /// Indent the first line of paragraphs (PR-034).
+    pub first_line_indent: bool,
+    /// Extra blank lines between blocks add space (MD-074).
+    pub preserve_blank_lines: bool,
+    /// Image titles as captions.
+    pub image_titles: bool,
+    /// Images are limited to the text column (otherwise to their natural size).
+    pub image_fit_column: bool,
     /// Body font size in points.
     pub size: f32,
     /// Monospace font size in points.
@@ -182,6 +194,12 @@ impl Default for Style {
             toc_depth: 6,
             spellcheck: false,
             print: false,
+            code_wrap: true,
+            code_line_numbers: false,
+            first_line_indent: false,
+            preserve_blank_lines: false,
+            image_titles: false,
+            image_fit_column: true,
             size: 16.0,
             mono_size: 14.0,
             line_height: 1.6,

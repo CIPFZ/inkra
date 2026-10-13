@@ -250,6 +250,9 @@ fn main() -> std::process::ExitCode {
     let i18n = I18n::new(&lang);
     let mut engine = Engine::new(prefs);
     engine.state.paths = Some(paths.clone());
+    for p in engine.load_keybindings() {
+        log::warn!("{p}");
+    }
     let session_file = paths.session_file();
     let session = if args.no_session {
         Default::default()

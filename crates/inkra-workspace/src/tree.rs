@@ -25,11 +25,38 @@ pub const MARKDOWN_EXTS: &[&str] = &[
     "apib",
 ];
 
+static EXTS: std::sync::RwLock<Vec<String>> = std::sync::RwLock::new(Vec::new());
+
+/// Sets the extensions treated as Markdown (PR-015); empty restores the default
+/// list.
+pub fn set_markdown_exts(exts: &[String]) {
+    if let Ok(mut e) = EXTS.write() {
+        *e = exts
+            .iter()
+            .map(|x| x.trim().trim_start_matches('.').to_ascii_lowercase())
+            .filter(|x| !x.is_empty())
+            .collect();
+    }
+}
+
+/// The extensions treated as Markdown.
+pub fn markdown_exts() -> Vec<String> {
+    match EXTS.read() {
+        Ok(e) if !e.is_empty() => e.clone(),
+        _ => MARKDOWN_EXTS.iter().map(|s| (*s).to_owned()).collect(),
+    }
+}
+
 /// Whether `p` has a Markdown extension.
 pub fn is_markdown(p: &Path) -> bool {
-    p.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| MARKDOWN_EXTS.contains(&e.to_ascii_lowercase().as_str()))
+    let Some(e) = p.extension().and_then(|e| e.to_str()) else {
+        return false;
+    };
+    let e = e.to_ascii_lowercase();
+    match EXTS.read() {
+        Ok(list) if !list.is_empty() => list.contains(&e),
+        _ => MARKDOWN_EXTS.contains(&e.as_str()),
+    }
 }
 
 /// What the tree and lists show.

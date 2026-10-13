@@ -168,6 +168,25 @@ impl AppState {
                 s.diagrams = self.prefs.bool("markdown.diagrams");
                 s.toc_depth = self.prefs.f64("markdown.tocDepth").clamp(1.0, 6.0) as u8;
                 s.spellcheck = self.prefs.bool("editor.spellcheck");
+                let p = &self.prefs;
+                s.code_wrap = p.bool("markdown.codeWrap");
+                s.code_line_numbers = p.bool("markdown.codeLineNumbers");
+                s.first_line_indent = p.bool("editor.firstLineIndent");
+                s.preserve_blank_lines = p.bool("markdown.preserveBlankLines");
+                s.image_titles = p.bool("image.showTitle");
+                s.image_fit_column = p.bool("image.maxWidthFollowsEditor");
+                let bits = [
+                    s.code_wrap,
+                    s.code_line_numbers,
+                    s.first_line_indent,
+                    s.preserve_blank_lines,
+                    s.image_titles,
+                    s.image_fit_column,
+                ]
+                .iter()
+                .enumerate()
+                .fold(0u64, |acc, (k, b)| acc | (u64::from(*b) << k));
+                s.version = s.version.wrapping_add(bits << 32);
                 s.version = s.version.wrapping_add(u64::from(s.spellcheck) << 24);
                 s.version = s.version.wrapping_add(u64::from(s.toc_depth) << 16);
                 s.version = s
@@ -219,6 +238,7 @@ impl AppState {
         editor.prefs = crate::edit_prefs(&self.prefs);
         if editor.doc.text().is_empty() {
             editor.doc.set_options(crate::markdown_options(&self.prefs));
+            editor.doc.line_ending = crate::new_line_ending(&self.prefs);
         }
         self.next_window = self.next_window.max(self.meta.id) + 1;
         let id = self.next_window;

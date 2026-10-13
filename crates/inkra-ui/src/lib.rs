@@ -710,7 +710,7 @@ impl Shell {
                 .and_then(|e| e.to_str())
                 .map(str::to_ascii_lowercase)
                 .unwrap_or_default();
-            if dialogs::MARKDOWN_EXTS.contains(&ext.as_str()) {
+            if inkra_workspace::tree::markdown_exts().contains(&ext) {
                 self.invoke(ctx, "file.open", &json!({ "path": path }));
             } else if matches!(
                 ext.as_str(),
@@ -751,7 +751,7 @@ impl Shell {
                 .and_then(|p| p.parent().map(Path::to_owned));
             if let Some(path) = images::resolve(base.as_deref(), file) {
                 let is_md = path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
-                    dialogs::MARKDOWN_EXTS.contains(&e.to_ascii_lowercase().as_str())
+                    inkra_workspace::tree::markdown_exts().contains(&e.to_ascii_lowercase())
                 });
                 if is_md && path.exists() {
                     self.invoke(ctx, "file.open", &json!({ "path": path }));

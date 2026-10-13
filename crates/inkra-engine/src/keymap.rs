@@ -492,6 +492,90 @@ impl Keymap {
         self.bindings.retain(|b| b.command != command);
     }
 
+    /// Applies the user's `keybindings.json` (UI-020): an array of
+    /// `{"command": id, "key": "Ctrl+B" | null, "args": {…}?}`. An entry with
+    /// `"key": null` removes the command's default bindings; an entry with a key
+    /// adds a binding that wins over others on the same chord. Returns one
+    /// message per entry that could not be used.
+    pub fn apply_user(&mut self, json: &str) -> Vec<String> {
+        let mut problems = Vec::new();
+        let list: Vec<Value> = match serde_json::from_str(json) {
+            Ok(Value::Array(a)) => a,
+            Ok(_) => return vec!["keybindings.json must contain an array".into()],
+            Err(e) => return vec![format!("keybindings.json: {e}")],
+        };
+        // Removals first, so that a removal and a new key for the same command
+        // can come in any order.
+        for v in &list {
+            if v.get("key").is_some_and(Value::is_null)
+                && let Some(c) = v.get("command").and_then(Value::as_str)
+            {
+                self.unbind_command(c);
+            }
+        }
+        for (k, v) in list.iter().enumerate() {
+            let Some(cmd) = v.get("command").and_then(Value::as_str) else {
+                problems.push(format!("entry {}: missing \"command\"", k + 1));
+                continue;
+            };
+            match v.get("key") {
+                Some(Value::Null) => {}
+                Some(Value::String(key)) => match key.parse::<KeyChord>() {
+                    Ok(chord) => {
+                        self.bind(chord, cmd, v.get("args").cloned().unwrap_or(Value::Null))
+                    }
+                    Err(e) => problems.push(format!("entry {} ({cmd}): {e}", k + 1)),
+                },
+                _ => problems.push(format!(
+                    "entry {} ({cmd}): \"key\" must be a string or null",
+                    k + 1
+                )),
+            }
+        }
+        problems
+    }
+
+    /// The user entries that turn `defaults` into `self`, for writing
+    /// `keybindings.json` from the keymap editor: removals for commands whose
+    /// bindings changed, then their current keys.
+    pub fn user_entries(&self, defaults: &Keymap) -> Vec<Value> {
+        let mut commands: Vec<&str> = self
+            .bindings
+            .iter()
+            .chain(&defaults.bindings)
+            .map(|b| b.command.as_str())
+            .collect();
+        commands.sort_unstable();
+        commands.dedup();
+        let mut out = Vec::new();
+        for c in commands {
+            let mine: Vec<&Binding> = self.bindings.iter().filter(|b| b.command == c).collect();
+            let def: Vec<&Binding> = defaults
+                .bindings
+                .iter()
+                .filter(|b| b.command == c)
+                .collect();
+            let same = mine.len() == def.len()
+                && mine
+                    .iter()
+                    .all(|m| def.iter().any(|d| d.chord == m.chord && d.when == m.when));
+            if same {
+                continue;
+            }
+            if !def.is_empty() {
+                out.push(serde_json::json!({ "command": c, "key": Value::Null }));
+            }
+            for m in mine {
+                let mut e = serde_json::json!({ "command": c, "key": m.chord.to_string() });
+                if !m.params.is_null() {
+                    e["args"] = m.params.clone();
+                }
+                out.push(e);
+            }
+        }
+        out
+    }
+
     /// Adds a binding (taking precedence over existing ones for the same chord).
     pub fn bind(&mut self, chord: KeyChord, command: &str, params: Value) {
         self.bindings
@@ -511,6 +595,33 @@ impl Keymap {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn user_keybindings() {
+        let defaults = Keymap::defaults(Os::Windows);
+        let mut km = defaults.clone();
+        let problems = km.apply_user(
+            r#"[{"command":"format.bold","key":null},{"command":"format.bold","key":"Ctrl+Alt+B"},{"command":"x","key":"Nope+?"},{"key":"Ctrl+1"}]"#,
+        );
+        assert_eq!(problems.len(), 2);
+        assert_eq!(
+            km.chord_for("format.bold")
+                .map(|c| c.to_string())
+                .as_deref(),
+            Some("Ctrl+Alt+B")
+        );
+        assert!(km.resolve(&"Ctrl+B".parse().unwrap(), false).is_none());
+        // Round trip through the entries written by the editor.
+        let entries = km.user_entries(&defaults);
+        let mut again = defaults.clone();
+        assert!(
+            again
+                .apply_user(&serde_json::to_string(&entries).unwrap())
+                .is_empty()
+        );
+        assert_eq!(again.chord_for("format.bold"), km.chord_for("format.bold"));
+        assert!(defaults.user_entries(&defaults).is_empty());
+    }
 
     #[test]
     fn parse_and_display() {

@@ -85,7 +85,7 @@ impl Dialogs {
             let result = match &purpose {
                 Purpose::InsertImage => d.add_filter("Images", IMAGE_EXTS).pick_file(),
                 Purpose::Open => d
-                    .add_filter("Markdown", MARKDOWN_EXTS)
+                    .add_filter("Markdown", &inkra_workspace::tree::markdown_exts())
                     .add_filter("All files", &["*"])
                     .pick_file(),
                 Purpose::OpenFolder | Purpose::MoveTo(_) => d.pick_folder(),

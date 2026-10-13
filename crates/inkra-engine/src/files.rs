@@ -86,6 +86,21 @@ pub fn open_path(cx: &mut CommandContext<'_>, path: &Path) -> CommandResult {
 
 /// Saves the active document to `path` (FS-003).
 pub fn save_to(cx: &mut CommandContext<'_>, path: &Path) -> CommandResult {
+    // PR-013 / MD-092: clean up before writing (undoable).
+    let what = if cx.app.prefs.bool("general.normalizeOnSave") {
+        Some(crate::editor::normalize::Normalize::ALL)
+    } else if cx.app.prefs.bool("general.trimTrailingOnSave") {
+        Some(crate::editor::normalize::Normalize::TRAILING)
+    } else {
+        None
+    };
+    if let Some(what) = what {
+        let e = &mut cx.app.editor;
+        let new = crate::editor::normalize::normalize(&e.doc, what);
+        if let Some(tx) = crate::editor::normalize::replace_with(&e.doc, e.sel, &new) {
+            e.apply(tx, inkra_doc::UndoPolicy::NewGroup);
+        }
+    }
     let disk = files::save(path, &cx.app.editor.doc).map_err(|e| err("file.save", e))?;
     let e = &mut cx.app.editor;
     e.doc.mark_saved();

@@ -17,8 +17,24 @@ pub fn register_all(r: &mut CommandRegistry) {
             if !cx.app.set_pref(&key, value) {
                 return Err(crate::command::CommandError::Failed { id: "app.setPreference".into(), msg: format!("invalid value for `{key}`") });
             }
-            if key.starts_with("appearance.") || key == "markdown.mathNumbering" || key == "markdown.diagrams" || key == "markdown.tocDepth" || key == "editor.spellcheck" {
+            const STYLE_KEYS: &[&str] = &[
+                "markdown.mathNumbering",
+                "markdown.diagrams",
+                "markdown.tocDepth",
+                "editor.spellcheck",
+                "markdown.codeWrap",
+                "markdown.codeLineNumbers",
+                "editor.firstLineIndent",
+                "markdown.preserveBlankLines",
+                "image.showTitle",
+                "image.maxWidthFollowsEditor",
+            ];
+            if key.starts_with("appearance.") || STYLE_KEYS.contains(&key.as_str()) {
                 let _ = cx.app.reload_theme();
+            }
+            if key == "general.markdownExtensions" {
+                inkra_workspace::tree::set_markdown_exts(&cx.app.prefs.strings(&key));
+                cx.effects.push(Effect::RootChanged);
             }
             if key.starts_with("markdown.") || key.starts_with("editor.") {
                 // Parse options and editing preferences apply to every open

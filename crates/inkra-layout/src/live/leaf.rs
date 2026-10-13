@@ -244,11 +244,15 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                     if let Some(img) =
                         sole_image(b).filter(|_| matches!(b.kind, BlockKind::Paragraph))
                     {
-                        let InlineKind::Image { dest, .. } = &img.kind else {
+                        let InlineKind::Image { dest, title, .. } = &img.kind else {
                             unreachable!()
                         };
                         let size = cx.images.size(dest).unwrap_or(PLACEHOLDER);
-                        let scale = (w / size[0]).min(1.0);
+                        let scale = if style.image_fit_column {
+                            (w / size[0]).min(1.0)
+                        } else {
+                            1.0
+                        };
                         let r =
                             Rect::from_min_size(pos2(x, y), vec2(size[0] * scale, size[1] * scale));
                         out.decos.push(Deco::Image {
@@ -257,6 +261,31 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                         });
                         content_h = r.height();
                         first_row_h = content_h;
+                        if style.image_titles
+                            && let Some(t) = title.as_ref().filter(|t| !t.trim().is_empty())
+                        {
+                            // The title as a caption under the image.
+                            let mut cf = fmt;
+                            cf.size = (em * 0.85).round();
+                            cf.color = style.fg_muted;
+                            cf.italic = true;
+                            let mut cb = Builder::new(
+                                text,
+                                base,
+                                delta,
+                                None,
+                                style,
+                                r.width().max(w.min(240.0)),
+                            );
+                            cb.push(t, &cf, None, true);
+                            let (ch, _) = galley_height(fonts, &cb.job);
+                            out.runs.push(RunSpec {
+                                job: cb.job,
+                                pos: vec2(x, y + content_h + 4.0),
+                                map: SourceMap::default(),
+                            });
+                            content_h += ch + 4.0;
+                        }
                         // ED-002: the source is editable below the image when the
                         // caret is on its line.
                         let mut bl = Builder::new(text, base, delta, Some(cx.caret), style, w);
@@ -329,6 +358,18 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                             .first()
                             .map_or(item.src.start, |l| abs(&l.span).start);
                         bl.finish_empty(start, &pf);
+                        // PR-034: body paragraphs (not list items or quotes' first
+                        // lines after markers) start indented by two characters.
+                        if style.first_line_indent
+                            && matches!(b.kind, BlockKind::Paragraph)
+                            && !item
+                                .frames
+                                .iter()
+                                .any(|f| matches!(f, super::Frame::Item { .. }))
+                            && let Some(sec) = bl.job.sections.first_mut()
+                        {
+                            sec.leading_space = 2.0 * em;
+                        }
                         let (h, fr) = galley_height(fonts, &bl.job);
                         content_h = h;
                         first_row_h = fr;
@@ -354,7 +395,20 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                         })
                         .unwrap_or_default();
                     let pad = style.code_padding;
-                    let (job, map, body) = code_job(cx, b, delta, &lang, w - 2.0 * pad, base);
+                    // MD-071: a gutter of line numbers; MD-072: unwrapped code
+                    // makes the box as wide as its longest line (it scrolls).
+                    let gutter = if style.code_line_numbers {
+                        let digits = b.lines.len().max(1).to_string().len() as f32;
+                        (digits + 1.5) * style.mono_size * 0.6
+                    } else {
+                        0.0
+                    };
+                    let wrap_w = if style.code_wrap {
+                        w - 2.0 * pad - gutter
+                    } else {
+                        f32::INFINITY
+                    };
+                    let (job, map, body) = code_job(cx, b, delta, &lang, wrap_w, base);
                     let is_diagram = style.diagrams && lang.eq_ignore_ascii_case("mermaid");
                     if is_diagram && !active {
                         // MD-100: the diagram instead of its source.
@@ -403,7 +457,42 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                         out.caret_range = Some(at..at);
                     } else {
                         let (h, fr) = galley_height(fonts, &job);
-                        let rect = Rect::from_min_size(pos2(x, y), vec2(w, h + 2.0 * pad));
+                        let g = fonts.layout_job(job.clone());
+                        let box_w = if style.code_wrap {
+                            w
+                        } else {
+                            w.max(g.size().x + 2.0 * pad + gutter + 4.0)
+                        };
+                        let rect = Rect::from_min_size(pos2(x, y), vec2(box_w, h + 2.0 * pad));
+                        if gutter > 0.0 {
+                            let mut nums = String::new();
+                            let mut n = 0;
+                            let mut new_line = true;
+                            for (k, r) in g.rows.iter().enumerate() {
+                                if k > 0 {
+                                    nums.push('\n');
+                                }
+                                if new_line {
+                                    n += 1;
+                                    nums.push_str(&n.to_string());
+                                }
+                                new_line = r.ends_with_newline;
+                            }
+                            let mut nf = Fmt::body(style);
+                            nf.mono = true;
+                            nf.size = style.mono_size;
+                            nf.line_height = (style.mono_size * 1.5).round();
+                            nf.color = style.fg_muted;
+                            let mut nb = Builder::new(text, base, delta, None, style, gutter);
+                            nb.push(&nums, &nf, None, true);
+                            let mut job = nb.job;
+                            job.halign = epaint::emath::Align::RIGHT;
+                            out.runs.push(RunSpec {
+                                job,
+                                pos: vec2(x + pad + gutter - 0.6 * style.mono_size, y + pad),
+                                map: SourceMap::default(),
+                            });
+                        }
                         out.decos.push(Deco::Rect {
                             rect,
                             fill: style.code_bg,
@@ -418,7 +507,7 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                         });
                         out.runs.push(RunSpec {
                             job,
-                            pos: vec2(x + pad, y + pad),
+                            pos: vec2(x + pad + gutter, y + pad),
                             map,
                         });
                         content_h = rect.height();

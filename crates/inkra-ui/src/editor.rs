@@ -1189,7 +1189,12 @@ impl EditorView {
             };
             let top = self.view.top(i);
             for o in &l.overlays {
-                if let Overlay::Table { rect, span, .. } = o {
+                // Wide tables and unwrapped code blocks (MD-072) scroll.
+                let (rect, span) = match o {
+                    Overlay::Table { rect, span, .. } => (rect, span),
+                    Overlay::Code { rect, body, .. } => (rect, body),
+                };
+                {
                     let over = rect.max.x - col_w;
                     if over > 0.5 {
                         let shift = self

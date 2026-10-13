@@ -53,7 +53,11 @@ impl Engine {
         state.next_window = 1;
         state.meta.recovery_id = state::recovery_id(1);
         state.editor.doc.set_options(markdown_options(&state.prefs));
+        state.editor.doc.line_ending = new_line_ending(&state.prefs);
         state.editor.prefs = edit_prefs(&state.prefs);
+        inkra_workspace::tree::set_markdown_exts(
+            &state.prefs.strings("general.markdownExtensions"),
+        );
         let _ = state.reload_theme();
         viewing::view_from_prefs(&mut state.view, &state.prefs);
         Self {
@@ -88,6 +92,42 @@ impl Engine {
         self.registry.is_checked(id, &cx)
     }
 
+    /// Loads the default keymap plus the user's `keybindings.json` (UI-020);
+    /// returns problems with the file.
+    pub fn load_keybindings(&mut self) -> Vec<String> {
+        let mut km = Keymap::defaults(Os::current());
+        let problems = match self
+            .state
+            .paths
+            .as_ref()
+            .map(inkra_workspace::Paths::keybindings_file)
+        {
+            Some(f) if f.is_file() => match std::fs::read_to_string(&f) {
+                Ok(t) => km.apply_user(&t),
+                Err(e) => vec![format!("{}: {e}", f.display())],
+            },
+            _ => Vec::new(),
+        };
+        self.keymap = km;
+        problems
+    }
+
+    /// Writes the current keymap's differences from the defaults to
+    /// `keybindings.json` (UI-020).
+    pub fn save_keybindings(&self) -> std::io::Result<()> {
+        let Some(f) = self
+            .state
+            .paths
+            .as_ref()
+            .map(inkra_workspace::Paths::keybindings_file)
+        else {
+            return Ok(());
+        };
+        let entries = self.keymap.user_entries(&Keymap::defaults(Os::current()));
+        let text = serde_json::to_string_pretty(&entries).unwrap_or_else(|_| "[]".into());
+        inkra_workspace::fs::atomic_write(&f, format!("{text}\n").as_bytes())
+    }
+
     /// Takes the effects produced since the last call.
     pub fn take_effects(&mut self) -> Vec<Effect> {
         std::mem::take(&mut self.effects)
@@ -118,6 +158,15 @@ pub fn edit_prefs(prefs: &Preferences) -> editor::ops::EditPrefs {
         },
         smart_dashes: smart && prefs.bool("markdown.smartDashes"),
         smart_ellipsis: smart && prefs.bool("markdown.smartEllipsis"),
+    }
+}
+
+/// The line ending for new documents (PR-016).
+pub fn new_line_ending(prefs: &Preferences) -> inkra_text::LineEnding {
+    if prefs.string("general.defaultNewline") == "crlf" {
+        inkra_text::LineEnding::Crlf
+    } else {
+        inkra_text::LineEnding::Lf
     }
 }
 

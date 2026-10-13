@@ -279,6 +279,23 @@ pub fn frames_at(doc: &Doc, pos: usize) -> Vec<Frame> {
 /// Vertical gap above `cur` given the previous item (SPEC 7.1 spacing).
 pub fn gap(doc: &Doc, prev: Option<&LiveItem>, cur: &LiveItem, style: &crate::Style) -> f32 {
     let Some(prev) = prev else { return 0.0 };
+    let base = gap_base(doc, prev, cur, style);
+    if !style.preserve_blank_lines || prev.src.end > cur.src.start {
+        return base;
+    }
+    // MD-074: every blank line beyond the first adds a line of space.
+    let t = doc.text();
+    let between = t.slice(prev.src.end..cur.src.start);
+    let blank = between
+        .split('\n')
+        .skip(1)
+        .filter(|l| l.trim().is_empty())
+        .count()
+        .saturating_sub(2);
+    base + blank as f32 * style.size * style.line_height
+}
+
+fn gap_base(doc: &Doc, prev: &LiveItem, cur: &LiveItem, style: &crate::Style) -> f32 {
     let em = style.size;
     let heading_size = |it: &LiveItem| -> Option<(f32, crate::style::HeadingStyle)> {
         let (b, _) = it.block(doc)?;

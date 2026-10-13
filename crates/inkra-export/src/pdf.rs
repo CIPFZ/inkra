@@ -632,6 +632,9 @@ pub(crate) fn prepare(
     let mut style = o.style.clone();
     style.spellcheck = false;
     style.print = true;
+    // Paper does not scroll.
+    style.code_wrap = true;
+    style.image_fit_column = true;
     style.version = style.version.wrapping_add(0x5EED);
     let mut view = ViewLayout::new();
     view.sync(&doc, Mode::Live, width, &style, usize::MAX);
