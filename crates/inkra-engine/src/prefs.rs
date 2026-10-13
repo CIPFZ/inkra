@@ -367,6 +367,13 @@ pub const PREFS: &[PrefSpec] = &[
         doc: "`...` becomes an ellipsis.",
     },
     PrefSpec {
+        key: "editor.spellcheck",
+        default: "true",
+        kind: PrefKind::Bool,
+        req: "PR-035",
+        doc: "Underline misspelled English words (ED-104).",
+    },
+    PrefSpec {
         key: "markdown.tocDepth",
         default: "6",
         kind: PrefKind::Number,

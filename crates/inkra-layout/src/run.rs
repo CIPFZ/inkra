@@ -67,6 +67,8 @@ pub struct SourceMap {
     pub objects: Vec<InlineObject>,
     /// Clickable byte ranges of the run text.
     pub hits: Vec<(Range<usize>, crate::block::HitAction)>,
+    /// Misspelled byte ranges of the run text (ED-104).
+    pub squiggles: Vec<Range<usize>>,
 }
 
 impl SourceMap {

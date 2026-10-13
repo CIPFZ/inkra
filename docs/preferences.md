@@ -52,6 +52,7 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `markdown.smartQuotes` | `curly` / `corner` / `guillemets` / `off` | `"curly"` | MD-066 | Quote style of smart punctuation: “” ‘’, 「」『』 or «» ‹›. |
 | `markdown.smartDashes` | bool | `true` | MD-066 | `--` becomes an en dash, `---` an em dash. |
 | `markdown.smartEllipsis` | bool | `true` | MD-066 | `...` becomes an ellipsis. |
+| `editor.spellcheck` | bool | `true` | PR-035 | Underline misspelled English words (ED-104). |
 | `markdown.tocDepth` | number | `6` | MD-078 | Deepest heading level listed by `[TOC]`. |
 | `markdown.mathNumbering` | `none` / `ams` / `all` | `"none"` | MD-068 | Number display formulas: off, AMS environments (`equation`, `align`), or every block. |
 | `markdown.inlineMath` | bool | `false` | MD-060 | Inline math `$...$`. |

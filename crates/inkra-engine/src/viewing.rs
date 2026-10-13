@@ -138,6 +138,79 @@ pub fn register(r: &mut CommandRegistry) {
         },
     ));
 
+    // Spell checking (ED-104).
+    r.register(
+        FnCommand::new(
+            spec(
+                "edit.toggleSpellcheck",
+                Edit,
+                "ED-104",
+                "Underline misspelled words.",
+            ),
+            |cx, _| {
+                let on = !cx.app.prefs.bool("editor.spellcheck");
+                cx.app.set_pref("editor.spellcheck", Value::from(on));
+                let _ = cx.app.reload_theme();
+                Ok(Outcome::Done)
+            },
+        )
+        .checked(|cx| Some(cx.app.prefs.bool("editor.spellcheck"))),
+    );
+    r.register(
+        FnCommand::new(
+            spec(
+                "edit.toggleSmartPunctuation",
+                Edit,
+                "ED-102",
+                "Typographic quotes, dashes and ellipses while typing.",
+            ),
+            |cx, _| {
+                let on = !cx.app.prefs.bool("markdown.smartPunctuation");
+                cx.app
+                    .set_pref("markdown.smartPunctuation", Value::from(on));
+                let ep = crate::edit_prefs(&cx.app.prefs);
+                cx.app.editor.prefs = ep.clone();
+                for w in &mut cx.app.others {
+                    w.editor.prefs = ep.clone();
+                }
+                Ok(Outcome::Done)
+            },
+        )
+        .checked(|cx| Some(cx.app.prefs.bool("markdown.smartPunctuation"))),
+    );
+    for (id, doc, add) in [
+        (
+            "spell.addWord",
+            "Add a word to the personal dictionary.",
+            true,
+        ),
+        ("spell.ignore", "Ignore a word for this session.", false),
+    ] {
+        let run: fn(
+            &mut crate::state::CommandContext<'_>,
+            &Value,
+        ) -> crate::command::CommandResult = if add {
+            |_, p| {
+                inkra_text::spell::add_word(
+                    p.get("word").and_then(Value::as_str).unwrap_or_default(),
+                );
+                Ok(Outcome::Done)
+            }
+        } else {
+            |_, p| {
+                inkra_text::spell::ignore(
+                    p.get("word").and_then(Value::as_str).unwrap_or_default(),
+                );
+                Ok(Outcome::Done)
+            }
+        };
+        let mut s = spec(id, Edit, "ED-104", doc);
+        s.params = Some(
+            r#"{"type":"object","required":["word"],"properties":{"word":{"type":"string"}}}"#,
+        );
+        r.register(FnCommand::new(s, run));
+    }
+
     // Copy as … (ED-016, ED-130).
     let copy_as: &[(&str, &str, u8)] = &[
         (

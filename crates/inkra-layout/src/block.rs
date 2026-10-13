@@ -44,6 +44,15 @@ pub enum Deco {
         /// The formula.
         math: crate::run::MathScene,
     },
+    /// A wavy underline (misspelled word, ED-104).
+    Squiggle {
+        /// Start (block-local, on the baseline).
+        a: Pos2,
+        /// End.
+        b: Pos2,
+        /// Color.
+        color: Color32,
+    },
     /// A circle.
     Circle {
         /// Center (block-local).

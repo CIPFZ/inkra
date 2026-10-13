@@ -167,6 +167,8 @@ impl AppState {
                 };
                 s.diagrams = self.prefs.bool("markdown.diagrams");
                 s.toc_depth = self.prefs.f64("markdown.tocDepth").clamp(1.0, 6.0) as u8;
+                s.spellcheck = self.prefs.bool("editor.spellcheck");
+                s.version = s.version.wrapping_add(u64::from(s.spellcheck) << 24);
                 s.version = s.version.wrapping_add(u64::from(s.toc_depth) << 16);
                 s.version = s
                     .version

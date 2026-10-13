@@ -211,6 +211,15 @@ impl Shell {
         self.engine.state.system_dark = ctx.system_theme() == Some(egui::Theme::Dark);
         let _ = self.engine.state.reload_theme();
         self.sync_style(ctx);
+        // The spell checker loads in the background too (ED-104).
+        let c = ctx.clone();
+        let personal = self
+            .engine
+            .state
+            .paths
+            .as_ref()
+            .map(inkra_workspace::Paths::dictionary_file);
+        inkra_text::spell::load(personal, move || c.request_repaint());
         // Syntax definitions load in the background (AD-5).
         let c = ctx.clone();
         inkra_highlight::on_ready(move || c.request_repaint());

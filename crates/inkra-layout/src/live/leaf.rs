@@ -81,6 +81,7 @@ fn sole_image(b: &Block) -> Option<&inkra_markdown::Inline> {
 pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> BlockLayout {
     super::inline::set_math_refs(cx.math_refs);
     super::inline::set_footnotes(&cx.doc_info.footnotes);
+    super::inline::set_spellcheck(cx.style.spellcheck);
     let style = cx.style;
     let text = cx.doc.text();
     let base = item.src.start;
@@ -935,7 +936,7 @@ fn place_objects(out: &mut BlockLayout, fonts: &mut FontsView<'_>) {
     let mut decos = Vec::new();
     let mut hits = Vec::new();
     for run in &out.runs {
-        if run.map.objects.is_empty() && run.map.hits.is_empty() {
+        if run.map.objects.is_empty() && run.map.hits.is_empty() && run.map.squiggles.is_empty() {
             continue;
         }
         let g = fonts.layout_job(run.job.clone());
@@ -967,6 +968,38 @@ fn place_objects(out: &mut BlockLayout, fonts: &mut FontsView<'_>) {
                     rect: rect.expand(2.0),
                     action: action.clone(),
                 });
+            }
+        }
+        // Misspellings: a wavy line under each row part of the word.
+        for range in &run.map.squiggles {
+            let (a, b) = (
+                crate::run::char_index(&run.job.text, range.start),
+                crate::run::char_index(&run.job.text, range.end),
+            );
+            let mut k = 0usize;
+            for r in &g.rows {
+                let mut seg: Option<(f32, f32, f32)> = None;
+                for gl in &r.row.glyphs {
+                    if k >= a && k < b {
+                        let x0 = run.pos.x + r.pos.x + gl.pos.x;
+                        let y = run.pos.y + r.pos.y + gl.pos.y + 2.5;
+                        seg = Some(match seg {
+                            None => (x0, x0 + gl.advance_width, y),
+                            Some((s, _, yy)) => (s, x0 + gl.advance_width, yy),
+                        });
+                    }
+                    k += 1;
+                }
+                if r.ends_with_newline {
+                    k += 1;
+                }
+                if let Some((x0, x1, y)) = seg {
+                    decos.push(Deco::Squiggle {
+                        a: pos2(x0, y),
+                        b: pos2(x1, y),
+                        color: Color32::from_rgb(215, 58, 73),
+                    });
+                }
             }
         }
         for obj in &run.map.objects {

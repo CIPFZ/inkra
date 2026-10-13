@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **148**
+Registered commands: **152**
 
 
 ## App
@@ -52,6 +52,8 @@ Registered commands: **148**
 | `edit.selectLine` | Select Line / Sentence | 选择当前行/句 | `Ctrl+L` | `⌘L` | — | ED-011 | Select the current line. |
 | `edit.selectWord` | Select Word | 选择当前词 | `Ctrl+D` | `⌘D` | — | ED-011 | Select the word at the caret. |
 | `edit.tab` | Tab | 制表 |  |  | `{"type":"object","properties":{"outdent":{"type":"boolean"}}}` | ED-014 | Tab / Shift+Tab: indent or outdent list items and code, or insert spaces. |
+| `edit.toggleSmartPunctuation` | Use Smart Punctuation | 使用智能标点 |  |  | — | ED-102 | Typographic quotes, dashes and ellipses while typing. |
+| `edit.toggleSpellcheck` | Check Spelling While Typing | 输入时检查拼写 |  |  | — | ED-104 | Underline misspelled words. |
 | `edit.undo` | Undo | 撤销 | `Ctrl+Z` | `⌘Z` | — | ED-015 | Undo the last change group. |
 
 ## File
@@ -145,6 +147,13 @@ Registered commands: **148**
 | `sidebar.reveal` | Show in Folder | 在文件夹中显示 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"}}}` | FS-022 | Show a file or folder in the system file manager. |
 | `sidebar.setRoot` | Set as Root Folder | 设为根目录 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"}}}` | FS-022 | Use a folder as the sidebar root. |
 
+## Edit
+
+| Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
+|---|---|---|---|---|---|---|---|
+| `spell.addWord` | Add to Dictionary | 添加到词典 |  |  | `{"type":"object","required":["word"],"properties":{"word":{"type":"string"}}}` | ED-104 | Add a word to the personal dictionary. |
+| `spell.ignore` | Ignore | 忽略 |  |  | `{"type":"object","required":["word"],"properties":{"word":{"type":"string"}}}` | ED-104 | Ignore a word for this session. |
+
 ## Table
 
 | Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
@@ -213,8 +222,6 @@ These appear greyed out in menus.
 - `app.preferences` — Preferences…
 - `edit.emojiSymbols` — Emoji & Symbols
 - `edit.selectStyleScope` — Select Style Scope
-- `edit.toggleSmartPunctuation` — Use Smart Punctuation
-- `edit.toggleSpellcheck` — Check Spelling While Typing
 - `file.delete` — Delete
 - `file.exportHtml` — HTML
 - `file.exportHtmlPlain` — HTML (without styles)

@@ -560,6 +560,9 @@ impl ViewLayout {
             if matches!(b.kind, inkra_markdown::BlockKind::Toc) {
                 self.doc_info.headings.hash(&mut h);
             }
+            if cx.style.spellcheck {
+                inkra_text::spell::generation().hash(&mut h);
+            }
             if matches!(b.kind, inkra_markdown::BlockKind::Table { .. })
                 && let Some(ws) = cx.images.column_widths(item.src.start)
             {

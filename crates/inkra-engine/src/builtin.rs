@@ -17,7 +17,7 @@ pub fn register_all(r: &mut CommandRegistry) {
             if !cx.app.set_pref(&key, value) {
                 return Err(crate::command::CommandError::Failed { id: "app.setPreference".into(), msg: format!("invalid value for `{key}`") });
             }
-            if key.starts_with("appearance.") || key == "markdown.mathNumbering" || key == "markdown.diagrams" || key == "markdown.tocDepth" {
+            if key.starts_with("appearance.") || key == "markdown.mathNumbering" || key == "markdown.diagrams" || key == "markdown.tocDepth" || key == "editor.spellcheck" {
                 let _ = cx.app.reload_theme();
             }
             if key.starts_with("markdown.") || key.starts_with("editor.") {

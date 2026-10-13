@@ -71,6 +71,8 @@ pub struct Style {
     pub diagrams: bool,
     /// Deepest heading level shown by `[TOC]` (MD-078); a preference.
     pub toc_depth: u8,
+    /// Underline misspelled words (ED-104); a preference.
+    pub spellcheck: bool,
     /// Body font size in points.
     pub size: f32,
     /// Monospace font size in points.
@@ -175,6 +177,7 @@ impl Default for Style {
             math_numbering: 0,
             diagrams: true,
             toc_depth: 6,
+            spellcheck: false,
             size: 16.0,
             mono_size: 14.0,
             line_height: 1.6,

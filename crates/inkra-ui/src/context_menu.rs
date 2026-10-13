@@ -67,6 +67,47 @@ pub fn show(ui: &mut egui::Ui, engine: &mut Engine, i18n: &I18n) -> Vec<(String,
     });
     let has_link = format_ops::link_ranges(&e.doc, pos).is_some();
 
+    // Spelling suggestions first (ED-130).
+    if engine.state.prefs.bool("editor.spellcheck") && !context::in_code_content(&e.doc, pos) {
+        let t = e.doc.text();
+        let lr = t.line_content_range(t.byte_to_line(pos));
+        let line = t.slice(lr.clone()).into_owned();
+        let w = inkra_text::segment::word_at(&line, pos.saturating_sub(lr.start).min(line.len()));
+        let (ws, we) = (lr.start + w.start, lr.start + w.end);
+        if we > ws {
+            let word = t.slice(ws..we).into_owned();
+            if !inkra_text::spell::check(&word) {
+                let sugg = inkra_text::spell::suggest(&word, 6);
+                if sugg.is_empty() {
+                    ui.add_enabled(false, egui::Button::new(i18n.tr("spell-no-suggestions")));
+                }
+                for s in sugg {
+                    custom(
+                        ui,
+                        s.clone(),
+                        "edit.replaceRange",
+                        json!({ "start": ws, "end": we, "text": s }),
+                        &mut out,
+                    );
+                }
+                custom(
+                    ui,
+                    i18n.tr("cmd-spell-addWord"),
+                    "spell.addWord",
+                    json!({ "word": word }),
+                    &mut out,
+                );
+                custom(
+                    ui,
+                    i18n.tr("cmd-spell-ignore"),
+                    "spell.ignore",
+                    json!({ "word": word }),
+                    &mut out,
+                );
+                ui.separator();
+            }
+        }
+    }
     // Context-specific entries first.
     if let Some(url) = &link {
         custom(

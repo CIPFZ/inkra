@@ -322,3 +322,6 @@ cmd-table-moveColumnTo = Move Column
 cmd-table-moveRowTo = Move Row
 code-copy = Copy
 cmd-edit-replaceRange = Replace Range
+cmd-spell-addWord = Add to Dictionary
+cmd-spell-ignore = Ignore
+spell-no-suggestions = No suggestions

@@ -322,3 +322,6 @@ cmd-table-moveColumnTo = 移动列
 cmd-table-moveRowTo = 移动行
 code-copy = 复制
 cmd-edit-replaceRange = 替换范围
+cmd-spell-addWord = 添加到词典
+cmd-spell-ignore = 忽略
+spell-no-suggestions = 无建议

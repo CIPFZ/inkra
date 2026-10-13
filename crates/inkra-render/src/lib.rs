@@ -117,6 +117,20 @@ pub fn paint_decos(
                     }
                 }
             }
+            Deco::Squiggle { a, b, color } => {
+                // A zig-zag of 2 px amplitude, 4 px period.
+                let mut pts = Vec::new();
+                let mut x = a.x;
+                let mut up = true;
+                while x <= b.x {
+                    pts.push(Pos2::new(x, a.y + if up { 0.0 } else { 2.0 }) + o);
+                    x += 2.0;
+                    up = !up;
+                }
+                if pts.len() >= 2 {
+                    out.push(Shape::line(pts, Stroke::new(1.0, fade(*color))));
+                }
+            }
             Deco::Math { rect, math } => {
                 if let Some(tex) = textures.math(math) {
                     let r = rect.translate(o);

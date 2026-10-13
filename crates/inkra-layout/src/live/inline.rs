@@ -26,6 +26,15 @@ thread_local! {
     static NOTES: std::cell::RefCell<Vec<(String, u32)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
+thread_local! {
+    static SPELL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Enables spell-check underlines for text laid out on this thread.
+pub fn set_spellcheck(on: bool) {
+    SPELL.with(|s| s.set(on));
+}
+
 /// Sets the footnote numbers used while laying out on this thread.
 pub fn set_footnotes(notes: &[(String, u32)]) {
     NOTES.with(|n| {
@@ -306,7 +315,17 @@ impl<'a> Builder<'a> {
         let active = self.active(&i.span);
         let style = self.style;
         match &i.kind {
-            InlineKind::Text => self.push_src(span, fmt),
+            InlineKind::Text => {
+                let start = self.job.text.len();
+                self.push_src(span.clone(), fmt);
+                if SPELL.with(std::cell::Cell::get) && !fmt.mono {
+                    // Text nodes map byte-identically, so source ranges carry over.
+                    let s = self.text.slice(span);
+                    for r in inkra_text::spell::misspelled(&s) {
+                        self.map.squiggles.push(start + r.start..start + r.end);
+                    }
+                }
+            }
             InlineKind::Escape => {
                 if active {
                     self.push_marker(span.start..span.start + 1, fmt);
