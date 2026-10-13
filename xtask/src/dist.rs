@@ -325,9 +325,11 @@ fn wxs(release: &Path, root: &Path) -> String {
     let cli = release.join("inkra-cli.exe");
     let icon = root.join("assets/brand/inkra.ico");
     let mut assoc = String::new();
-    for e in EXTS {
+    for (k, e) in EXTS.iter().enumerate() {
+        // The MIME type maps to one extension only (one registry key).
+        let ct = if k == 0 { " ContentType=\"text/markdown\"" } else { "" };
         assoc.push_str(&format!(
-            "          <Extension Id=\"{e}\" ContentType=\"text/markdown\"><Verb Id=\"open\" Command=\"Open\" TargetFile=\"InkraExe\" Argument='\"%1\"' /></Extension>\n"
+            "          <Extension Id=\"{e}\"{ct}><Verb Id=\"open\" Command=\"Open\" TargetFile=\"InkraExe\" Argument='\"%1\"' /></Extension>\n"
         ));
     }
     format!(
