@@ -96,12 +96,33 @@ fn wgpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
             wgpu::DeviceType::Other => 3,
             wgpu::DeviceType::Cpu => 4,
         };
-        adapters
+        let chosen = adapters
             .iter()
             .filter(|a| surface.is_none_or(|s| a.is_surface_supported(s)))
             .min_by_key(|a| rank(a.get_info().device_type))
-            .cloned()
-            .ok_or_else(|| "no wgpu adapter can present to this window".to_owned())
+            .cloned();
+        // Startup diagnostics (SPEC 2.5): which adapters were probed.
+        let names: Vec<String> = adapters
+            .iter()
+            .map(|a| {
+                format!(
+                    "{} ({:?}, {:?})",
+                    a.get_info().name,
+                    a.get_info().device_type,
+                    a.get_info().backend
+                )
+            })
+            .collect();
+        log::info!(
+            "startup: {} adapter(s) after {:.1} ms: {}; using {}",
+            adapters.len(),
+            process_ms(),
+            names.join("; "),
+            chosen
+                .as_ref()
+                .map_or_else(|| "none".to_owned(), |a| a.get_info().name)
+        );
+        chosen.ok_or_else(|| "no wgpu adapter can present to this window".to_owned())
     }));
     WgpuConfiguration {
         wgpu_setup: WgpuSetup::CreateNew(setup),
@@ -210,6 +231,7 @@ fn icon() -> Option<egui::IconData> {
 
 fn main() -> std::process::ExitCode {
     let started = Instant::now();
+    let _ = PROCESS_START.set(started);
     let args = match args::parse(std::env::args().skip(1)) {
         Ok(a) => a,
         Err(e) => {
@@ -296,6 +318,7 @@ fn main() -> std::process::ExitCode {
     let measure_startup = args.measure_startup;
     let raw = Arc::new(inkra_ui::RawKeys::default());
     let raw_for_app = raw.clone();
+    log::info!("startup: engine ready after {:.1} ms", process_ms());
     let event_loop =
         match winit::event_loop::EventLoop::<eframe::UserEvent>::with_user_event().build() {
             Ok(l) => l,
@@ -394,3 +417,12 @@ fn reduce_motion() -> bool {
             .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "false")
     }
 }
+
+/// Milliseconds since the process started (startup diagnostics).
+fn process_ms() -> f64 {
+    PROCESS_START
+        .get()
+        .map_or(0.0, |t| t.elapsed().as_secs_f64() * 1e3)
+}
+
+static PROCESS_START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();

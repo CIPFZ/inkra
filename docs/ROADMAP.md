@@ -7,7 +7,7 @@
 - UI-001 / NF-006：macOS 系统菜单栏与 dmg 在真机上验证。
 - UI-033：GNOME 与 macOS 上实测（Windows 已验证）。
 - NF-006：Wayland 实测；Flatpak 清单；Windows arm64 构建。
-- 性能：Windows（虚拟 GPU）冷启动 ~390 ms，高于 300 ms 预算；DX12 设备创建约占 330 ms，需在实体机上复测并评估延迟创建表面。
+- 性能：Windows（虚拟 GPU）冷启动 ~400 ms，高于 300 ms 预算。启动日志分解：引擎就绪 5 ms；DX12 枚举适配器 195 ms（该虚拟机报告 3 个适配器：两个 RTX 3080 与 WARP，wgpu 为每个创建设备探测）；设备创建与 FXC 着色器编译 125 ms；界面与首帧 70 ms。需在单 GPU 实体机上复测；可评估随包分发 DXC（需先确认许可证）以替代 FXC。
 - 内存：Windows 空文档工作集 211 MB / 专用 376 MB，主要来自 GPU 驱动；需在实体机上用 VMMap 拆分并评估 GL 后端、较小的帧延迟与字体图集；Linux 匿名内存 57 MB（其中系统 CJK 字体 19 MB 读入内存，`forbid(unsafe)` 下无法 mmap）。
 - deb 包未在 Debian/Ubuntu 上实际安装验证。
 
