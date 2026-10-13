@@ -67,6 +67,8 @@ pub struct EditorView {
     pub blink: bool,
     col_handles: Vec<Rect>,
     col_drag: Option<(usize, usize)>,
+    /// A reorder grip being dragged: table start, column?, index.
+    grip_drag: Option<(usize, bool, usize)>,
     pending_top: Option<usize>,
     viewport_top: usize,
     /// Horizontal scroll of wide tables, by table source start (ED-080).
@@ -108,6 +110,7 @@ impl EditorView {
             blink: true,
             col_handles: Vec::new(),
             col_drag: None,
+            grip_drag: None,
             pending_top: None,
             viewport_top: 0,
             hscroll: Default::default(),
@@ -610,7 +613,7 @@ impl EditorView {
 
         // Column borders of tables can be dragged (ED-084, display only).
         if !source {
-            self.table_handles(ui, &visible, offset);
+            self.table_handles(ui, engine, &visible, offset, &mut out);
         }
 
         // Code block tools (ED-002): language and copy button when the caret is inside.
@@ -683,7 +686,14 @@ impl EditorView {
     }
 
     /// Draggable column borders of visible tables.
-    fn table_handles(&mut self, ui: &mut egui::Ui, visible: &std::ops::Range<usize>, offset: Vec2) {
+    fn table_handles(
+        &mut self,
+        ui: &mut egui::Ui,
+        engine: &mut Engine,
+        visible: &std::ops::Range<usize>,
+        offset: Vec2,
+        out: &mut EditorOutput,
+    ) {
         self.col_handles.clear();
         let mut tables = Vec::new();
         for i in visible.clone() {
@@ -692,12 +702,25 @@ impl EditorView {
             };
             let top = self.view.top(i);
             for o in &l.overlays {
-                if let Overlay::Table { rect, span, cols } = o {
-                    tables.push((i, rect.translate(vec2(0.0, top)), span.start, cols.clone()));
+                if let Overlay::Table {
+                    rect,
+                    span,
+                    cols,
+                    rows,
+                } = o
+                {
+                    tables.push((
+                        i,
+                        rect.translate(vec2(0.0, top)),
+                        span.clone(),
+                        cols.clone(),
+                        rows.clone(),
+                    ));
                 }
             }
         }
-        for (item, rect, key, cols) in tables {
+        for (item, rect, span, cols, rows) in tables {
+            let key = span.start;
             let shift = self
                 .wide
                 .iter()
@@ -737,6 +760,142 @@ impl EditorView {
                 if resp.double_clicked() {
                     // Back to automatic widths.
                     self.images.column_widths.remove(&key);
+                }
+            }
+            self.reorder_grips(ui, engine, r, &span, &cols, &rows, out);
+        }
+    }
+
+    /// Grips to reorder columns (top edge of the header cells) and body rows (left
+    /// margin) by dragging (ED-084). The source is rewritten on release.
+    #[allow(clippy::too_many_arguments)]
+    fn reorder_grips(
+        &mut self,
+        ui: &mut egui::Ui,
+        engine: &mut Engine,
+        r: Rect,
+        span: &std::ops::Range<usize>,
+        cols: &[f32],
+        rows: &[f32],
+        out: &mut EditorOutput,
+    ) {
+        let hovered = ui
+            .input(|i| i.pointer.hover_pos())
+            .is_some_and(|p| r.expand2(vec2(16.0, 8.0)).contains(p));
+        let caret = engine.state.editor.sel.head;
+        let active = caret >= span.start && caret <= span.end;
+        let dragging_here = self.grip_drag.is_some_and(|g| g.0 == span.start);
+        if !(hovered || active || dragging_here) {
+            return;
+        }
+        let painter = ui.painter_at(self.last_text_rect.expand2(vec2(24.0, 0.0)));
+        let muted = self.style.fg_muted.gamma_multiply(0.5);
+        let pointer = ui.input(|i| i.pointer.interact_pos());
+        // Column grips.
+        let mut x = r.left();
+        let mut col_x = vec![x];
+        for w in cols {
+            x += w;
+            col_x.push(x);
+        }
+        let mut row_y = vec![r.top()];
+        let mut y = r.top();
+        for h in rows {
+            y += h;
+            row_y.push(y);
+        }
+        let mut release = None;
+        for c in 0..cols.len() {
+            let g = Rect::from_min_max(
+                pos2(col_x[c] + 4.0, r.top()),
+                pos2(col_x[c + 1] - 4.0, r.top() + 6.0),
+            );
+            let id = self.id.with(("col-grip", span.start, c));
+            let resp = ui.interact(g, id, Sense::drag());
+            self.col_handles.push(g);
+            if resp.hovered() || resp.dragged() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                painter.rect_filled(g.shrink2(vec2(g.width() * 0.35, 1.5)), 2.0, muted);
+            }
+            if resp.drag_started() {
+                self.grip_drag = Some((span.start, true, c));
+            }
+            if resp.drag_stopped() {
+                release = Some((true, c));
+            }
+        }
+        for rr in 1..rows.len() {
+            let g = Rect::from_min_max(
+                pos2(r.left() - 14.0, row_y[rr] + 2.0),
+                pos2(r.left() - 3.0, row_y[rr + 1] - 2.0),
+            );
+            let id = self.id.with(("row-grip", span.start, rr));
+            let resp = ui.interact(g, id, Sense::drag());
+            self.col_handles.push(g);
+            if resp.hovered() || resp.dragged() || active {
+                for k in 0..3 {
+                    let cy = g.center().y - 4.0 + 4.0 * k as f32;
+                    painter.circle_filled(pos2(g.center().x, cy), 1.2, muted);
+                }
+            }
+            if resp.hovered() || resp.dragged() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+            }
+            if resp.drag_started() {
+                self.grip_drag = Some((span.start, false, rr));
+            }
+            if resp.drag_stopped() {
+                release = Some((false, rr));
+            }
+        }
+        // Drop target under the pointer, shown as a line while dragging.
+        let target = |p: Pos2, col: bool| -> usize {
+            if col {
+                (0..cols.len())
+                    .min_by(|&a, &b| {
+                        let ca = (col_x[a] + col_x[a + 1]) / 2.0;
+                        let cb = (col_x[b] + col_x[b + 1]) / 2.0;
+                        (p.x - ca).abs().total_cmp(&(p.x - cb).abs())
+                    })
+                    .unwrap_or(0)
+            } else {
+                (1..rows.len())
+                    .min_by(|&a, &b| {
+                        let ca = (row_y[a] + row_y[a + 1]) / 2.0;
+                        let cb = (row_y[b] + row_y[b + 1]) / 2.0;
+                        (p.y - ca).abs().total_cmp(&(p.y - cb).abs())
+                    })
+                    .unwrap_or(1)
+            }
+        };
+        if let (Some((key, col, from)), Some(p)) = (self.grip_drag, pointer)
+            && key == span.start
+        {
+            let to = target(p, col);
+            let stroke = egui::Stroke::new(2.0, self.style.accent);
+            if col {
+                let x = if to > from { col_x[to + 1] } else { col_x[to] };
+                painter.line_segment([pos2(x, r.top()), pos2(x, r.bottom())], stroke);
+            } else {
+                let y = if to > from { row_y[to + 1] } else { row_y[to] };
+                painter.line_segment([pos2(r.left(), y), pos2(r.right(), y)], stroke);
+            }
+            if let Some((col, from)) = release {
+                self.grip_drag = None;
+                if to != from {
+                    // Commands act on the table at the caret.
+                    let inside = span.start + 1;
+                    engine
+                        .state
+                        .editor
+                        .set_selection(inkra_doc::Selection::caret(inside));
+                    let id = if col {
+                        "table.moveColumnTo"
+                    } else {
+                        "table.moveRowTo"
+                    };
+                    out.commands
+                        .push((id.into(), serde_json::json!({ "from": from, "to": to })));
                 }
             }
         }
@@ -1035,7 +1194,10 @@ impl EditorView {
             )
         });
         let Some(screen) = pos else { return };
-        if self.col_handles.iter().any(|r| r.contains(screen)) || self.col_drag.is_some() {
+        if self.col_handles.iter().any(|r| r.contains(screen))
+            || self.col_drag.is_some()
+            || self.grip_drag.is_some()
+        {
             return;
         }
         // Right click: move the caret there unless it is inside the selection.

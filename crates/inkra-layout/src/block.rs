@@ -90,6 +90,8 @@ pub enum Overlay {
         span: Range<usize>,
         /// Column widths.
         cols: Vec<f32>,
+        /// Row heights (header first).
+        rows: Vec<f32>,
     },
 }
 

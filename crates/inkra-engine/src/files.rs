@@ -37,7 +37,7 @@ pub fn load_editor(
     let fallback = inkra_text::Encoding::from_label(&app.prefs.string("general.defaultEncoding"));
     let (doc, disk) = files::load(path, crate::markdown_options(&app.prefs), fallback)?;
     let mut e = Editor::new(doc);
-    e.path = Some(std::fs::canonicalize(path).unwrap_or_else(|_| path.to_owned()));
+    e.path = Some(inkra_workspace::paths::canonical(path));
     if app.prefs.string("editor.defaultMode") == "source" {
         e.mode = ViewMode::Source;
     }
@@ -47,7 +47,7 @@ pub fn load_editor(
 /// Opens `path` following FS-001: an already open file is focused; a blank active
 /// window is reused; otherwise a new window opens.
 pub fn open_path(cx: &mut CommandContext<'_>, path: &Path) -> CommandResult {
-    let canon = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_owned());
+    let canon = inkra_workspace::paths::canonical(path);
     if let Some((meta, _)) = cx
         .app
         .editors()
@@ -88,7 +88,7 @@ pub fn save_to(cx: &mut CommandContext<'_>, path: &Path) -> CommandResult {
     let disk = files::save(path, &cx.app.editor.doc).map_err(|e| err("file.save", e))?;
     let e = &mut cx.app.editor;
     e.doc.mark_saved();
-    e.path = Some(std::fs::canonicalize(path).unwrap_or_else(|_| path.to_owned()));
+    e.path = Some(inkra_workspace::paths::canonical(path));
     cx.app.meta.disk = Some(disk);
     cx.app.meta.external = None;
     if let Some(p) = &cx.app.paths {

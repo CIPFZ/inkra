@@ -318,3 +318,5 @@ count-reading = 阅读时间
 count-minutes = { $n } 分钟
 count-selection = 选区
 count-document = 文档
+cmd-table-moveColumnTo = 移动列
+cmd-table-moveRowTo = 移动行

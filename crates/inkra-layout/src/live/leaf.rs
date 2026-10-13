@@ -424,7 +424,8 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                     out.overlays.push(Overlay::Table {
                         rect: Rect::from_min_max(pos2(x, y), pos2(grid_w, y + h)),
                         span: item.src.clone(),
-                        cols,
+                        cols: cols.0,
+                        rows: cols.1,
                     });
                     content_h = h;
                     first_row_h = fr;
@@ -730,7 +731,7 @@ fn table(
     table_start: usize,
     fonts: &mut FontsView<'_>,
     out: &mut BlockLayout,
-) -> (f32, f32, Vec<f32>) {
+) -> (f32, f32, (Vec<f32>, Vec<f32>)) {
     let style = cx.style;
     let text = cx.doc.text();
     let ncols = aligns.len().max(1);
@@ -793,9 +794,11 @@ fn table(
         }
     }
     let mut ty = y;
+    let mut row_hs = Vec::new();
     let mut first_row = 0.0;
     for (ri, row) in cells.into_iter().enumerate() {
         let row_h = row.iter().map(|c| c.3).fold(fmt.line_height, f32::max) + 2.0 * pad_y;
+        row_hs.push(row_h);
         if ri > 0 && ri % 2 == 0 {
             out.decos.push(Deco::Rect {
                 rect: Rect::from_min_size(pos2(x, ty), vec2(col_w.iter().sum(), row_h)),
@@ -855,5 +858,5 @@ fn table(
     }
     out.caret_range = Some(0..(b.span.end - b.span.start));
     let _ = Pos2::ZERO;
-    (ty - y, first_row, col_w)
+    (ty - y, first_row, (col_w, row_hs))
 }

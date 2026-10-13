@@ -134,3 +134,60 @@ mod tests {
         assert_eq!(p.logs_dir(), PathBuf::from("/tmp/x/data/logs"));
     }
 }
+
+/// Canonical form of `p` for comparing and displaying open files: symlinks and
+/// `..` resolved, and on Windows without the `\\?\` verbatim prefix when the
+/// path is representable without it. Falls back to `p` if it does not exist.
+pub fn canonical(p: &Path) -> PathBuf {
+    let c = match std::fs::canonicalize(p) {
+        Ok(c) => c,
+        Err(_) => return p.to_owned(),
+    };
+    simplify_verbatim(c)
+}
+
+fn simplify_verbatim(c: PathBuf) -> PathBuf {
+    let s = c.to_string_lossy();
+    if let Some(rest) = s.strip_prefix(r"\\?\") {
+        // `\\?\UNC\server\share` → `\\server\share`; `\\?\C:\x` → `C:\x`.
+        if let Some(unc) = rest.strip_prefix(r"UNC\") {
+            return PathBuf::from(format!(r"\\{unc}"));
+        }
+        let drive = rest.as_bytes();
+        let plain = drive.len() >= 3
+            && drive[0].is_ascii_alphabetic()
+            && drive[1] == b':'
+            && drive[2] == b'\\';
+        // Long paths and reserved names need the prefix.
+        if plain
+            && rest.len() < 260
+            && !rest
+                .split('\\')
+                .any(|c| c.ends_with('.') || c.ends_with(' '))
+        {
+            return PathBuf::from(rest);
+        }
+    }
+    c
+}
+
+#[cfg(test)]
+mod canonical_tests {
+    use super::*;
+
+    #[test]
+    fn strips_verbatim_prefix() {
+        assert_eq!(
+            simplify_verbatim(PathBuf::from(r"\\?\C:\work\a.md")),
+            PathBuf::from(r"C:\work\a.md")
+        );
+        assert_eq!(
+            simplify_verbatim(PathBuf::from(r"\\?\UNC\srv\share\a.md")),
+            PathBuf::from(r"\\srv\share\a.md")
+        );
+        assert_eq!(
+            simplify_verbatim(PathBuf::from("/tmp/a.md")),
+            PathBuf::from("/tmp/a.md")
+        );
+    }
+}

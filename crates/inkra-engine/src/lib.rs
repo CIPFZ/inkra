@@ -201,6 +201,34 @@ mod table_command_tests {
             .map(|l| l.split('|').nth(1).unwrap().trim())
             .collect();
         assert_eq!(rows, ["1", "2", "10"], "numeric sort");
+        e.execute(
+            "table.moveRowTo",
+            &serde_json::json!({ "from": 3, "to": 1 }),
+        )
+        .unwrap();
+        let t = e.state.editor.text();
+        assert!(t.lines().nth(2).unwrap().starts_with("| 10"), "{t}");
+        e.execute(
+            "table.moveRowTo",
+            &serde_json::json!({ "from": 1, "to": 3 }),
+        )
+        .unwrap();
+        e.execute(
+            "table.moveColumnTo",
+            &serde_json::json!({ "from": 0, "to": 1 }),
+        )
+        .unwrap();
+        assert!(
+            e.state.editor.text().starts_with("| b"),
+            "{}",
+            e.state.editor.text()
+        );
+        e.execute(
+            "table.moveColumnTo",
+            &serde_json::json!({ "from": 1, "to": 0 }),
+        )
+        .unwrap();
+        e.state.editor.sel = inkra_doc::Selection::caret(2);
         e.execute("table.alignCenter", &Value::Null).unwrap();
         assert!(
             e.state

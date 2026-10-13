@@ -950,7 +950,7 @@ impl Shell {
         q: &inkra_workspace::search::Query,
     ) {
         self.invoke(ctx, "file.open", &json!({ "path": path }));
-        let canon = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_owned());
+        let canon = inkra_workspace::paths::canonical(path);
         let Some(id) = self
             .engine
             .state

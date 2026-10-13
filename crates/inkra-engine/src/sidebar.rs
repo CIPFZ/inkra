@@ -212,7 +212,7 @@ pub fn register(r: &mut CommandRegistry) {
                     format!("{} is not a folder", path.display()),
                 ));
             }
-            let path = std::fs::canonicalize(&path).unwrap_or(path);
+            let path = inkra_workspace::paths::canonical(&path);
             cx.app.session.touch_folder(&path);
             cx.app.session.root = Some(path);
             cx.effects.push(Effect::RootChanged);

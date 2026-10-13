@@ -101,6 +101,10 @@ fn select_cell(cx: &mut CommandContext<'_>, t: &Table, target: Cell) {
     cx.effects.push(Effect::ScrollToCaret);
 }
 
+fn idx(p: &Value, key: &str) -> usize {
+    p.get(key).and_then(Value::as_u64).unwrap_or(0) as usize
+}
+
 type Run = fn(&mut CommandContext<'_>, &Value) -> CommandResult;
 
 /// Registers table commands.
@@ -269,6 +273,56 @@ pub fn register(r: &mut CommandRegistry) {
     for (id, doc, run) in cmds {
         r.register(FnCommand::new(edits(spec(id, T, "ED-083", doc)), *run).enabled(in_table));
     }
+    r.register(
+        FnCommand::new(
+            edits({
+                let mut s = spec("table.moveColumnTo", T, "ED-084", "Move column `from` to index `to` (dragging a column grip).");
+                s.params = Some(r#"{"type":"object","required":["from","to"],"properties":{"from":{"type":"integer"},"to":{"type":"integer"}}}"#);
+                s
+            }),
+            |cx, p| {
+                let (from, to) = (idx(p, "from"), idx(p, "to"));
+                rewrite(cx, |cells, a, c| {
+                    if from >= a.len() || from == to {
+                        return false;
+                    }
+                    let to = to.min(a.len() - 1);
+                    for row in cells.iter_mut() {
+                        let v = row.remove(from);
+                        row.insert(to, v);
+                    }
+                    let al = a.remove(from);
+                    a.insert(to, al);
+                    *c = Cell { row: c.row, col: to };
+                    true
+                })
+            },
+        )
+        .enabled(in_table),
+    );
+    r.register(
+        FnCommand::new(
+            edits({
+                let mut s = spec("table.moveRowTo", T, "ED-084", "Move body row `from` to index `to` (rows count from 1; the header stays).");
+                s.params = Some(r#"{"type":"object","required":["from","to"],"properties":{"from":{"type":"integer"},"to":{"type":"integer"}}}"#);
+                s
+            }),
+            |cx, p| {
+                let (from, to) = (idx(p, "from"), idx(p, "to"));
+                rewrite(cx, |cells, _, c| {
+                    if from == 0 || from >= cells.len() || from == to {
+                        return false;
+                    }
+                    let to = to.clamp(1, cells.len() - 1);
+                    let r = cells.remove(from);
+                    cells.insert(to, r);
+                    *c = Cell { row: to, col: c.col };
+                    true
+                })
+            },
+        )
+        .enabled(in_table),
+    );
     r.register(
         FnCommand::new(
             edits(spec(

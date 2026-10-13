@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **145**
+Registered commands: **147**
 
 
 ## App
@@ -164,7 +164,9 @@ Registered commands: **145**
 | `table.insertRowBelow` | Insert Row Below | 在下方插入行 | `Ctrl+Enter` (in table) | `⌘↩` (in table) | — | ED-083 | Insert a row below (Ctrl+Enter). |
 | `table.moveColLeft` | Move Column Left | 左移列 |  |  | — | ED-083 | Move the column left. |
 | `table.moveColRight` | Move Column Right | 右移列 |  |  | — | ED-083 | Move the column right. |
+| `table.moveColumnTo` | Move Column | 移动列 |  |  | `{"type":"object","required":["from","to"],"properties":{"from":{"type":"integer"},"to":{"type":"integer"}}}` | ED-084 | Move column `from` to index `to` (dragging a column grip). |
 | `table.moveRowDown` | Move Row Down | 下移行 | `Alt+Down` (in table) | `⌥↓` (in table) | — | ED-083 | Move the row down (Alt+Down). |
+| `table.moveRowTo` | Move Row | 移动行 |  |  | `{"type":"object","required":["from","to"],"properties":{"from":{"type":"integer"},"to":{"type":"integer"}}}` | ED-084 | Move body row `from` to index `to` (rows count from 1; the header stays). |
 | `table.moveRowUp` | Move Row Up | 上移行 | `Alt+Up` (in table) | `⌥↑` (in table) | — | ED-083 | Move the row up (Alt+Up). |
 | `table.nextCell` | Next Cell | 下一个单元格 |  |  | — | ED-014 | Move to the next cell (adds a row after the last cell). |
 | `table.prevCell` | Previous Cell | 上一个单元格 |  |  | — | ED-014 | Move to the previous cell. |
