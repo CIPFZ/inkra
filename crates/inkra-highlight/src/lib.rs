@@ -265,6 +265,35 @@ fn theme<'a>(ts: &'a ThemeSet, name: &str) -> Option<&'a Theme> {
         .or_else(|| ts.themes.get("InspiredGitHub"))
 }
 
+/// Color schemes loaded from `.tmTheme` files, by name (leaked: a session
+/// loads a handful at most).
+static USER_THEMES: std::sync::RwLock<Vec<(String, &'static Theme)>> =
+    std::sync::RwLock::new(Vec::new());
+
+/// Loads a TextMate color scheme (`themes/<name>/syntax.tmTheme`, TH-001) and
+/// returns the name to pass to [`highlight`]. Reloads when the file changes.
+pub fn load_theme_file(path: &std::path::Path) -> Result<String, String> {
+    let theme = ThemeSet::get_theme(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    format!("{:?}", theme.settings).hash(&mut h);
+    format!("{:?}", theme.scopes).hash(&mut h);
+    let name = format!("file:{}#{:x}", path.display(), h.finish());
+    let mut list = USER_THEMES.write().map_err(|_| "poisoned".to_owned())?;
+    if !list.iter().any(|(n, _)| *n == name) {
+        list.push((name.clone(), Box::leak(Box::new(theme))));
+    }
+    Ok(name)
+}
+
+fn user_theme(name: &str) -> Option<&'static Theme> {
+    USER_THEMES
+        .read()
+        .ok()?
+        .iter()
+        .find(|(n, _)| n == name)
+        .map(|(_, t)| *t)
+}
+
 /// Names of the built-in syntect themes.
 pub fn theme_names() -> Vec<String> {
     ASSETS
@@ -294,7 +323,10 @@ pub fn highlight(code: &str, lang: &str, theme_name: &str) -> Option<Highlighted
         return Some(hit);
     }
     let syntax = find_syntax(&assets.syntaxes, lang)?;
-    let theme = theme(&assets.themes, theme_name)?;
+    let theme = match user_theme(theme_name) {
+        Some(t) => t,
+        None => theme(&assets.themes, theme_name)?,
+    };
     let mut hl = HighlightLines::new(syntax, theme);
     let mut spans = Vec::new();
     let mut offset = 0usize;

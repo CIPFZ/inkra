@@ -108,8 +108,14 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
             Frame::Item { task, .. } => {
                 marker_slots.push((x, f));
                 x += style.list_indent * em;
+                // MD-006: completed tasks are muted and/or struck through.
                 if task.as_ref().is_some_and(|t| t.1) {
-                    fmt.color = style.fg_muted;
+                    if style.task_done != 1 {
+                        fmt.color = style.fg_muted;
+                    }
+                    if style.task_done >= 1 {
+                        fmt.strike = true;
+                    }
                 }
             }
             Frame::Footnote { .. } => {
@@ -218,6 +224,17 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                         .first()
                         .map(|l| abs(&l.span))
                         .unwrap_or(item.src.end..item.src.end);
+                    // MD-002: heading numbers are drawn, never written; they
+                    // precede the marker so the caret stays next to the text.
+                    if let Some(n) = cx
+                        .doc_info
+                        .heading_number(item.src.start)
+                        .or_else(|| cx.doc_info.heading_number(abs(&b.span).start))
+                    {
+                        let mut nf = hf;
+                        nf.color = style.fg_muted;
+                        bl.push(&format!("{n} "), &nf, None, true);
+                    }
                     if active && !setext {
                         // `# ` marker in muted color (ED-002).
                         bl.push_marker(abs(marker).start..content.start.max(abs(marker).end), &hf);
@@ -382,10 +399,9 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                         // lines after markers) start indented by two characters.
                         if style.first_line_indent
                             && matches!(b.kind, BlockKind::Paragraph)
-                            && !item
-                                .frames
-                                .iter()
-                                .any(|f| matches!(f, super::Frame::Item { .. }))
+                            && !item.frames.iter().any(|f| {
+                                matches!(f, super::Frame::Item { .. } | super::Frame::Quote { .. })
+                            })
                             && let Some(sec) = bl.job.sections.first_mut()
                         {
                             sec.leading_space = 2.0 * em;
@@ -660,8 +676,27 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                         && !inkra_html::render::needs_source(&text.slice(item.src.clone())) =>
                 {
                     // MD-014: the renderable HTML subset.
-                    let blocks = inkra_html::render::flatten(&text.slice(item.src.clone()));
-                    let h = html_blocks(&blocks, cx, fmt, x, y + 0.2 * em, w, fonts, &mut out);
+                    let html = text.slice(item.src.clone());
+                    let blocks = inkra_html::render::flatten(&html);
+                    // `<details>` keys start from the block's text (stable across
+                    // edits elsewhere).
+                    let mut seen = {
+                        use std::hash::{Hash, Hasher};
+                        let mut h = std::collections::hash_map::DefaultHasher::new();
+                        html.hash(&mut h);
+                        (h.finish() as usize) & 0xffff_ffff
+                    };
+                    let h = html_blocks(
+                        &blocks,
+                        cx,
+                        fmt,
+                        x,
+                        y + 0.2 * em,
+                        w,
+                        fonts,
+                        &mut out,
+                        &mut seen,
+                    );
                     // A closing tag alone (`</details>`) takes almost no room.
                     content_h = if blocks.is_empty() {
                         0.5 * em
@@ -986,9 +1021,13 @@ fn span_fmt(sp: &inkra_html::render::Span, base: Fmt, style: &Style) -> Fmt {
     }
     if let Some(s) = sp.size {
         f.size = (base.size * s).round();
+        f.line_height = f.line_height.max((f.size * 1.3).round());
     }
     if let Some([r, g, b]) = sp.color {
         f.color = Color32::from_rgb(r, g, b);
+    }
+    if let Some([r, g, b]) = sp.bg {
+        f.bg = Color32::from_rgb(r, g, b);
     }
     if sp.link.is_some() {
         f.color = style.accent;
@@ -1008,6 +1047,7 @@ fn html_blocks(
     w: f32,
     fonts: &mut FontsView<'_>,
     out: &mut BlockLayout,
+    details_seen: &mut usize,
 ) -> f32 {
     use inkra_html::render::{Align as HAlign, HBlock};
     let style = cx.style;
@@ -1128,9 +1168,16 @@ fn html_blocks(
             } => {
                 let mut f = fmt;
                 f.bold = true;
+                // MD-014: the summary folds and unfolds the body in the view.
+                let key =
+                    super::details_key(summary.iter().map(|s| s.text.as_str()), *details_seen);
+                *details_seen += 1;
+                let open = *open != super::details_toggled(key);
                 let mut bl = Builder::new(text, 0, 0, None, style, w);
-                bl.push(if *open { "▼ " } else { "▶ " }, &f, None, true);
+                bl.push(if open { "▼ " } else { "▶ " }, &f, None, true);
                 spans_into(&mut bl, summary, f, w);
+                let end = bl.job.text.len();
+                bl.map.hits.push((0..end, HitAction::ToggleDetails(key)));
                 let (h, _) = galley_height(fonts, &bl.job);
                 out.runs.push(RunSpec {
                     job: bl.job,
@@ -1138,8 +1185,18 @@ fn html_blocks(
                     map: bl.map,
                 });
                 cy += h + 0.3 * em;
-                if *open {
-                    cy += html_blocks(body, cx, fmt, x + 1.2 * em, cy, w - 1.2 * em, fonts, out);
+                if open {
+                    cy += html_blocks(
+                        body,
+                        cx,
+                        fmt,
+                        x + 1.2 * em,
+                        cy,
+                        w - 1.2 * em,
+                        fonts,
+                        out,
+                        details_seen,
+                    );
                 }
             }
             HBlock::Table(rows) => {
@@ -1216,6 +1273,22 @@ fn diagram_palette(style: &Style) -> inkra_diagram::Palette {
     p.cluster_stroke = c(style.code_border);
     p.label_bg = c(style.code_bg);
     p.pie_text = c(style.fg);
+    // MD-102: the theme's `[diagram]` colors win.
+    let [primary, border, line, text] = style.diagram_colors;
+    if let Some(v) = primary {
+        p.node_fill = c(v);
+    }
+    if let Some(v) = border {
+        p.node_stroke = c(v);
+    }
+    if let Some(v) = line {
+        p.edge = c(v);
+        p.lifeline = c(v);
+    }
+    if let Some(v) = text {
+        p.fg = c(v);
+        p.pie_text = c(v);
+    }
     p
 }
 
@@ -1775,7 +1848,7 @@ fn table(
         rect: Rect::from_min_max(pos2(x, y), pos2(x + tw, ty)),
         fill: Color32::TRANSPARENT,
         stroke: Stroke::new(1.0, style.table_border),
-        radius: 0.0,
+        radius: style.radius.min(4.0),
     });
     let mut gx = x;
     for c in &col_w[..col_w.len() - 1] {

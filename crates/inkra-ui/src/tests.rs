@@ -118,6 +118,58 @@ fn quit_closes_viewport() {
     assert!(h.state().quit_requested());
 }
 
+#[test]
+fn session_restores_sidebar_scroll_and_caret() {
+    let d = tempfile::tempdir().unwrap();
+    let p = d.path().join("long.md");
+    let body: String = (0..300).map(|i| format!("Paragraph {i}\n\n")).collect();
+    std::fs::write(&p, &body).unwrap();
+    let top = body.find("Paragraph 120").unwrap();
+    let session = inkra_workspace::session::Session {
+        windows: vec![inkra_workspace::session::WindowSession {
+            path: Some(p.clone()),
+            caret: top + 3,
+            sidebar: true,
+            top: Some(top),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let mut h = harness("en-US");
+    assert_eq!(h.state_mut().restore_session(&session), 1);
+    h.run_steps(4);
+    let sh = h.state();
+    assert!(sh.engine.state.view.sidebar_visible);
+    assert_eq!(sh.engine.state.editor.sel.head, top + 3);
+    let saved = sh.session();
+    assert!(saved.windows[0].sidebar);
+    let t = saved.windows[0].top.expect("scrolled");
+    assert!(
+        (top.saturating_sub(40)..=top + 40).contains(&t),
+        "top {t} vs {top}"
+    );
+}
+
+#[test]
+fn closing_the_last_window_can_keep_the_app_running() {
+    let mut sh = shell("en-US");
+    sh.engine
+        .state
+        .prefs
+        .set("general.quitOnLastWindow", serde_json::json!(false));
+    sh.engine.state.editor = inkra_engine::editor::Editor::from_text("saved text");
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(|ui, shell: &mut Shell| shell.ui(ui), sh);
+    h.run();
+    h.get_by_label("File").click();
+    h.run();
+    h.get_by_label("Close Ctrl+W").click();
+    h.run_steps(3);
+    assert!(!h.state().quit_requested());
+    assert_eq!(text(&h), "");
+}
+
 fn text(h: &Harness<'_, Shell>) -> String {
     h.state().engine.state.editor.text()
 }
@@ -640,6 +692,26 @@ fn m5_toc_and_footnotes_render() {
         r.iter().any(|t| t.contains("Text1 and2")),
         "footnotes numbered by first reference: {r:?}"
     );
+}
+
+#[test]
+fn theme_numbers_headings_without_writing_them() {
+    let doc = "# Intro\n\ntext\n\n## Part\n\n## Next\n\n# End\n";
+    let mut h = live_harness(doc);
+    {
+        let st = &mut h.state_mut().engine.state;
+        st.style.heading_numbers = true;
+        st.style.version += 2;
+        st.editor.sel = inkra_doc::Selection::caret(doc.len());
+    }
+    for _ in 0..4 {
+        h.step();
+    }
+    let r = rendered(&h);
+    for n in ["1. Intro", "1.1. Part", "1.2. Next", "2. End"] {
+        assert!(r.iter().any(|t| t.contains(n)), "{n} in {r:?}");
+    }
+    assert_eq!(h.state().engine.state.editor.doc.text().to_string(), doc);
 }
 
 #[test]

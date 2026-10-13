@@ -126,6 +126,8 @@ pub struct AppState {
     /// The system asks for reduced motion (UI-033): no animated scrolling or
     /// fading.
     pub reduce_motion: bool,
+    /// The inline math hint was shown this session (MD-035).
+    pub math_hint_shown: bool,
     /// The system uses a dark appearance (for the Auto theme).
     pub system_dark: bool,
 }
@@ -303,6 +305,17 @@ impl AppState {
         std::iter::once((&self.meta, &self.editor))
             .chain(self.others.iter().map(|p| (&p.meta, &p.editor)))
     }
+
+    /// The view flags of window `id`.
+    pub fn view_of(&self, id: u64) -> Option<&ViewState> {
+        if self.meta.id == id {
+            return Some(&self.view);
+        }
+        self.others
+            .iter()
+            .find(|p| p.meta.id == id)
+            .map(|p| &p.view)
+    }
 }
 
 /// Recovery entry id for a window of this process.
@@ -319,6 +332,8 @@ pub enum Notice {
         /// Command id.
         command: String,
     },
+    /// `$…$` was typed while inline math is off (MD-035).
+    InlineMathHint,
 }
 
 /// Side effects the engine cannot perform itself; drained by the host (UI or CLI).

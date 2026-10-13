@@ -354,6 +354,42 @@ pub fn shared_quotes(prev: Option<&LiveItem>, cur: &LiveItem) -> usize {
     n
 }
 
+thread_local! {
+    static DETAILS: std::cell::RefCell<(std::collections::HashSet<u64>, u64)> = Default::default();
+}
+
+/// Key of a `<details>` element: its summary and position (MD-014).
+pub fn details_key<'a>(summary: impl Iterator<Item = &'a str>, n: usize) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for s in summary {
+        s.hash(&mut h);
+    }
+    n.hash(&mut h);
+    h.finish()
+}
+
+/// Whether the reader flipped `<details>` `key` from its `open` attribute.
+pub fn details_toggled(key: u64) -> bool {
+    DETAILS.with(|d| d.borrow().0.contains(&key))
+}
+
+/// Folds or unfolds `<details>` `key` in the view (not in the file).
+pub fn toggle_details(key: u64) {
+    DETAILS.with(|d| {
+        let mut d = d.borrow_mut();
+        if !d.0.remove(&key) {
+            d.0.insert(key);
+        }
+        d.1 += 1;
+    });
+}
+
+/// Changes whenever a `<details>` is toggled (cache keys).
+pub fn details_generation() -> u64 {
+    DETAILS.with(|d| d.borrow().1)
+}
+
 /// Document-wide facts some items need: footnote numbers by order of first
 /// reference (MD-010) and the headings shown by `[TOC]` (MD-013).
 #[derive(Debug, Clone, Default, PartialEq, Hash)]
@@ -362,6 +398,9 @@ pub struct DocInfo {
     pub footnotes: Vec<(String, u32)>,
     /// `(level, text, anchor)` of every heading, when the document has a `[TOC]`.
     pub headings: Vec<(u8, String, String)>,
+    /// Heading numbers (`1.2.`) by heading start, when the theme numbers them
+    /// (MD-002, render only).
+    pub heading_numbers: Vec<(usize, String)>,
 }
 
 impl DocInfo {
@@ -371,6 +410,36 @@ impl DocInfo {
             .iter()
             .find(|(l, _)| l == label)
             .map(|(_, n)| *n)
+    }
+
+    /// The number shown before the heading starting at `start`.
+    pub fn heading_number(&self, start: usize) -> Option<&str> {
+        self.heading_numbers
+            .iter()
+            .find(|(s, _)| *s == start)
+            .map(|(_, n)| n.as_str())
+    }
+
+    /// Like [`Self::compute`], numbering headings when `numbers` is set.
+    pub fn compute_with(doc: &Doc, items: &[LiveItem], numbers: bool) -> Self {
+        let mut info = Self::compute(doc, items);
+        if numbers {
+            let blocks = doc.ast().to_blocks();
+            let heads = inkra_markdown::walk::headings(doc.text(), &blocks);
+            let top = heads.iter().map(|h| h.level).min().unwrap_or(1);
+            let mut counters = [0u32; 6];
+            for h in heads {
+                let k = usize::from(h.level.saturating_sub(top)).min(5);
+                counters[k] += 1;
+                for c in counters.iter_mut().skip(k + 1) {
+                    *c = 0;
+                }
+                let n: Vec<String> = counters[..=k].iter().map(|c| c.to_string()).collect();
+                info.heading_numbers
+                    .push((h.span.start, format!("{}.", n.join("."))));
+            }
+        }
+        info
     }
 
     /// Computes the info for `doc` given its flattened items.

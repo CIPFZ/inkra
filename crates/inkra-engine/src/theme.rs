@@ -223,26 +223,88 @@ fn f32_of(t: &toml::Table, section: &str, key: &str) -> Option<f32> {
         .or_else(|| v.as_integer().map(|i| i as f32))
 }
 
-fn font_kind(t: &toml::Table, key: &str, fallback: FontKind) -> FontKind {
-    t.get("fonts")
+/// The first usable face of a font chain (TH-006): a bundled or generic name,
+/// or an installed family; failing that, the bundled face closest to the first
+/// name. Also returns the installed family's name, if one was chosen.
+fn font_choice(t: &toml::Table, key: &str, fallback: FontKind) -> (FontKind, Option<String>) {
+    let names: Vec<String> = t
+        .get("fonts")
         .and_then(|f| f.get(key))
         .and_then(Value::as_array)
-        .and_then(|a| {
+        .map(|a| {
             a.iter()
                 .filter_map(Value::as_str)
-                .find_map(FontKind::from_name)
+                .map(str::to_owned)
+                .collect()
         })
-        .unwrap_or(fallback)
+        .unwrap_or_default();
+    for n in &names {
+        if let Some(k) = inkra_layout::fonts::resolve_name(n) {
+            let name = matches!(k, FontKind::System(_)).then(|| n.clone());
+            return (k, name);
+        }
+    }
+    (
+        names
+            .iter()
+            .find_map(|n| FontKind::from_name(n))
+            .unwrap_or(fallback),
+        None,
+    )
 }
 
 /// Loads theme `name` into a [`Style`]. Unknown fields are ignored; invalid
 /// values keep the inherited ones.
 pub fn load(name: &str, user_dir: Option<&Path>) -> Result<Style, String> {
     let t = resolved_table(name, user_dir, 0)?;
-    let mut s = Style::default();
-    s.name = name.to_owned();
-    s.dark = meta_dark(&t);
-    s.body_font = font_kind(&t, "body", FontKind::Sans);
+    let mut s = style_of(name, &t)?;
+    // TH-001: `syntax_theme` may name a TextMate scheme beside the theme file
+    // (`syntax.tmTheme` by default).
+    if let Some((_, Origin::File(p))) = source_of(name, user_dir)
+        && let Some(dir) = p.parent()
+    {
+        let named = t
+            .get("code")
+            .and_then(|c| c.get("syntax_theme"))
+            .and_then(Value::as_str)
+            .filter(|n| n.ends_with(".tmTheme"));
+        let file = dir.join(named.unwrap_or("syntax.tmTheme"));
+        if file.is_file() {
+            match inkra_highlight::load_theme_file(&file) {
+                Ok(n) => {
+                    use std::hash::{Hash, Hasher};
+                    let mut h = std::collections::hash_map::DefaultHasher::new();
+                    s.version.hash(&mut h);
+                    n.hash(&mut h);
+                    s.version = h.finish() | 1;
+                    s.syntax_theme = n;
+                }
+                Err(e) => log::warn!("syntax theme: {e}"),
+            }
+        }
+    }
+    Ok(s)
+}
+
+fn style_of(name: &str, t: &toml::Table) -> Result<Style, String> {
+    let t = t.clone();
+    let (body, body_name) = font_choice(&t, "body", FontKind::Sans);
+    let (mono, mono_name) = font_choice(&t, "mono", FontKind::Mono);
+    let mut s = Style {
+        name: name.to_owned(),
+        dark: meta_dark(&t),
+        body_font: body,
+        mono_font: mono,
+        font_names: [body_name, None, mono_name],
+        ..Style::default()
+    };
+    if let Some(v) = t
+        .get("fonts")
+        .and_then(|f| f.get("cjk_latin_spacing"))
+        .and_then(Value::as_bool)
+    {
+        s.cjk_latin_spacing = v;
+    }
     s.heading_font = {
         let empty = t
             .get("fonts")
@@ -250,9 +312,12 @@ pub fn load(name: &str, user_dir: Option<&Path>) -> Result<Style, String> {
             .and_then(Value::as_array)
             .is_none_or(|a| a.is_empty());
         if empty {
+            s.font_names[1] = s.font_names[0].clone();
             s.body_font
         } else {
-            font_kind(&t, "heading", s.body_font)
+            let (k, n) = font_choice(&t, "heading", s.body_font);
+            s.font_names[1] = n;
+            k
         }
     };
     if let Some(v) = f32_of(&t, "fonts", "size") {
@@ -294,8 +359,12 @@ pub fn load(name: &str, user_dir: Option<&Path>) -> Result<Style, String> {
         sidebar_bg,
         sidebar_fg,
         sidebar_active_bg,
-        statusbar_fg
+        statusbar_fg,
+        toolbar_bg
     );
+    if c.get("toolbar_bg").is_none() {
+        s.toolbar_bg = s.sidebar_bg;
+    }
     for (i, k) in [
         "alert_note",
         "alert_tip",
@@ -342,6 +411,9 @@ pub fn load(name: &str, user_dir: Option<&Path>) -> Result<Style, String> {
                 hs.color = c.resolve(col);
             }
         }
+        if let Some(v) = h.get("auto_number").and_then(Value::as_bool) {
+            s.heading_numbers = v;
+        }
     }
     if let Some(code) = t.get("code").and_then(Value::as_table) {
         if let Some(st) = code.get("syntax_theme").and_then(Value::as_str) {
@@ -378,6 +450,38 @@ pub fn load(name: &str, user_dir: Option<&Path>) -> Result<Style, String> {
     }
     if let Some(v) = f32_of(&t, "layout", "focus_dim_opacity") {
         s.focus_dim_opacity = v.clamp(0.0, 1.0);
+    }
+    if let Some(v) = f32_of(&t, "layout", "radius") {
+        s.radius = v.clamp(0.0, 20.0);
+    }
+    if let Some(v) = f32_of(&t, "layout", "image_radius") {
+        s.image_radius = v.clamp(0.0, 40.0);
+    }
+    if let Some(v) = t
+        .get("layout")
+        .and_then(|l| l.get("task_done"))
+        .and_then(Value::as_str)
+    {
+        s.task_done = match v {
+            "strike" => 1,
+            "both" => 2,
+            _ => 0,
+        };
+    }
+    // MD-102: diagram colors (`[diagram]`).
+    if let Some(d) = t.get("diagram").and_then(Value::as_table) {
+        for (k, key) in ["primary", "primary_border", "line", "text"]
+            .iter()
+            .enumerate()
+        {
+            if let Some(v) = d
+                .get(*key)
+                .and_then(Value::as_str)
+                .and_then(|v| c.resolve(v))
+            {
+                s.diagram_colors[k] = Some(v);
+            }
+        }
     }
     // Source-mode highlighting follows the theme's palette.
     s.source.heading = s.accent;
@@ -485,5 +589,39 @@ mod tests {
         assert!(load("Nope", None).is_err());
         std::fs::write(dir.path().join("Bad.toml"), "not = [toml").unwrap();
         assert!(list(Some(dir.path())).iter().all(|e| e.name != "Bad"));
+    }
+
+    #[test]
+    fn every_documented_field_is_read() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("Full")).unwrap();
+        std::fs::write(
+            dir.path().join("Full/theme.toml"),
+            "[fonts]\nmono = [\"Nonexistent Mono\", \"monospace\"]\nbody = [\"serif\"]\ncjk_latin_spacing = true\n\
+             [colors]\ntoolbar_bg = \"#123456\"\n[headings]\nauto_number = true\n\
+             [layout]\nradius = 8.0\nimage_radius = 6.0\ntask_done = \"strike\"\n\
+             [diagram]\nprimary = \"#ececff\"\nline = \"fg\"\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("Full/syntax.tmTheme"),
+            r#"<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>name</key><string>T</string><key>settings</key><array><dict><key>settings</key><dict><key>foreground</key><string>#112233</string><key>background</key><string>#ffffff</string></dict></dict></array></dict></plist>"#,
+        )
+        .unwrap();
+        let s = load("Full", Some(dir.path())).unwrap();
+        assert_eq!(s.body_font, FontKind::Serif);
+        assert_eq!(s.mono_font, FontKind::Mono);
+        assert!(s.cjk_latin_spacing && s.heading_numbers);
+        assert_eq!(s.toolbar_bg, Color32::from_rgb(0x12, 0x34, 0x56));
+        assert_eq!((s.radius, s.image_radius, s.task_done), (8.0, 6.0, 1));
+        assert_eq!(
+            s.diagram_colors[0],
+            Some(Color32::from_rgb(0xec, 0xec, 0xff))
+        );
+        assert_eq!(s.diagram_colors[2], Some(s.fg));
+        assert!(s.syntax_theme.starts_with("file:"), "{}", s.syntax_theme);
+        // Without `toolbar_bg`, the toolbar matches the sidebar.
+        let p = load("Paper", None).unwrap();
+        assert_eq!(p.toolbar_bg, p.sidebar_bg);
     }
 }

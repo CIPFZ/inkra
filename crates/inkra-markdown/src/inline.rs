@@ -314,6 +314,12 @@ impl<'a> Parser<'a> {
                 self.parse_newline(block);
                 true
             }
+            b'\\' if self.o.latex_delimiters && self.s.get(self.pos + 1) == Some(&b'(') => {
+                self.parse_paren_math(block) || {
+                    self.parse_backslash(block);
+                    true
+                }
+            }
             b'\\' => {
                 self.parse_backslash(block);
                 true
@@ -1039,6 +1045,31 @@ impl<'a> Parser<'a> {
                 }
                 _ => i += 1,
             }
+        }
+        false
+    }
+
+    /// `\( … \)` inline math (MD-035, `latex_delimiters`).
+    fn parse_paren_math(&mut self, block: usize) -> bool {
+        let start = self.pos;
+        let s = self.s;
+        let body = start + 2;
+        let mut i = body;
+        while i + 1 < s.len() {
+            if s[i] == b'\\' {
+                if s[i + 1] == b')' && i > body {
+                    let n = self.new_node(InlineKind::Math { content: body..i }, start..i + 2);
+                    self.append(block, n);
+                    self.pos = i + 2;
+                    return true;
+                }
+                i += 2;
+                continue;
+            }
+            if s[i] == b'\n' && s.get(i + 1) == Some(&b'\n') {
+                break;
+            }
+            i += 1;
         }
         false
     }

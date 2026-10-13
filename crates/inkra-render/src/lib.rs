@@ -14,6 +14,10 @@ pub trait Textures {
     fn image(&self, src: &str) -> Option<epaint::TextureId>;
     /// The texture of a rasterized formula.
     fn math(&self, m: &inkra_layout::MathScene) -> Option<epaint::TextureId>;
+    /// Corner radius of images (theme `layout.image_radius`).
+    fn image_radius(&self) -> f32 {
+        0.0
+    }
 }
 
 /// Rasterizes a vector scene (formula, diagram) at `ppp` pixels per point;
@@ -95,12 +99,21 @@ pub fn paint_decos(
                 match textures.image(src) {
                     Some(tex) => {
                         let tint = fade(Color32::WHITE);
-                        out.push(Shape::image(
-                            tex,
-                            r,
-                            Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
-                            tint,
-                        ));
+                        let uv = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
+                        // TH-001 `layout.image_radius`.
+                        let radius = textures.image_radius();
+                        if radius > 0.0 {
+                            out.push(Shape::Rect(
+                                epaint::RectShape::filled(
+                                    r,
+                                    CornerRadius::same(radius.min(120.0) as u8),
+                                    tint,
+                                )
+                                .with_texture(tex, uv),
+                            ));
+                        } else {
+                            out.push(Shape::image(tex, r, uv, tint));
+                        }
                     }
                     None => {
                         out.push(Shape::rect_filled(

@@ -48,19 +48,64 @@ pub fn load_editor(
 /// Opens `path` following FS-001: an already open file is focused; a blank active
 /// window is reused; otherwise a new window opens.
 pub fn open_path(cx: &mut CommandContext<'_>, path: &Path) -> CommandResult {
+    open_path_with(cx, path, None, None)
+}
+
+/// The caret position of heading `anchor` (MD-033 `other.md#anchor`).
+fn anchor_pos(e: &Editor, anchor: &str) -> Option<usize> {
+    let blocks = e.doc.ast().to_blocks();
+    inkra_markdown::walk::headings(e.doc.text(), &blocks)
+        .into_iter()
+        .find(|h| h.anchor == anchor)
+        .map(|h| h.span.end)
+}
+
+/// [`open_path`] with a window choice (`"current"` / `"new"`, else the
+/// `general.openFileIn` preference) and a heading anchor to put the caret at.
+pub fn open_path_with(
+    cx: &mut CommandContext<'_>,
+    path: &Path,
+    window: Option<&str>,
+    anchor: Option<&str>,
+) -> CommandResult {
     let canon = inkra_workspace::paths::canonical(path);
-    if let Some((meta, _)) = cx
+    let open = cx
         .app
         .editors()
         .find(|(_, e)| e.path.as_deref() == Some(canon.as_path()))
-    {
-        let id = meta.id;
+        .map(|(m, _)| m.id);
+    if let Some(id) = open {
+        if let Some(a) = anchor {
+            let e = if cx.app.meta.id == id {
+                Some(&mut cx.app.editor)
+            } else {
+                cx.app
+                    .others
+                    .iter_mut()
+                    .find(|p| p.meta.id == id)
+                    .map(|p| &mut p.editor)
+            };
+            if let Some(e) = e
+                && let Some(pos) = anchor_pos(e, a)
+            {
+                e.sel = inkra_doc::Selection::caret(pos);
+            }
+            cx.effects.push(Effect::ScrollToCaret);
+        }
         cx.effects.push(Effect::FocusWindow(id));
         return Ok(Outcome::Done);
     }
-    let (editor, disk) = load_editor(cx.app, &canon).map_err(|e| err("file.open", e))?;
+    let (mut editor, disk) = load_editor(cx.app, &canon).map_err(|e| err("file.open", e))?;
+    if let Some(pos) = anchor.and_then(|a| anchor_pos(&editor, a)) {
+        editor.sel = inkra_doc::Selection::caret(pos);
+    }
     cx.app.session.touch_recent(&canon);
-    let reuse = match cx.app.prefs.string("general.openFileIn").as_str() {
+    let choice = match window {
+        Some("current") => "current".to_owned(),
+        Some("new") => "newWindow".to_owned(),
+        _ => cx.app.prefs.string("general.openFileIn"),
+    };
+    let reuse = match choice.as_str() {
         "newWindow" => false,
         // Never replaces unsaved changes (iron rule: no content loss).
         "current" => !cx.app.editor.doc.is_dirty(),
@@ -295,10 +340,15 @@ pub fn register(r: &mut CommandRegistry) {
                 "FS-002",
                 "Open a file (dialog without `path`).",
             ),
-            r#"{"type":"object","properties":{"path":{"type":"string"}}}"#,
+            r#"{"type":"object","properties":{"path":{"type":"string"},"window":{"enum":["current","new"]},"anchor":{"type":"string"}}}"#,
         ),
         |cx, p| match p.get("path").and_then(Value::as_str) {
-            Some(path) => open_path(cx, Path::new(path)),
+            Some(path) => open_path_with(
+                cx,
+                Path::new(path),
+                p.get("window").and_then(Value::as_str),
+                p.get("anchor").and_then(Value::as_str),
+            ),
             None => {
                 cx.effects.push(Effect::OpenDialog);
                 Ok(Outcome::Done)
@@ -436,6 +486,24 @@ pub fn register(r: &mut CommandRegistry) {
             |cx, _| {
                 if let Some(p) = cx.app.editor.path.clone() {
                     cx.effects.push(Effect::Reveal(p));
+                }
+                Ok(Outcome::Done)
+            },
+        )
+        .enabled(|cx| cx.app.editor.path.is_some()),
+    );
+    r.register(
+        FnCommand::new(
+            spec(
+                "file.copyPath",
+                File,
+                "FS-010",
+                "Copy the current file's path.",
+            ),
+            |cx, _| {
+                if let Some(p) = &cx.app.editor.path {
+                    let text = p.to_string_lossy().trim_start_matches(r"\\?\").to_owned();
+                    cx.effects.push(Effect::SetClipboard { text, html: None });
                 }
                 Ok(Outcome::Done)
             },
@@ -596,5 +664,39 @@ mod readonly_tests {
         #[allow(clippy::permissions_set_readonly_false)]
         perm.set_readonly(false);
         let _ = std::fs::set_permissions(&f, perm);
+    }
+}
+
+#[cfg(test)]
+mod link_tests {
+    use serde_json::json;
+
+    #[test]
+    fn linked_files_open_in_the_current_window_at_the_anchor() {
+        let d = tempfile::tempdir().unwrap();
+        let a = d.path().join("a.md");
+        let b = d.path().join("b.md");
+        std::fs::write(&a, "[go](b.md#second-part)\n").unwrap();
+        std::fs::write(&b, "# First\n\ntext\n\n## Second part\n\nmore\n").unwrap();
+        let mut e = crate::Engine::new(crate::Preferences::default());
+        e.execute("file.open", &json!({ "path": a })).unwrap();
+        e.take_effects();
+        e.execute(
+            "file.open",
+            &json!({ "path": b, "window": "current", "anchor": "second-part" }),
+        )
+        .unwrap();
+        assert_eq!(e.state.others.len(), 0, "the clean window was reused");
+        let text = e.state.editor.text();
+        assert_eq!(
+            e.state.editor.sel.head,
+            text.find("Second part").unwrap() + "Second part".len()
+        );
+        // A modified document is never replaced.
+        e.execute("edit.insertText", &json!({ "text": "y" }))
+            .unwrap();
+        e.execute("file.open", &json!({ "path": a, "window": "current" }))
+            .unwrap();
+        assert_eq!(e.state.others.len(), 1);
     }
 }

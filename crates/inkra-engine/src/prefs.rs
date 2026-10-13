@@ -80,6 +80,13 @@ pub const PREFS: &[PrefSpec] = &[
         doc: "On startup: restore the last session, open a new document, or open a folder.",
     },
     PrefSpec {
+        key: "general.startupFolder",
+        default: r#""""#,
+        kind: PrefKind::String,
+        req: "PR-010",
+        doc: "Folder opened in the sidebar when `general.startup` is `folder` (empty: the last opened folder).",
+    },
+    PrefSpec {
         key: "general.defaultEncoding",
         default: r#""utf-8""#,
         kind: PrefKind::String,
@@ -144,10 +151,39 @@ pub const PREFS: &[PrefSpec] = &[
     },
     PrefSpec {
         key: "general.markdownExtensions",
-        default: r#"["md", "markdown", "mdown", "mkd", "mkdn", "mdwn", "mdtxt", "mdtext", "text", "txt", "rmd", "qmd"]"#,
+        default: r#"["md", "markdown", "mdown", "mmd", "text", "txt", "mdx", "rmarkdown", "rmd", "mkd", "mdwn", "mdtxt", "mdtext", "apib"]"#,
         kind: PrefKind::StringList,
         req: "PR-015",
         doc: "File extensions treated as Markdown (file tree, open dialog, drops).",
+    },
+    PrefSpec {
+        key: "general.quitOnLastWindow",
+        default: if cfg!(target_os = "macos") {
+            "false"
+        } else {
+            "true"
+        },
+        kind: PrefKind::Bool,
+        req: "FS-005",
+        doc: "Closing the last window quits; otherwise it stays open with a blank document (default off on macOS).",
+    },
+    PrefSpec {
+        key: "editor.linkedFileIn",
+        default: r#""current""#,
+        kind: PrefKind::Enum(&["current", "new"]),
+        req: "MD-033",
+        doc: "A clicked link to a Markdown file opens in the current window (a modified document is never replaced) or a new one.",
+    },
+    PrefSpec {
+        key: "appearance.titleBar",
+        default: if cfg!(windows) {
+            r#""integrated""#
+        } else {
+            r#""native""#
+        },
+        kind: PrefKind::Enum(&["integrated", "native"]),
+        req: "TH-008",
+        doc: "Integrated title bar (menus and window buttons in one row; default on Windows) or the system's.",
     },
     PrefSpec {
         key: "general.dropMarkdown",
@@ -323,6 +359,13 @@ pub const PREFS: &[PrefSpec] = &[
         kind: PrefKind::Bool,
         req: "PR-043",
         doc: "Show the word count in the status bar.",
+    },
+    PrefSpec {
+        key: "view.wordCountDisplay",
+        default: r#""always""#,
+        kind: PrefKind::Enum(&["always", "hover"]),
+        req: "FS-025",
+        doc: "The word count is always shown, or only while the pointer is over the status bar.",
     },
     PrefSpec {
         key: "image.maxWidthFollowsEditor",
@@ -883,6 +926,13 @@ pub const PREFS: &[PrefSpec] = &[
         kind: PrefKind::Bool,
         req: "MD-067",
         doc: "Strict CommonMark headings (`# ` needs a space).",
+    },
+    PrefSpec {
+        key: "markdown.strictEmphasis",
+        default: "false",
+        kind: PrefKind::Bool,
+        req: "MD-030",
+        doc: "Strict CommonMark emphasis delimiter rules (off: `**中文**后` is bold next to CJK text).",
     },
     PrefSpec {
         key: "markdown.latexDelimiters",

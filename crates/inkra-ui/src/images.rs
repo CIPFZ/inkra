@@ -33,6 +33,8 @@ pub struct Images {
     /// Load `http(s)` images (NF-004: can be turned off).
     pub remote: bool,
     root: Option<PathBuf>,
+    /// Corner radius images are drawn with (theme).
+    pub image_radius: f32,
 }
 
 impl Default for Images {
@@ -48,6 +50,7 @@ impl Default for Images {
             frame: 0,
             remote: true,
             root: None,
+            image_radius: 0.0,
         }
     }
 }
@@ -124,7 +127,7 @@ pub fn resolve(base: Option<&Path>, src: &str) -> Option<PathBuf> {
     base.map(|b| b.join(p))
 }
 
-fn percent_decode(s: &str) -> String {
+pub(crate) fn percent_decode(s: &str) -> String {
     let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;
@@ -367,6 +370,10 @@ impl inkra_render::Textures for Images {
             .iter()
             .find(|(k, _)| k.0 == m.key && k.1 == m.color)
             .map(|(_, (t, _))| t.id())
+    }
+
+    fn image_radius(&self) -> f32 {
+        self.image_radius
     }
 }
 

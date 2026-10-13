@@ -289,6 +289,15 @@ pub fn register(r: &mut CommandRegistry) {
                 .unwrap_or_default()
                 .to_owned();
             cx.app.editor.type_text(&text);
+            if text == "$"
+                && !cx.app.math_hint_shown
+                && !cx.app.prefs.bool("markdown.inlineMath")
+                && crate::closes_dollar_pair(&cx.app.editor)
+            {
+                cx.app.math_hint_shown = true;
+                cx.effects
+                    .push(Effect::Notify(crate::state::Notice::InlineMathHint));
+            }
             done(cx)
         },
     ));
@@ -663,4 +672,40 @@ fn find_step(cx: &mut CommandContext<'_>, forward: bool) -> CommandResult {
         e.sel = Selection::new(r.start, r.end);
     }
     done(cx)
+}
+
+#[cfg(test)]
+mod hint_tests {
+    use serde_json::json;
+
+    #[test]
+    fn typing_a_dollar_pair_suggests_inline_math_once() {
+        let mut e = crate::Engine::new(crate::Preferences::default());
+        let hints = |e: &mut crate::Engine| {
+            e.take_effects()
+                .iter()
+                .filter(|x| {
+                    matches!(
+                        x,
+                        crate::Effect::Notify(crate::state::Notice::InlineMathHint)
+                    )
+                })
+                .count()
+        };
+        for c in ["c", "o", "s", "t", " ", "$", "5"] {
+            e.type_text(c);
+        }
+        assert_eq!(hints(&mut e), 0, "an opening `$` alone is no pair");
+        for c in ["$", "x", "^", "2", "$"] {
+            e.type_text(c);
+        }
+        // The second `$` closes a pair: one hint.
+        assert_eq!(hints(&mut e), 1);
+        e.execute("edit.insertText", &json!({ "text": " $y$" }))
+            .unwrap();
+        for c in [" ", "$", "z", "$"] {
+            e.type_text(c);
+        }
+        assert_eq!(hints(&mut e), 0, "only once per session");
+    }
 }

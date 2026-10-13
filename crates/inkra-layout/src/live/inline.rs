@@ -59,6 +59,18 @@ pub fn set_footnotes(notes: &[(String, u32)]) {
     });
 }
 
+/// The label of the first `\ref{…}` / `\eqref{…}` in TeX source.
+pub(crate) fn first_ref(tex: &str) -> Option<&str> {
+    let i = tex
+        .find("\\eqref{")
+        .map(|i| i + 7)
+        .or_else(|| tex.find("\\ref{").map(|i| i + 5))?;
+    let rest = &tex[i..];
+    rest.find('}')
+        .map(|j| rest[..j].trim())
+        .filter(|l| !l.is_empty())
+}
+
 /// Sets the equation references used by inline math laid out on this thread.
 pub fn set_math_refs(refs: &[(String, String)]) {
     REFS.with(|r| {
@@ -90,6 +102,8 @@ pub struct Fmt {
     pub mono: bool,
     /// Typeface when not monospace.
     pub kind: crate::fonts::FontKind,
+    /// Typeface when monospace.
+    pub mono_kind: crate::fonts::FontKind,
     /// Bold.
     pub bold: bool,
     /// Italic.
@@ -116,6 +130,7 @@ impl Fmt {
         Self {
             mono: false,
             kind: style.body_font,
+            mono_kind: style.mono_font,
             bold: false,
             italic: false,
             size: style.size,
@@ -133,11 +148,7 @@ impl Fmt {
             font_id: FontId::new(
                 self.size,
                 crate::fonts::family_of(
-                    if self.mono {
-                        crate::fonts::FontKind::Mono
-                    } else {
-                        self.kind
-                    },
+                    if self.mono { self.mono_kind } else { self.kind },
                     self.bold,
                     self.italic,
                 ),
@@ -226,14 +237,20 @@ impl<'a> Builder<'a> {
             return;
         }
         let start = self.job.text.len();
+        // A boundary with the previous text counts too.
+        let prev = self.job.text.chars().next_back();
         self.job.text.push_str(s);
         let end = self.job.text.len();
         if start < end {
-            self.job.sections.push(LayoutSection {
-                leading_space: 0.0,
-                byte_range: ByteIndex(start)..ByteIndex(end),
-                format: fmt.text_format(),
-            });
+            if self.style.cjk_latin_spacing && !fmt.mono {
+                self.push_spaced(start, prev, fmt);
+            } else {
+                self.job.sections.push(LayoutSection {
+                    leading_space: 0.0,
+                    byte_range: ByteIndex(start)..ByteIndex(end),
+                    format: fmt.text_format(),
+                });
+            }
         }
         if let Some(r) = src {
             let rel = r.start.saturating_sub(self.base)..r.end.saturating_sub(self.base);
@@ -243,6 +260,47 @@ impl<'a> Builder<'a> {
                 self.map.text(start..end, rel);
             }
         }
+    }
+
+    /// Sections for text from `start` with a quarter em of extra space at each
+    /// boundary between CJK and Latin letters or digits (theme
+    /// `fonts.cjk_latin_spacing`); the source text is not changed.
+    fn push_spaced(&mut self, start: usize, prev: Option<char>, fmt: &Fmt) {
+        fn cjk(c: char) -> bool {
+            matches!(c as u32, 0x3040..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF | 0xAC00..=0xD7AF)
+        }
+        fn latin(c: char) -> bool {
+            c.is_ascii_alphanumeric()
+        }
+        let end = self.job.text.len();
+        let gap = fmt.size * 0.25;
+        let mut seg = start;
+        let mut lead = 0.0;
+        let mut last = prev;
+        let boundaries: Vec<usize> = self.job.text[start..]
+            .char_indices()
+            .filter_map(|(k, c)| {
+                let b = last.is_some_and(|p| (cjk(p) && latin(c)) || (latin(p) && cjk(c)));
+                last = Some(c);
+                b.then_some(start + k)
+            })
+            .collect();
+        for at in boundaries {
+            if at > seg {
+                self.job.sections.push(LayoutSection {
+                    leading_space: lead,
+                    byte_range: ByteIndex(seg)..ByteIndex(at),
+                    format: fmt.text_format(),
+                });
+            }
+            seg = at;
+            lead = gap;
+        }
+        self.job.sections.push(LayoutSection {
+            leading_space: lead,
+            byte_range: ByteIndex(seg)..ByteIndex(end),
+            format: fmt.text_format(),
+        });
     }
 
     /// Reserves space for an object (inline math) mapped atomically to `src`:
@@ -617,7 +675,16 @@ impl<'a> Builder<'a> {
                     if tex.contains("ref") {
                         req.refs = REFS.with(|r| r.borrow().clone());
                     }
+                    let at = self.job.text.len();
                     self.push_object(math_scene(&req, fmt.color), fmt, span);
+                    // MD-008: Ctrl+click on `\eqref{l}` jumps to the equation.
+                    if let Some(l) = first_ref(&tex) {
+                        let end = self.job.text.len();
+                        self.map.hits.push((
+                            at..end,
+                            crate::block::HitAction::InlineLink(format!("#{l}")),
+                        ));
+                    }
                 }
             }
             InlineKind::FootnoteRef { label } => {
@@ -677,17 +744,43 @@ fn html_fmt(name: &str, src: &str, base: Fmt, style: &Style) -> Fmt {
         "big" => f.size = (base.size * 1.2).round(),
         _ => {}
     }
-    let color = inkra_html::render::tag_attr(src, "color").or_else(|| {
-        inkra_html::render::tag_attr(src, "style").and_then(|s| {
+    let css = inkra_html::render::tag_attr(src, "style");
+    let prop = |name: &str| {
+        css.as_deref().and_then(|s| {
             s.split(';').find_map(|d| {
                 d.split_once(':')
-                    .filter(|(k, _)| k.trim() == "color")
+                    .filter(|(k, _)| k.trim().eq_ignore_ascii_case(name))
                     .map(|(_, v)| v.trim().to_owned())
             })
         })
-    });
+    };
+    let color = inkra_html::render::tag_attr(src, "color").or_else(|| prop("color"));
     if let Some([r, g, b]) = color.as_deref().and_then(inkra_html::render::parse_color) {
         f.color = Color32::from_rgb(r, g, b);
+    }
+    // MD-040 with the MD-014 style subset.
+    let bg = prop("background-color").or_else(|| prop("background"));
+    if let Some([r, g, b]) = bg.as_deref().and_then(inkra_html::render::parse_color) {
+        f.bg = Color32::from_rgb(r, g, b);
+    }
+    if let Some((k, relative)) = prop("font-size")
+        .as_deref()
+        .and_then(inkra_html::render::font_size_factor)
+    {
+        f.size = if relative {
+            base.size * k
+        } else {
+            style.size * k
+        }
+        .round();
+        f.line_height = f.line_height.max((f.size * 1.3).round());
+    }
+    if prop("font-weight").is_some_and(|w| w == "bold" || w.parse::<u32>().is_ok_and(|n| n >= 600))
+    {
+        f.bold = true;
+    }
+    if prop("font-style").is_some_and(|w| w == "italic") {
+        f.italic = true;
     }
     f
 }

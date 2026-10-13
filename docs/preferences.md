@@ -11,6 +11,7 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `general.autoSave` | bool | `false` | PR-012 | Save automatically 3 s after changes and when the window loses focus (FS-004). |
 | `general.autoReload` | bool | `true` | PR-017 | Reload files changed on disk when there are no local changes (FS-007). |
 | `general.startup` | `restore` / `new` / `folder` | `"restore"` | PR-010 | On startup: restore the last session, open a new document, or open a folder. |
+| `general.startupFolder` | string | `""` | PR-010 | Folder opened in the sidebar when `general.startup` is `folder` (empty: the last opened folder). |
 | `general.defaultEncoding` | string | `"utf-8"` | PR-016 | Encoding tried for files that are not valid UTF-8 (e.g. `gbk`). |
 | `editor.defaultMode` | `live` / `source` | `"live"` | PR-030 | Open documents in live rendering or source mode. |
 | `appearance.theme` | string | `"Paper"` | TH-003 | Theme name. |
@@ -20,7 +21,10 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `general.defaultNewline` | `lf` / `crlf` | `"lf"` | PR-016 | Line ending of new documents (existing files keep theirs). |
 | `general.trimTrailingOnSave` | bool | `false` | PR-013 | Remove trailing whitespace when saving (hard line breaks keep two spaces). |
 | `general.normalizeOnSave` | bool | `false` | MD-092 | Normalize when saving: pad tables, renumber ordered lists, trim trailing whitespace, end with one newline. |
-| `general.markdownExtensions` | string[] | `["md", "markdown", "mdown", "mkd", "mkdn", "mdwn", "mdtxt", "mdtext", "text", "txt", "rmd", "qmd"]` | PR-015 | File extensions treated as Markdown (file tree, open dialog, drops). |
+| `general.markdownExtensions` | string[] | `["md", "markdown", "mdown", "mmd", "text", "txt", "mdx", "rmarkdown", "rmd", "mkd", "mdwn", "mdtxt", "mdtext", "apib"]` | PR-015 | File extensions treated as Markdown (file tree, open dialog, drops). |
+| `general.quitOnLastWindow` | bool | `true` | FS-005 | Closing the last window quits; otherwise it stays open with a blank document (default off on macOS). |
+| `editor.linkedFileIn` | `current` / `new` | `"current"` | MD-033 | A clicked link to a Markdown file opens in the current window (a modified document is never replaced) or a new one. |
+| `appearance.titleBar` | `integrated` / `native` | `"native"` | TH-008 | Integrated title bar (menus and window buttons in one row; default on Windows) or the system's. |
 | `general.dropMarkdown` | `open` / `link` | `"open"` | ED-017 | A Markdown file dropped on the editor opens, or is inserted as a link. |
 | `general.saveToast` | bool | `true` | UI-041 | Show a short notice after saving. |
 | `general.checkUpdates` | bool | `true` | PR-020 | Check GitHub Releases for a newer version at startup (never downloads). |
@@ -46,6 +50,7 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `editor.spellcheckLanguage` | string | `"system"` | PR-035 | Spelling language: `system` (the OS locale) or a tag such as `de-DE`; uses an installed Hunspell dictionary, else the bundled en_US. Takes effect after restarting. |
 | `editor.spellcheckDictionary` | string | `""` | PR-035 | Personal dictionary file (empty: `dictionary.txt` in the configuration folder). |
 | `view.wordCount` | bool | `true` | PR-043 | Show the word count in the status bar. |
+| `view.wordCountDisplay` | `always` / `hover` | `"always"` | FS-025 | The word count is always shown, or only while the pointer is over the status bar. |
 | `image.maxWidthFollowsEditor` | bool | `true` | TH-008 | Limit image width to the text column (otherwise images may extend into the margins up to the window). |
 | `image.showTitle` | bool | `false` | TH-008 | Show an image's title under it as a caption. |
 | `markdown.codeLineNumbers` | bool | `false` | MD-071 | Show line numbers in code blocks. |
@@ -126,6 +131,7 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `markdown.superscript` | bool | `false` | MD-062 | Superscript `^x^`. |
 | `markdown.highlight` | bool | `false` | MD-063 | Highlight `==x==`. |
 | `markdown.strictMode` | bool | `false` | MD-067 | Strict CommonMark headings (`# ` needs a space). |
+| `markdown.strictEmphasis` | bool | `false` | MD-030 | Strict CommonMark emphasis delimiter rules (off: `**中文**后` is bold next to CJK text). |
 | `markdown.latexDelimiters` | bool | `false` | MD-069 | Math delimiters `\[ \]` and `\( \)`. |
 | `markdown.looseInlineMath` | bool | `false` | MD-070 | Allow spaces next to inline `$` delimiters. |
 | `markdown.strongMarker` | `**` / `__` | `"**"` | MD-075 | Marker used when commands create bold text. |

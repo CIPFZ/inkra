@@ -375,7 +375,7 @@ pub fn layout_ops(l: &BlockLayout, fonts: &mut FontsView<'_>, faces: &mut FaceTa
         let target = match &h.action {
             HitAction::Link(u) | HitAction::InlineLink(u) => u.clone(),
             HitAction::Footnote(label) => format!("#fn:{label}"),
-            HitAction::ToggleTask(_) => continue,
+            HitAction::ToggleTask(_) | HitAction::ToggleDetails(_) => continue,
         };
         out.push(Op::Link {
             rect: h.rect,

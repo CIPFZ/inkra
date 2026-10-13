@@ -253,7 +253,8 @@ impl ViewLayout {
                 if geometry_or_doc_changed {
                     self.live = live::flatten(doc);
                     self.number_equations(doc, style.math_numbering);
-                    self.doc_info = live::DocInfo::compute(doc, &self.live);
+                    self.doc_info =
+                        live::DocInfo::compute_with(doc, &self.live, style.heading_numbers);
                 } else {
                     // Only the virtual empty line moved.
                     self.live.retain(|it| it.top != usize::MAX);
@@ -592,6 +593,12 @@ impl ViewLayout {
             }
             if matches!(b.kind, inkra_markdown::BlockKind::Toc) {
                 self.doc_info.headings.hash(&mut h);
+            }
+            if matches!(b.kind, inkra_markdown::BlockKind::Heading { .. }) {
+                self.doc_info.heading_number(item.src.start).hash(&mut h);
+            }
+            if matches!(b.kind, inkra_markdown::BlockKind::HtmlBlock { .. }) {
+                live::details_generation().hash(&mut h);
             }
             if cx.style.spellcheck {
                 inkra_text::spell::generation().hash(&mut h);

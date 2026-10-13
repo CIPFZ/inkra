@@ -52,6 +52,26 @@ pub struct Style {
     pub body_font: crate::fonts::FontKind,
     /// Heading typeface.
     pub heading_font: crate::fonts::FontKind,
+    /// Code typeface (`fonts.mono`).
+    pub mono_font: crate::fonts::FontKind,
+    /// System family names of the body, heading and mono chains (HTML export
+    /// writes them into its CSS).
+    pub font_names: [Option<String>; 3],
+    /// Toolbar background (`colors.toolbar_bg`).
+    pub toolbar_bg: Color32,
+    /// Number headings in the view (`headings.auto_number`, MD-002).
+    pub heading_numbers: bool,
+    /// Corner radius of quotes, alerts and tables (`layout.radius`).
+    pub radius: f32,
+    /// Corner radius of images (`layout.image_radius`).
+    pub image_radius: f32,
+    /// Completed task text (`layout.task_done`): `0` muted, `1` struck
+    /// through, `2` both (MD-006).
+    pub task_done: u8,
+    /// Thin spaces between CJK and Latin text in the view (`fonts.cjk_latin_spacing`).
+    pub cjk_latin_spacing: bool,
+    /// Diagram colors (`[diagram]`, MD-102): primary fill, primary border, line, text.
+    pub diagram_colors: [Option<Color32>; 4],
     /// syntect theme for code blocks.
     pub syntax_theme: String,
     /// UI chrome: sidebar background.
@@ -182,6 +202,15 @@ impl Default for Style {
             name: "Paper".to_owned(),
             dark: false,
             body_font: crate::fonts::FontKind::Sans,
+            mono_font: crate::fonts::FontKind::Mono,
+            font_names: [None, None, None],
+            toolbar_bg: Color32::from_rgb(0xf3, 0xf3, 0xf3),
+            heading_numbers: false,
+            radius: 4.0,
+            image_radius: 0.0,
+            task_done: 0,
+            cjk_latin_spacing: false,
+            diagram_colors: [None; 4],
             heading_font: crate::fonts::FontKind::Sans,
             syntax_theme: "InspiredGitHub".to_owned(),
             sidebar_bg: rgb(0xf3, 0xf1, 0xec),

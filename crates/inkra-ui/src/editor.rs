@@ -83,6 +83,9 @@ pub struct EditorView {
     /// A reorder grip being dragged: table start, column?, index.
     grip_drag: Option<(usize, bool, usize)>,
     pending_top: Option<usize>,
+    instant_top: bool,
+    /// Typewriter scroll animation: from, to, start time (WM-002).
+    typewriter_anim: Option<(f32, f32, f64)>,
     /// Smooth scrolling to an item (PR-042): start offset, item, start time.
     scroll_anim: Option<(f32, usize, f64)>,
     viewport_top: usize,
@@ -135,6 +138,8 @@ impl EditorView {
             text_drag_last: None,
             grip_drag: None,
             pending_top: None,
+            instant_top: false,
+            typewriter_anim: None,
             scroll_anim: None,
             viewport_top: 0,
             hscroll: Default::default(),
@@ -212,6 +217,12 @@ impl EditorView {
         self.pending_top = Some(pos);
     }
 
+    /// Like [`Self::scroll_to_top`] without animation (session restore).
+    pub fn restore_top(&mut self, pos: usize) {
+        self.pending_top = Some(pos);
+        self.instant_top = true;
+    }
+
     /// Requests that the caret be scrolled into view on the next frame.
     pub fn reveal_caret(&mut self) {
         self.scroll_to_caret = true;
@@ -280,6 +291,7 @@ impl EditorView {
             ctx.request_repaint();
         }
         self.images.remote = engine.state.prefs.bool("image.loadRemote");
+        self.images.image_radius = self.style.image_radius;
         // ED-091: the image root of `/…` paths: front matter, else the preference.
         let doc_dir = engine
             .state
@@ -447,6 +459,7 @@ impl EditorView {
             let i = self.view.item_of(pos);
             let target = self.view.top(i) + pad - 8.0;
             if engine.state.prefs.bool("editor.smoothScroll")
+                && !std::mem::take(&mut self.instant_top)
                 && !engine.state.reduce_motion
                 && (target - self.scroll).abs() > 1.0
             {
@@ -472,9 +485,29 @@ impl EditorView {
         if self.scroll_to_caret && typewriter {
             // WM-002: the caret line stays in the vertical middle.
             if let Some(r) = caret_rect {
-                self.scroll = r.center().y + pad - viewport_h / 2.0;
+                let target = r.center().y + pad - viewport_h / 2.0;
+                // WM-002: an 80 ms ease when smooth scrolling is on.
+                if engine.state.prefs.bool("editor.smoothScroll")
+                    && !engine.state.reduce_motion
+                    && (target - self.scroll).abs() > 1.0
+                {
+                    self.typewriter_anim = Some((self.scroll, target, ctx.input(|inp| inp.time)));
+                } else {
+                    self.scroll = target;
+                    self.typewriter_anim = None;
+                }
             }
             self.scroll_to_caret = false;
+        }
+        if let Some((from, to, t0)) = self.typewriter_anim {
+            let t = ((ctx.input(|inp| inp.time) - t0) / 0.08).clamp(0.0, 1.0) as f32;
+            let e = 1.0 - (1.0 - t).powi(3);
+            self.scroll = from + (to - from) * e;
+            if t >= 1.0 || !typewriter {
+                self.typewriter_anim = None;
+            } else {
+                ctx.request_repaint();
+            }
         }
         if self.scroll_to_caret {
             if let Some(r) = caret_rect {
@@ -1694,6 +1727,10 @@ impl EditorView {
                     HitAction::Link(url) | HitAction::InlineLink(url) => out
                         .commands
                         .push(("app.openUrl".into(), json!({ "url": url }))),
+                    HitAction::ToggleDetails(key) => {
+                        inkra_layout::live::toggle_details(key);
+                        ctx.request_repaint();
+                    }
                     HitAction::Footnote(label) => {
                         // MD-010: clicking a reference jumps to its definition.
                         let e = &mut engine.state.editor;
@@ -1738,9 +1775,14 @@ impl EditorView {
             }
             // Ctrl+click on a link opens it (PR-040), or a plain click if so set.
             let plain_click = engine.state.prefs.string("editor.linkClick") == "click";
+            // MD-008: `\eqref` in a formula links to its equation.
+            let math_ref = || match self.hit_any(p) {
+                Some(HitAction::InlineLink(u)) if u.starts_with('#') => Some(u),
+                _ => None,
+            };
             if (command || plain_click)
                 && !shift
-                && let Some(url) = ops::link_at(&e.doc, at)
+                && let Some(url) = ops::link_at(&e.doc, at).or_else(math_ref)
             {
                 out.commands
                     .push(("app.openUrl".into(), json!({ "url": url })));
@@ -1927,7 +1969,7 @@ impl EditorView {
             match ev {
                 Event::Text(t) => {
                     if t.chars().all(|c| !c.is_control()) {
-                        engine.state.editor.type_text(&t);
+                        engine.type_text(&t);
                         self.desired_x = None;
                         self.touch(ctx);
                     }

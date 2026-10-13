@@ -43,6 +43,8 @@ pub struct Span {
     pub sub: bool,
     /// Text color.
     pub color: Option<[u8; 3]>,
+    /// Background color (`style="background-color"`).
+    pub bg: Option<[u8; 3]>,
     /// Link target.
     pub link: Option<String>,
     /// Relative font size.
@@ -440,6 +442,22 @@ impl Flat {
                 if let Some(c) = style_prop(h, "color").and_then(|c| parse_color(&c)) {
                     s.color = Some(c);
                 }
+                // MD-014: `background-color` and `font-size` of the style subset.
+                if let Some(c) = style_prop(h, "background-color")
+                    .or_else(|| style_prop(h, "background"))
+                    .and_then(|c| parse_color(&c))
+                {
+                    s.bg = Some(c);
+                }
+                if let Some((k, relative)) =
+                    style_prop(h, "font-size").and_then(|v| font_size_factor(&v))
+                {
+                    s.size = Some(if relative {
+                        s.size.unwrap_or(1.0) * k
+                    } else {
+                        k
+                    });
+                }
                 if style_prop(h, "font-weight")
                     .is_some_and(|w| w == "bold" || w.parse::<u32>().is_ok_and(|n| n >= 600))
                 {
@@ -465,6 +483,37 @@ impl Flat {
             _ => {}
         }
     }
+}
+
+/// A CSS `font-size` as a factor of the body size (16 px), and whether it is
+/// relative to the parent (`em`, `%`).
+pub fn font_size_factor(v: &str) -> Option<(f32, bool)> {
+    let v = v.trim().to_ascii_lowercase();
+    let num = |s: &str| s.trim().parse::<f32>().ok().filter(|x| *x > 0.0);
+    let (k, relative) = if let Some(n) = v.strip_suffix("px") {
+        (num(n)? / 16.0, false)
+    } else if let Some(n) = v.strip_suffix("pt") {
+        (num(n)? * 4.0 / 3.0 / 16.0, false)
+    } else if let Some(n) = v.strip_suffix("rem") {
+        (num(n)?, false)
+    } else if let Some(n) = v.strip_suffix("em") {
+        (num(n)?, true)
+    } else if let Some(n) = v.strip_suffix('%') {
+        (num(n)? / 100.0, true)
+    } else {
+        let k = match v.as_str() {
+            "xx-small" => 0.6,
+            "x-small" => 0.75,
+            "small" | "smaller" => 0.89,
+            "medium" => 1.0,
+            "large" | "larger" => 1.2,
+            "x-large" => 1.5,
+            "xx-large" => 2.0,
+            _ => return None,
+        };
+        (k, false)
+    };
+    Some((k.clamp(0.4, 4.0), relative))
 }
 
 fn collect(h: &Handle, out: &mut String) {

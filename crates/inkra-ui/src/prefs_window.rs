@@ -48,6 +48,8 @@ fn keys(page: Page) -> &'static [Option<&'static str>] {
         Page::General => &[
             Some("general.language"),
             Some("general.startup"),
+            Some("general.startupFolder"),
+            Some("general.quitOnLastWindow"),
             Some("general.openFileIn"),
             Some("general.dropMarkdown"),
             None,
@@ -72,7 +74,9 @@ fn keys(page: Page) -> &'static [Option<&'static str>] {
             None,
             Some("view.statusBar"),
             Some("view.wordCount"),
+            Some("view.wordCountDisplay"),
             Some("view.menuBar"),
+            Some("appearance.titleBar"),
             Some("view.toolbar"),
             Some("appearance.rememberWindowSize"),
             Some("appearance.titleFullPath"),
@@ -109,6 +113,7 @@ fn keys(page: Page) -> &'static [Option<&'static str>] {
             Some("editor.hardBreak"),
             Some("editor.copyAs"),
             Some("editor.linkClick"),
+            Some("editor.linkedFileIn"),
             Some("editor.focusMode"),
             Some("editor.typewriterMode"),
             Some("editor.ctrlWheelZoom"),
@@ -139,6 +144,7 @@ fn keys(page: Page) -> &'static [Option<&'static str>] {
             Some("markdown.diagrams"),
             Some("markdown.mermaidCli"),
             Some("markdown.strictMode"),
+            Some("markdown.strictEmphasis"),
             None,
             Some("markdown.mathNumbering"),
             Some("markdown.latexDelimiters"),
@@ -380,6 +386,31 @@ impl PrefsWindow {
                         Page::Keymap => self.keymap_page(ui, engine, i18n, os, &mut out),
                         Page::Advanced => self.advanced_page(ui, i18n, &mut out),
                         p => self.form(ui, engine, i18n, themes, keys(p).iter().copied(), &mut out),
+                    }
+                    // PR-002 on General, TH-003 on Appearance.
+                    let mut cmd = |ui: &mut egui::Ui, label: &str, id: &str, params: Value| {
+                        if ui.button(i18n.tr(label)).clicked() {
+                            out.push(Request::Invoke(id.into(), params));
+                        }
+                    };
+                    match self.page {
+                        Page::General => {
+                            ui.add_space(8.0);
+                            ui.horizontal(|ui| {
+                                cmd(ui, "prefs-export-settings", "app.exportSettings", json!({}));
+                                cmd(ui, "prefs-import-settings", "app.importSettings", json!({}));
+                            });
+                        }
+                        Page::Appearance => {
+                            ui.add_space(8.0);
+                            cmd(
+                                ui,
+                                "prefs-open-themes",
+                                "app.openFolder",
+                                json!({ "which": "themes" }),
+                            );
+                        }
+                        _ => {}
                     }
                 });
         });

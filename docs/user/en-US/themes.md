@@ -26,7 +26,9 @@ Built-in themes: Paper (default), Ink (dark), Journal, Mono, Slate, Serif.
 | Section | Keys | Meaning |
 |---|---|---|
 | `[meta]` | `name` `author` `version` `dark` `base` | `dark` selects dark UI chrome; `base` is the theme to inherit |
-| `[fonts]` | `body` `heading` `mono` | Font family lists, tried in order; Inter, Source Serif 4 and JetBrains Mono are bundled |
+| `[fonts]` | `body` `heading` `mono` | Font family lists; the first available one is used: bundled Inter, Source Serif 4, JetBrains Mono, the generic `sans-serif` `serif` `monospace`, or any installed family (such as `"Noto Serif CJK SC"`) |
+|  | `math` | Formula font; only the bundled Latin Modern Math is used for now |
+|  | `cjk_latin_spacing` | `true` shows a small gap between CJK and Latin letters or digits (the file is not changed) |
 |  | `size` `line_height` `paragraph_spacing` | Body size (pt), line height factor, paragraph spacing (em) |
 | `[colors]` | `bg` `fg` `fg_muted` `accent` `selection` `cursor` | Background, text, secondary text, accent (links…), selection, caret |
 |  | `code_bg` `code_border` `quote_border` `quote_fg` `hr` | Code blocks, quotes, rules |
@@ -35,8 +37,12 @@ Built-in themes: Paper (default), Ink (dark), Journal, Mono, Slate, Serif.
 |  | `sidebar_bg` `sidebar_fg` `sidebar_active_bg` `toolbar_bg` `statusbar_fg` | Sidebar and status bar |
 |  | `alert_note` `alert_tip` `alert_important` `alert_warning` `alert_caution` | Alert colors |
 | `[headings]` | `h1`…`h6` | `{ size, weight, margin_top, margin_bottom, border_bottom, color }`; `color` is a color or a color key |
-| `[code]` | `syntax_theme` `radius` `padding` `line_numbers_fg` | Highlighting theme (syntect built-ins such as InspiredGitHub, base16-ocean.dark), corner radius, padding |
+|  | `auto_number` | `true` shows `1.`, `1.2.` before headings (display only, not written to the file) |
+| `[code]` | `syntax_theme` `radius` `padding` `line_numbers_fg` | Highlighting theme (syntect built-ins such as InspiredGitHub, base16-ocean.dark), corner radius, padding. A `syntax.tmTheme` (TextMate scheme) in the theme folder is used automatically, or name one with `syntax_theme = "mine.tmTheme"` |
 | `[layout]` | `max_width` `padding_x` `padding_y` `list_indent` `quote_indent` `focus_dim_opacity` | Text column width, margins, indents, focus mode dimming |
+|  | `radius` `image_radius` | Table and image corner radius |
+|  | `task_done` | Completed task text: `"muted"` (default), `"strike"` or `"both"` |
+| `[diagram]` | `primary` `primary_border` `line` `text` | Diagram node fill, node border, lines and text (derived from the theme colors by default) |
 
 Colors are `#rrggbb` or `#rrggbbaa` with alpha. If a theme has an error, Inkra keeps the current theme and reports the line.
 

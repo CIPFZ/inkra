@@ -71,6 +71,8 @@ enum NKind {
     Math {
         open: Span,
         close: Option<Span>,
+        /// Opened with `\[` (closes with `\]`).
+        bracket: bool,
     },
     FrontMatter {
         open: Span,
@@ -429,7 +431,7 @@ impl<'o> BlockParser<'o> {
                     | b'['
                     | b'0'..=b'9'
             )
-        )
+        ) || (self.o.latex_delimiters && self.peek(self.next_nonspace) == Some(b'\\'))
     }
 
     fn continue_block(&mut self, idx: usize) -> Cont {
@@ -531,10 +533,11 @@ impl<'o> BlockParser<'o> {
                     Cont::Matched
                 }
             }
-            NKind::Math { .. } => {
+            NKind::Math { bracket, .. } => {
                 let nns = self.next_nonspace;
                 let rest = &self.b()[nns..];
-                if self.indent <= 3 && rest.starts_with(b"$$") && scan::is_blank_rest(&rest[2..]) {
+                let closer: &[u8] = if bracket { b"\\]" } else { b"$$" };
+                if self.indent <= 3 && rest.starts_with(closer) && scan::is_blank_rest(&rest[2..]) {
                     let span = self.line_start + nns..self.cur_line_end;
                     if let NKind::Math { close, .. } = &mut self.nodes[idx].kind {
                         *close = Some(span);
@@ -661,12 +664,14 @@ impl<'o> BlockParser<'o> {
             self.advance_offset(len, false);
             return Start::Leaf;
         }
-        // math block
+        // math block (`$$`, or `\[` with `latex_delimiters`)
+        let bracket =
+            self.o.latex_delimiters && c == Some(b'\\') && self.b()[nns..].starts_with(b"\\[");
         if self.o.math_blocks
             && !self.indented
-            && c == Some(b'$')
-            && self.b()[nns..].starts_with(b"$$")
+            && (bracket || (c == Some(b'$') && self.b()[nns..].starts_with(b"$$")))
         {
+            let closer: &[u8] = if bracket { b"\\]" } else { b"$$" };
             self.close_unmatched_blocks();
             let ls = self.line_start;
             let rest = &self.cur.as_bytes()[nns + 2..];
@@ -677,13 +682,14 @@ impl<'o> BlockParser<'o> {
                     .take_while(|&&b| is_space_or_tab(b))
                     .count();
             let single =
-                trimmed_end >= 2 && rest[..trimmed_end].ends_with(b"$$") && trimmed_end > 2;
+                trimmed_end >= 2 && rest[..trimmed_end].ends_with(closer) && trimmed_end > 2;
             if single {
                 let close_start = ls + nns + 2 + trimmed_end - 2;
                 let idx = self.add_child(
                     NKind::Math {
                         open: ls + nns..ls + nns + 2,
                         close: Some(close_start..close_start + 2),
+                        bracket,
                     },
                     nns,
                 );
@@ -700,6 +706,7 @@ impl<'o> BlockParser<'o> {
                 NKind::Math {
                     open: ls + nns..ls + nns + 2,
                     close: None,
+                    bracket,
                 },
                 nns,
             );
@@ -1521,7 +1528,7 @@ impl<'o> BlockParser<'o> {
                     )
                 }
             }
-            NKind::Math { open, close } => Block {
+            NKind::Math { open, close, .. } => Block {
                 lines: n.lines.clone(),
                 ..Block::new(
                     BlockKind::MathBlock {

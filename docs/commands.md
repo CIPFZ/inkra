@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **214**
+Registered commands: **215**
 
 
 ## App
@@ -78,6 +78,7 @@ Registered commands: **214**
 |---|---|---|---|---|---|---|---|
 | `file.clearRecent` | Clear Recent Files | 清除最近文件 |  |  | — | FS-002 | Forget the recent files list. |
 | `file.close` | Close | 关闭 | `Ctrl+W` | `⌘W` | — | FS-005 | Close the window (asks to save changes). |
+| `file.copyPath` | Copy File Path | 复制文件路径 |  |  | — | FS-010 | Copy the current file's path. |
 | `file.delete` | Delete | 删除 |  |  | `{"type":"object","properties":{"confirmed":{"type":"boolean"}}}` | FS-022 | Move the current file to the recycle bin (asks first unless `confirmed`). |
 | `file.exportBlockImage` | Export Image… | 导出图片… |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-003 | Export the formula or diagram at the caret as PNG or SVG (by extension). |
 | `file.exportCustom` | Custom Export | 自定义导出 |  |  | `{"type":"object","required":["index"],"properties":{"index":{"type":"integer","minimum":0},"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-004 | Run a custom export command from the `export.custom` preference. |
@@ -91,7 +92,7 @@ Registered commands: **214**
 | `file.moveTo` | Move To… | 移动到… |  |  | `{"type":"object","properties":{"dest":{"type":"string"}}}` | FS-022 | Move the current file to another folder (asks unless `dest` is given). |
 | `file.new` | New | 新建 | `Ctrl+N` | `⌘N` | — | FS-001 | New blank document in a new window (FS-001). |
 | `file.newWindow` | New Window | 新建窗口 | `Ctrl+Shift+N` | `⇧⌘N` | — | FS-001 | New window (same as file.new). |
-| `file.open` | Open… | 打开… | `Ctrl+O` | `⌘O` | `{"type":"object","properties":{"path":{"type":"string"}}}` | FS-002 | Open a file (dialog without `path`). |
+| `file.open` | Open… | 打开… | `Ctrl+O` | `⌘O` | `{"type":"object","properties":{"path":{"type":"string"},"window":{"enum":["current","new"]},"anchor":{"type":"string"}}}` | FS-002 | Open a file (dialog without `path`). |
 | `file.openFolder` | Open Folder… | 打开文件夹… | `Ctrl+Shift+O` |  | — | FS-002 | Open a folder as the sidebar root. |
 | `file.openRecent` | Open Recent File | 打开最近文件 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"}}}` | FS-002 | Open a recently used file. |
 | `file.pageSetup` | Page Setup… | 页面设置… |  |  | — | EX-002 | Paper size, orientation, margins, header and footer for PDF and printing. |

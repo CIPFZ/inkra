@@ -43,6 +43,7 @@ pub fn show(
     i18n: &I18n,
     os: Os,
     data: &MenuData,
+    trailing: impl FnOnce(&mut egui::Ui),
 ) -> Option<Invocation> {
     let mut out = None;
     egui::MenuBar::new().ui(ui, |ui| {
@@ -51,6 +52,8 @@ pub fn show(
                 items(ui, menu.items, engine, i18n, os, data, &mut out);
             });
         }
+        // The rest of the row (the integrated title bar, TH-008).
+        trailing(ui);
     });
     out
 }

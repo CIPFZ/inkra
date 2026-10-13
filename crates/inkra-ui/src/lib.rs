@@ -24,6 +24,7 @@ pub mod prefs_window;
 pub mod quick_open;
 pub mod sidebar;
 pub mod status_bar;
+mod titlebar;
 mod toolbar;
 
 use std::collections::BTreeMap;
@@ -64,10 +65,14 @@ struct Toast {
     until: f64,
     /// Clicking the toast opens this file (UI-041: "导出完成（点击打开）").
     open: Option<PathBuf>,
+    /// A button: label, command, params.
+    action: Option<(String, String, Value)>,
 }
 
 /// UI state of one window.
 struct WinUi {
+    /// Native decorations last requested (TH-008).
+    decorations: Option<bool>,
     editor: editor::EditorView,
     find_focus: bool,
     status: status_bar::StatusCache,
@@ -85,6 +90,7 @@ struct WinUi {
 impl WinUi {
     fn new() -> Self {
         Self {
+            decorations: None,
             editor: editor::EditorView::new(),
             find_focus: false,
             status: Default::default(),
@@ -148,6 +154,8 @@ pub struct Shell {
     mmdc_conf: String,
     theme_names_at: f64,
     jobs: jobs::Jobs,
+    restore_flags: bool,
+    font_gen: u64,
     welcome_dismissed: Vec<u64>,
     image_viewer: Option<(String, bool)>,
     ui_font_size: f32,
@@ -214,6 +222,8 @@ impl Shell {
             theme_names: Vec::new(),
             mmdc_conf: String::new(),
             jobs: Default::default(),
+            restore_flags: false,
+            font_gen: 0,
             welcome_dismissed: Vec::new(),
             image_viewer: None,
             ui_font_size: 13.0,
@@ -247,6 +257,11 @@ impl Shell {
         self.setup_done = true;
         let t0 = std::time::Instant::now();
         ctx.set_fonts(inkra_layout::fonts::definitions());
+        self.font_gen = inkra_layout::fonts::generation();
+        // TH-006: without a CJK font, Chinese and Japanese text shows boxes.
+        if inkra_layout::fonts::cjk_missing() {
+            self.toast(ctx, self.i18n.tr("notice-no-cjk-font"));
+        }
         log::info!(
             "fonts installed in {:.1} ms",
             t0.elapsed().as_secs_f64() * 1e3
@@ -339,6 +354,7 @@ impl Shell {
             text,
             until: now + TOAST_SECS,
             open: None,
+            action: None,
         });
     }
 
@@ -404,8 +420,14 @@ impl Shell {
                 ed.mode = inkra_engine::editor::ViewMode::Source;
             }
             self.engine.state.view.sidebar_visible = w.sidebar;
+            self.engine.state.view.fullscreen = w.fullscreen;
+            self.restore_flags |= w.fullscreen;
             if let Some(ui) = self.windows.get_mut(&target) {
-                ui.editor.reveal_caret();
+                // FS-006: the scroll position comes back; else the caret shows.
+                match w.top {
+                    Some(top) => ui.editor.restore_top(top.min(len)),
+                    None => ui.editor.reveal_caret(),
+                }
                 if target != self.root
                     && self
                         .engine
@@ -450,9 +472,23 @@ impl Shell {
                     .get(&meta.id)
                     .map_or(0.0, |w| w.editor.scroll()),
                 source_mode: e.mode == inkra_engine::editor::ViewMode::Source,
-                sidebar: false,
+                sidebar: self
+                    .engine
+                    .state
+                    .view_of(meta.id)
+                    .is_some_and(|v| v.sidebar_visible),
                 rect: self.windows.get(&meta.id).and_then(|w| w.rect),
                 maximized: self.windows.get(&meta.id).is_some_and(|w| w.maximized),
+                fullscreen: self
+                    .engine
+                    .state
+                    .view_of(meta.id)
+                    .is_some_and(|v| v.fullscreen),
+                top: self
+                    .windows
+                    .get(&meta.id)
+                    .map(|w| w.editor.viewport_top())
+                    .filter(|t| *t > 0),
             })
             .collect();
         s
@@ -497,6 +533,7 @@ impl Shell {
             text,
             until: now + TOAST_SECS,
             open: None,
+            action: None,
         });
     }
 
@@ -507,6 +544,7 @@ impl Shell {
             text,
             until: now + TOAST_SECS,
             open: Some(file),
+            action: None,
         });
     }
 
@@ -796,6 +834,20 @@ impl Shell {
                         .tr_args("notice-operation-failed", &[("command", command.into())]);
                     self.toast(ctx, text);
                 }
+                Effect::Notify(Notice::InlineMathHint) => {
+                    // MD-035: non-blocking; the button turns inline math on.
+                    let now = ctx.input(|i| i.time);
+                    self.toasts.push(Toast {
+                        text: self.i18n.tr("notice-inline-math"),
+                        until: now + 8.0,
+                        open: None,
+                        action: Some((
+                            self.i18n.tr("notice-inline-math-enable"),
+                            "app.setPreference".into(),
+                            json!({ "key": "markdown.inlineMath", "value": true }),
+                        )),
+                    });
+                }
             }
         }
     }
@@ -809,6 +861,17 @@ impl Shell {
                         .remove(&meta.recovery_id);
                 }
             }
+        }
+        if self.windows.len() <= 1
+            && !self.quitting
+            && !self.engine.state.prefs.bool("general.quitOnLastWindow")
+        {
+            // FS-005: the application keeps running with a blank document.
+            self.engine.state.editor = inkra_engine::editor::Editor::default();
+            self.engine.state.meta.disk = None;
+            self.engine.state.meta.external = None;
+            ctx.send_viewport_cmd(egui::ViewportCommand::Title(String::new()));
+            return;
         }
         if self.windows.len() <= 1 {
             // Last window: the application exits (Windows/Linux, FS-005).
@@ -927,12 +990,28 @@ impl Shell {
     /// open in Inkra, other targets open with the system handler.
     fn open_url(&mut self, ctx: &egui::Context, url: &str) {
         if let Some(anchor) = url.strip_prefix('#') {
+            let anchor = &images::percent_decode(anchor);
             let e = &mut self.engine.state.editor;
             let blocks = e.doc.ast().to_blocks();
             let headings = inkra_markdown::walk::headings(e.doc.text(), &blocks);
-            if let Some(h) = headings.iter().find(|h| h.anchor == anchor) {
+            if let Some(h) = headings.iter().find(|h| h.anchor == *anchor) {
                 e.sel = inkra_doc::Selection::caret(h.span.end);
                 self.win().editor.reveal_caret();
+            } else if let Some(at) = e
+                .doc
+                .text()
+                .to_string()
+                .find(&format!("\\label{{{anchor}}}"))
+            {
+                // MD-008: `\eqref{l}` scrolls to the formula with `\label{l}`.
+                let start = e
+                    .doc
+                    .ast()
+                    .to_blocks()
+                    .iter()
+                    .find(|b| b.span.contains(&at))
+                    .map_or(at, |b| b.span.start);
+                self.win().editor.scroll_to_top(start);
             }
             return;
         }
@@ -942,7 +1021,7 @@ impl Shell {
         let blocked = dialogs::is_program;
         if !is_web {
             let url = local_target.as_deref().unwrap_or(url);
-            let (file, _anchor) = url.split_once('#').unwrap_or((url, ""));
+            let (file, anchor) = url.split_once('#').unwrap_or((url, ""));
             let base = self
                 .engine
                 .state
@@ -955,7 +1034,13 @@ impl Shell {
                     inkra_workspace::tree::markdown_exts().contains(&e.to_ascii_lowercase())
                 });
                 if is_md && path.exists() {
-                    self.invoke(ctx, "file.open", &json!({ "path": path }));
+                    // MD-033: `other.md#anchor` opens the file at that heading.
+                    let window = self.engine.state.prefs.string("editor.linkedFileIn");
+                    let mut params = json!({ "path": path, "window": window });
+                    if !anchor.is_empty() {
+                        params["anchor"] = json!(images::percent_decode(anchor));
+                    }
+                    self.invoke(ctx, "file.open", &params);
                     return;
                 }
                 if blocked(&path) {
@@ -1153,11 +1238,13 @@ impl Shell {
                     .and_then(|d| d.file_name())
                     .map(|n| n.to_string_lossy().into_owned());
                 // FS-011: files without write permission say so.
-                let ro = std::fs::metadata(p).is_ok_and(|m| m.permissions().readonly());
-                let ro = if ro {
-                    format!(" [{}]", self.i18n.tr("title-readonly"))
-                } else {
-                    String::new()
+                // FS-007: a file deleted or moved away on disk is marked too.
+                let ro = match std::fs::metadata(p) {
+                    Ok(m) if m.permissions().readonly() => {
+                        format!(" [{}]", self.i18n.tr("title-readonly"))
+                    }
+                    Ok(_) => String::new(),
+                    Err(_) => format!(" [{}]", self.i18n.tr("title-deleted")),
                 };
                 // FS-008: optionally the full path instead of the folder name.
                 if self.engine.state.prefs.bool("appearance.titleFullPath") {
@@ -1174,6 +1261,15 @@ impl Shell {
 
     /// Pushes the engine's theme to egui and every editor when it changed.
     fn sync_style(&mut self, ctx: &egui::Context) {
+        // TH-006: a theme naming an installed family adds it to the fonts; egui
+        // binds new families from the next pass, so the style waits a frame.
+        let fgen = inkra_layout::fonts::generation();
+        if fgen != self.font_gen {
+            self.font_gen = fgen;
+            ctx.set_fonts(inkra_layout::fonts::definitions());
+            ctx.request_repaint();
+            return;
+        }
         let style = &self.engine.state.style;
         if style.version == self.applied_style
             && self
@@ -1563,7 +1659,8 @@ impl Shell {
             let title = format!("{} - Inkra", self.title_of(&self.engine.state.editor));
             let mut builder = egui::ViewportBuilder::default()
                 .with_title(title)
-                .with_app_id("io.inkra.Inkra");
+                .with_app_id("io.inkra.Inkra")
+                .with_decorations(!titlebar::integrated(&self.engine) || self.uses_native_menu());
             // Window state memory: restored windows reopen where they were; new
             // ones cascade from the root window.
             let initial = match self.windows.get(&id).and_then(|w| w.initial) {
@@ -1617,6 +1714,20 @@ impl Shell {
         self.prefs_viewport(&ctx);
         self.image_viewport(&ctx);
 
+        // FS-006: restored windows come back fullscreen.
+        if std::mem::take(&mut self.restore_flags) {
+            let ids: Vec<u64> = self.windows.keys().copied().collect();
+            for id in ids {
+                if self.engine.state.view_of(id).is_some_and(|v| v.fullscreen) {
+                    let vid = if id == self.root {
+                        egui::ViewportId::ROOT
+                    } else {
+                        egui::ViewportId::from_hash_of(("inkra-window", id))
+                    };
+                    ctx.send_viewport_cmd_to(vid, egui::ViewportCommand::Fullscreen(true));
+                }
+            }
+        }
         // Root window.
         let root = self.root;
         self.engine.state.activate(root);
@@ -1817,11 +1928,42 @@ impl Shell {
         let show_menu = (self.engine.state.view.menu_bar && !self.engine.state.view.fullscreen)
             || alt
             || egui::Popup::is_any_open(&ctx);
-        if !self.uses_native_menu() && show_menu {
+        // TH-008: the integrated title bar holds the menus and window buttons.
+        let integrated = titlebar::integrated(&self.engine) && !self.uses_native_menu();
+        if let Some(w) = self.windows.get_mut(&id)
+            && w.decorations != Some(!integrated)
+        {
+            w.decorations = Some(!integrated);
+            ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(!integrated));
+        }
+        let bar = integrated && !self.engine.state.view.fullscreen;
+        if bar {
+            titlebar::resize_edges(&ctx);
+        }
+        if !self.uses_native_menu() && (show_menu || bar) {
             let mut invocation = None;
             let data = self.menu_data();
+            let title = format!("{} - Inkra", self.title_of(&self.engine.state.editor));
+            let fg = self.engine.state.style.statusbar_fg;
             egui::Panel::top("inkra-menubar").show(ui, |ui| {
-                invocation = menubar::show(ui, &mut self.engine, &self.i18n, self.os, &data);
+                ui.horizontal(|ui| {
+                    if bar {
+                        // Menus centered in a caption-height row.
+                        ui.spacing_mut().interact_size.y = titlebar::HEIGHT;
+                        ui.set_min_height(titlebar::HEIGHT);
+                    }
+                    let i18n = &self.i18n;
+                    if show_menu {
+                        invocation =
+                            menubar::show(ui, &mut self.engine, i18n, self.os, &data, |ui| {
+                                if bar {
+                                    titlebar::controls(ui, &title, fg, i18n);
+                                }
+                            });
+                    } else if bar {
+                        titlebar::controls(ui, &title, fg, i18n);
+                    }
+                });
             });
             if let Some(inv) = invocation {
                 self.invoke(&ctx, &inv.id, &inv.params);
@@ -1833,7 +1975,7 @@ impl Shell {
                 .frame(
                     egui::Frame::new()
                         .inner_margin(egui::Margin::symmetric(8, 3))
-                        .fill(self.engine.state.style.sidebar_bg),
+                        .fill(self.engine.state.style.toolbar_bg),
                 )
                 .show(ui, |ui| {
                     cmd = toolbar::show(ui, &mut self.engine, &self.i18n)
@@ -1913,6 +2055,8 @@ impl Shell {
                 let out = w
                     .editor
                     .show(ui, &mut self.engine, &mut self.clipboard, &self.i18n);
+                // Effects of typing (hints) come from the engine directly.
+                self.apply_effects(&ctx, None);
                 for (cmd, params) in out.commands {
                     self.invoke(&ctx, &cmd, &params);
                 }

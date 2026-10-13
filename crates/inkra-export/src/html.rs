@@ -340,11 +340,39 @@ pub fn diagram_palette(style: &Style) -> inkra_diagram::Palette {
     p.cluster_stroke = c(style.code_border);
     p.label_bg = c(style.code_bg);
     p.pie_text = c(style.fg);
+    let [primary, border, line, text] = style.diagram_colors;
+    if let Some(v) = primary {
+        p.node_fill = c(v);
+    }
+    if let Some(v) = border {
+        p.node_stroke = c(v);
+    }
+    if let Some(v) = line {
+        p.edge = c(v);
+        p.lifeline = c(v);
+    }
+    if let Some(v) = text {
+        p.fg = c(v);
+        p.pie_text = c(v);
+    }
     p
 }
 
-fn font_stack(k: FontKind) -> &'static str {
+/// The CSS font stack of a face; installed families come first by name.
+fn font_stack(k: FontKind, name: Option<&str>) -> String {
+    let base = match k {
+        FontKind::System(_) => font_stack_of(FontKind::Sans),
+        k => font_stack_of(k),
+    };
+    match name {
+        Some(n) => format!("\"{}\", {base}", n.replace('"', "")),
+        None => base.to_owned(),
+    }
+}
+
+fn font_stack_of(k: FontKind) -> &'static str {
     match k {
+        FontKind::System(_) => font_stack_of(FontKind::Sans),
         FontKind::Sans => {
             r#"Inter, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif"#
         }
@@ -378,7 +406,7 @@ table {{ border-collapse: collapse; margin: 1em 0; display: block; overflow-x: a
 th, td {{ border: 1px solid {table_border}; padding: 6px 12px; }}
 th {{ background: {table_header_bg}; }}
 tr:nth-child(2n) td {{ background: {table_alt}; }}
-img {{ max-width: 100%; }}
+img {{ max-width: 100%; border-radius: {img_radius}px; }}
 mark {{ background: {highlight}; }}
 ul.contains-task-list, li.task-list-item {{ list-style: none; }}
 .math-display {{ text-align: center; margin: 1em 0; overflow-x: auto; display: flex; justify-content: center; align-items: center; position: relative; }}
@@ -397,9 +425,9 @@ nav.toc > ul {{ padding-left: 0; }}
         maxw = s.max_width.round(),
         py = s.padding_y.round(),
         px = s.padding_x.round(),
-        body = font_stack(s.body_font),
-        heading = font_stack(s.heading_font),
-        mono = font_stack(FontKind::Mono),
+        body = font_stack(s.body_font, s.font_names[0].as_deref()),
+        heading = font_stack(s.heading_font, s.font_names[1].as_deref()),
+        mono = font_stack(s.mono_font, s.font_names[2].as_deref()),
         size = s.size,
         lh = s.line_height,
         accent = c(s.accent),
@@ -415,6 +443,7 @@ nav.toc > ul {{ padding-left: 0; }}
         table_alt = c(s.table_row_alt_bg),
         highlight = c(s.highlight_bg),
         muted = c(s.fg_muted),
+        img_radius = s.image_radius,
     );
     for (i, name) in ["note", "tip", "important", "warning", "caution"]
         .iter()

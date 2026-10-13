@@ -117,11 +117,19 @@ pub fn show(
         if engine.state.prefs.bool("view.wordCount") {
             let sel = (!e.sel.is_empty()).then(|| Counts::of(&e.doc.text().slice(e.sel.range())));
             let words = sel.as_ref().map_or(cache.counts.words, |c| c.words);
+            // FS-025: "hover" shows the count only while the pointer is over
+            // the status bar.
+            let bar_hovered = ui.rect_contains_pointer(ui.max_rect());
+            let text = if engine.state.prefs.string("view.wordCountDisplay") == "hover"
+                && !bar_hovered
+                && sel.is_none()
+            {
+                "Σ".to_owned()
+            } else {
+                i18n.tr_args("status-words", &[("count", (words as i64).into())])
+            };
             // Hover shows the details; a click pins them (FS-025).
-            let r = ui.add(
-                egui::Label::new(i18n.tr_args("status-words", &[("count", (words as i64).into())]))
-                    .sense(egui::Sense::click()),
-            );
+            let r = ui.add(egui::Label::new(text).sense(egui::Sense::click()));
             let pinned_id = ui.id().with("count-pinned");
             let mut pinned = ui
                 .ctx()

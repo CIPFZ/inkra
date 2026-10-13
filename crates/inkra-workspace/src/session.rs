@@ -23,6 +23,12 @@ pub struct WindowSession {
     pub rect: Option<[f32; 4]>,
     /// Maximized.
     pub maximized: bool,
+    /// Fullscreen.
+    #[serde(default)]
+    pub fullscreen: bool,
+    /// Document offset shown at the top of the viewport.
+    #[serde(default)]
+    pub top: Option<usize>,
 }
 
 /// The saved session.

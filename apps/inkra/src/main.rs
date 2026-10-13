@@ -292,7 +292,18 @@ fn main() -> std::process::ExitCode {
     // last session (FS-006, PR-010).
     let files: Vec<std::path::PathBuf> =
         args.paths.iter().filter(|p| p.is_file()).cloned().collect();
-    let folder = args.paths.iter().find(|p| p.is_dir()).cloned();
+    let mut folder = args.paths.iter().find(|p| p.is_dir()).cloned();
+    // PR-010: start with a folder in the sidebar.
+    if folder.is_none()
+        && files.is_empty()
+        && !args.new
+        && engine.state.prefs.string("general.startup") == "folder"
+    {
+        let chosen = engine.state.prefs.string("general.startupFolder");
+        folder = Some(std::path::PathBuf::from(chosen))
+            .filter(|p| p.is_dir())
+            .or_else(|| session.root.clone().filter(|p| p.is_dir()));
+    }
     let restore = files.is_empty()
         && folder.is_none()
         && !args.new
@@ -303,7 +314,12 @@ fn main() -> std::process::ExitCode {
         .with_title(title)
         .with_app_id(APP_ID)
         .with_inner_size([1100.0, 760.0])
-        .with_min_inner_size([480.0, 320.0]);
+        .with_min_inner_size([480.0, 320.0])
+        // TH-008: the integrated title bar replaces the system's.
+        .with_decorations(
+            cfg!(target_os = "macos")
+                || engine.state.prefs.string("appearance.titleBar") != "integrated",
+        );
     if let Some(icon) = icon() {
         viewport = viewport.with_icon(Arc::new(icon));
     }

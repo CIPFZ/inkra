@@ -204,6 +204,8 @@ pub const MENU_BAR: &[Menu] = &[
             S,
             c("file.properties"),
             c("file.revealInFolder"),
+            c("file.revealInSidebar"),
+            c("file.copyPath"),
             c("file.rename"),
             c("file.delete"),
             S,

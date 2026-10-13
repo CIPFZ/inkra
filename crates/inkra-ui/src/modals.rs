@@ -333,13 +333,20 @@ pub(crate) fn toasts(shell: &mut Shell, ctx: &egui::Context) {
     if shell.toasts.is_empty() {
         return;
     }
+    let mut run = None;
     egui::Area::new(egui::Id::new("inkra-toasts"))
         .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -32.0))
         .show(ctx, |ui| {
-            for t in &shell.toasts {
+            for t in &mut shell.toasts {
                 let r = egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.set_max_width(360.0);
                     ui.label(&t.text);
+                    if let Some((label, cmd, params)) = &t.action
+                        && ui.button(label.as_str()).clicked()
+                    {
+                        run = Some((cmd.clone(), params.clone()));
+                        t.until = now;
+                    }
                 });
                 if let Some(f) = &t.open {
                     let resp = r
@@ -352,6 +359,9 @@ pub(crate) fn toasts(shell: &mut Shell, ctx: &egui::Context) {
                 }
             }
         });
+    if let Some((cmd, params)) = run {
+        shell.invoke(ctx, &cmd, &params);
+    }
     let next = shell
         .toasts
         .iter()

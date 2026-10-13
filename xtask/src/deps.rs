@@ -88,6 +88,12 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         "rasterizing formulas and diagrams (also used by resvg); math/diagram examples only",
     ),
     (
+        "fontdb",
+        Scope::Only(&["inkra-layout"]),
+        "MIT",
+        "system font enumeration for theme font chains (TH-006)",
+    ),
+    (
         "ureq",
         Scope::Only(&["inkra-workspace"]),
         "MIT OR Apache-2.0",

@@ -79,6 +79,9 @@ pub enum HitAction {
     /// An ordinary Markdown link: opened with Ctrl+click in the editor (PR-040),
     /// a link annotation in PDF export.
     InlineLink(String),
+    /// The summary of an HTML `<details>`: clicking folds or unfolds it in the
+    /// view (MD-014); the key is [`crate::live::details_key`].
+    ToggleDetails(u64),
 }
 
 /// A clickable region.

@@ -10,7 +10,6 @@ use inkra_doc::Doc;
 use inkra_markdown::tokens::{TokenClass, tokens_in};
 
 use crate::block::BlockLayout;
-use crate::fonts::family;
 use crate::run::{RunSpec, SourceMap};
 use crate::style::Style;
 
@@ -211,7 +210,11 @@ pub fn layout_line(
         let format = TextFormat {
             font_id: FontId::new(
                 style.mono_size,
-                family(true, at.bold.unwrap_or(false), at.italic.unwrap_or(false)),
+                crate::fonts::family_of(
+                    style.mono_font,
+                    at.bold.unwrap_or(false),
+                    at.italic.unwrap_or(false),
+                ),
             ),
             color,
             background: at.bg.unwrap_or(Color32::TRANSPARENT),
@@ -235,7 +238,10 @@ pub fn layout_line(
             leading_space: 0.0,
             byte_range: epaint::text::ByteIndex(0)..epaint::text::ByteIndex(0),
             format: TextFormat {
-                font_id: FontId::new(style.mono_size, family(true, false, false)),
+                font_id: FontId::new(
+                    style.mono_size,
+                    crate::fonts::family_of(style.mono_font, false, false),
+                ),
                 color: style.fg,
                 line_height: Some(rh),
                 ..Default::default()

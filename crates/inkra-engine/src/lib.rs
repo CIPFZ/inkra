@@ -135,6 +135,40 @@ impl Engine {
     pub fn take_effects(&mut self) -> Vec<Effect> {
         std::mem::take(&mut self.effects)
     }
+
+    /// Types `text` at the caret (ED-010) and, the first time a `$…$` pair is
+    /// typed while inline math is off, suggests turning it on (MD-035).
+    pub fn type_text(&mut self, text: &str) {
+        self.state.editor.type_text(text);
+        if text == "$"
+            && !self.state.math_hint_shown
+            && !self.state.prefs.bool("markdown.inlineMath")
+            && closes_dollar_pair(&self.state.editor)
+        {
+            self.state.math_hint_shown = true;
+            self.effects
+                .push(Effect::Notify(state::Notice::InlineMathHint));
+        }
+    }
+}
+
+/// Whether the `$` before the caret closes `$x…$` on the same line.
+pub(crate) fn closes_dollar_pair(e: &editor::Editor) -> bool {
+    let t = e.doc.text();
+    let head = e.sel.head;
+    let line = t.byte_to_line_col(head).0;
+    let before = t.slice(t.line_to_byte(line)..head).into_owned();
+    let Some(body) = before.strip_suffix('$') else {
+        return false;
+    };
+    let Some(open) = body.rfind('$') else {
+        return false;
+    };
+    let inner = &body[open + 1..];
+    !inner.is_empty()
+        && !inner.starts_with(char::is_whitespace)
+        && !inner.ends_with(char::is_whitespace)
+        && !body[..open].ends_with('\\')
 }
 
 /// Editing preferences (ED-100, ED-101, ED-102, PR-031, PR-032, PR-041).
@@ -191,6 +225,7 @@ pub fn markdown_options(prefs: &Preferences) -> inkra_markdown::ParseOptions {
         superscript: prefs.bool("markdown.superscript"),
         highlight: prefs.bool("markdown.highlight"),
         strict_atx: prefs.bool("markdown.strictMode"),
+        cjk_emphasis: !prefs.bool("markdown.strictEmphasis"),
         latex_delimiters: prefs.bool("markdown.latexDelimiters"),
         loose_inline_math: prefs.bool("markdown.looseInlineMath"),
         ..Default::default()

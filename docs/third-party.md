@@ -18,7 +18,7 @@ Inkra is MIT OR Apache-2.0. It contains the following works.
 
 ## Rust crates
 
-531 crates linked into `inkra` and `inkra-cli` on any platform.
+539 crates linked into `inkra` and `inkra-cli` on any platform.
 
 | Crate | Version | License | Source |
 |---|---|---|---|
@@ -106,6 +106,7 @@ Inkra is MIT OR Apache-2.0. It contains the following works.
 | crunchy | 0.2.4 | MIT | https://github.com/eira-fransham/crunchy |
 | cursor-icon | 1.2.0 | MIT OR Apache-2.0 OR Zlib | https://github.com/rust-windowing/cursor-icon |
 | data-url | 0.3.2 | MIT OR Apache-2.0 | https://github.com/servo/rust-url |
+| deranged | 0.5.9 | MIT OR Apache-2.0 | https://github.com/jhpratt/deranged |
 | dispatch | 0.2.0 | MIT | http://github.com/SSheldon/rust-dispatch |
 | dispatch2 | 0.3.1 | Zlib OR Apache-2.0 OR MIT | https://github.com/madsmtm/objc2 |
 | displaydoc | 0.2.7 | MIT OR Apache-2.0 | https://github.com/yaahc/displaydoc |
@@ -251,6 +252,7 @@ Inkra is MIT OR Apache-2.0. It contains the following works.
 | notify-debouncer-mini | 0.7.0 | MIT OR Apache-2.0 | https://github.com/notify-rs/notify.git |
 | notify-types | 2.1.0 | MIT OR Apache-2.0 | https://github.com/notify-rs/notify.git |
 | nucleo-matcher | 0.3.1 | MPL-2.0 | https://github.com/helix-editor/nucleo |
+| num-conv | 0.2.2 | MIT OR Apache-2.0 | https://github.com/jhpratt/num-conv |
 | num-traits | 0.2.19 | MIT OR Apache-2.0 | https://github.com/rust-num/num-traits |
 | num_enum | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | https://github.com/illicitonion/num_enum |
 | num_enum_derive | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | https://github.com/illicitonion/num_enum |
@@ -303,6 +305,7 @@ Inkra is MIT OR Apache-2.0. It contains the following works.
 | piper | 0.2.5 | MIT OR Apache-2.0 | https://github.com/smol-rs/piper |
 | pkg-config | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/pkg-config-rs |
 | plain | 0.2.3 | MIT/Apache-2.0 | https://github.com/randomites/plain |
+| plist | 1.10.1 | MIT | https://github.com/ebarnard/rust-plist/ |
 | png | 0.18.1 | MIT OR Apache-2.0 | https://github.com/image-rs/image-png |
 | polling | 3.11.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/polling |
 | pollster | 0.4.0 | Apache-2.0/MIT | https://github.com/zesterer/pollster |
@@ -310,6 +313,7 @@ Inkra is MIT OR Apache-2.0. It contains the following works.
 | polycool | 0.4.0 | MIT OR Apache-2.0 | https://github.com/linebender/kurbo |
 | portable-atomic | 1.15.0 | Apache-2.0 OR MIT | https://github.com/taiki-e/portable-atomic |
 | portable-atomic-util | 0.2.8 | Apache-2.0 OR MIT | https://github.com/taiki-e/portable-atomic-util |
+| powerfmt | 0.2.1 | MIT OR Apache-2.0 | https://github.com/jhpratt/powerfmt |
 | precomputed-hash | 0.1.1 | MIT | https://github.com/emilio/precomputed-hash |
 | presser | 0.3.1 | MIT OR Apache-2.0 | https://github.com/EmbarkStudios/presser |
 | proc-macro-crate | 3.5.0 | MIT OR Apache-2.0 | https://github.com/bkchr/proc-macro-crate |
@@ -318,6 +322,7 @@ Inkra is MIT OR Apache-2.0. It contains the following works.
 | pxfm | 0.1.30 | BSD-3-Clause OR Apache-2.0 | https://github.com/awxkee/pxfm |
 | quick-error | 2.0.1 | MIT/Apache-2.0 | http://github.com/tailhook/quick-error |
 | quick-xml | 0.41.0 | MIT | https://github.com/tafia/quick-xml |
+| quick-xml | 0.42.0 | MIT | https://github.com/tafia/quick-xml |
 | quote | 1.0.47 | MIT OR Apache-2.0 | https://github.com/dtolnay/quote |
 | r-efi | 5.3.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | https://github.com/r-efi/r-efi |
 | r-efi | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | https://github.com/r-efi/r-efi |
@@ -409,6 +414,9 @@ Inkra is MIT OR Apache-2.0. It contains the following works.
 | thiserror-impl | 1.0.69 | MIT OR Apache-2.0 | https://github.com/dtolnay/thiserror |
 | thiserror-impl | 2.0.21 | MIT OR Apache-2.0 | https://github.com/dtolnay/thiserror |
 | tiff | 0.11.3 | MIT | https://github.com/image-rs/image-tiff |
+| time | 0.3.55 | MIT OR Apache-2.0 | https://github.com/time-rs/time |
+| time-core | 0.1.9 | MIT OR Apache-2.0 | https://github.com/time-rs/time |
+| time-macros | 0.2.32 | MIT OR Apache-2.0 | https://github.com/time-rs/time |
 | tiny-skia | 0.12.0 | BSD-3-Clause | https://github.com/linebender/tiny-skia |
 | tiny-skia-path | 0.12.0 | BSD-3-Clause | https://github.com/linebender/tiny-skia/tree/master/path |
 | tinystr | 0.8.4 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
