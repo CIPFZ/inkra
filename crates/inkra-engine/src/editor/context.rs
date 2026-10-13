@@ -247,3 +247,49 @@ pub fn at_fence_open_end(doc: &Doc, pos: usize) -> bool {
         _ => false,
     })
 }
+
+/// The definition of footnote `label`: start offset and plain text (MD-010).
+pub fn footnote_def(doc: &Doc, label: &str) -> Option<(usize, String)> {
+    let ast = doc.ast();
+    for i in 0..ast.len() {
+        let r = ast.get(i)?;
+        let mut found = None;
+        r.block.walk(&mut |b| {
+            if found.is_some() {
+                return;
+            }
+            if let BlockKind::FootnoteDef { label: l, .. } = &b.kind
+                && l == label
+            {
+                let mut text = String::new();
+                b.walk(&mut |c| {
+                    if c.kind.has_inlines() {
+                        if !text.is_empty() {
+                            text.push('\n');
+                        }
+                        inkra_markdown::walk::plain_text(
+                            doc.text(),
+                            &shifted(&c.inlines, r.delta),
+                            &mut text,
+                        );
+                    }
+                });
+                found = Some((r.abs(b.span.start), text));
+            }
+        });
+        if found.is_some() {
+            return found;
+        }
+    }
+    None
+}
+
+fn shifted(list: &[inkra_markdown::Inline], delta: isize) -> Vec<inkra_markdown::Inline> {
+    list.iter()
+        .map(|i| {
+            let mut i = i.clone();
+            i.shift(delta);
+            i
+        })
+        .collect()
+}

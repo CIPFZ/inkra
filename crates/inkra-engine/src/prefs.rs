@@ -276,6 +276,13 @@ pub const PREFS: &[PrefSpec] = &[
         doc: "Render ```` ```mermaid ```` blocks as diagrams (off: plain code blocks).",
     },
     PrefSpec {
+        key: "markdown.tocDepth",
+        default: "6",
+        kind: PrefKind::Number,
+        req: "MD-078",
+        doc: "Deepest heading level listed by `[TOC]`.",
+    },
+    PrefSpec {
         key: "markdown.mathNumbering",
         default: r#""none""#,
         kind: PrefKind::Enum(&["none", "ams", "all"]),

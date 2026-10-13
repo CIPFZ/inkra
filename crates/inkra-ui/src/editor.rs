@@ -677,6 +677,30 @@ impl EditorView {
             });
         }
 
+        // Footnote bubble (MD-010): the definition of a hovered reference.
+        if !source
+            && let Some(hp) = ctx
+                .input(|i| i.pointer.hover_pos())
+                .filter(|p| rect.contains(*p))
+        {
+            let p = self.doc_pos(hp, rect, text_rect);
+            if let Some(HitAction::Footnote(label)) = self.hit_action(p)
+                && let Some((_, text)) =
+                    inkra_engine::editor::context::footnote_def(&engine.state.editor.doc, &label)
+            {
+                egui::Tooltip::always_open(
+                    ctx.clone(),
+                    ui.layer_id(),
+                    self.id.with("footnote"),
+                    egui::PopupAnchor::Pointer,
+                )
+                .show(|ui| {
+                    ui.set_max_width(360.0);
+                    ui.label(text);
+                });
+            }
+        }
+
         // Right-click menu (ED-130).
         resp.context_menu(|ui| {
             let cmds = crate::context_menu::show(ui, engine, i18n);
@@ -1230,6 +1254,16 @@ impl EditorView {
                     HitAction::Link(url) => out
                         .commands
                         .push(("app.openUrl".into(), json!({ "url": url }))),
+                    HitAction::Footnote(label) => {
+                        // MD-010: clicking a reference jumps to its definition.
+                        let e = &mut engine.state.editor;
+                        if let Some((at, _)) =
+                            inkra_engine::editor::context::footnote_def(&e.doc, &label)
+                        {
+                            e.set_selection(Selection::caret(at));
+                            self.reveal_caret();
+                        }
+                    }
                 }
                 self.drag_anchor = None;
                 return;

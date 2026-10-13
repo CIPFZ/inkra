@@ -592,3 +592,54 @@ fn m4_quick_open_and_file_tree_move() {
     }
     h.get_by_label("target-file.md");
 }
+
+#[test]
+fn m5_toc_and_footnotes_render() {
+    let doc =
+        "# Notes\n\n[TOC]\n\n## First\n\nText[^b] and[^a].\n\n## Second\n\n[^a]: A.\n[^b]: B.\n";
+    let mut h = live_harness(doc);
+    h.state_mut().engine.state.editor.sel = inkra_doc::Selection::caret(0);
+    for _ in 0..4 {
+        h.step();
+    }
+    assert!(
+        h.state().engine.state.editor.sel.head <= 2,
+        "the caret stays in the heading"
+    );
+    let r = rendered(&h);
+    assert!(
+        r.iter()
+            .any(|t| t.contains("First") && t.contains("Second") && t.contains("Notes")),
+        "TOC lists headings: {r:?}"
+    );
+    assert!(
+        r.iter().any(|t| t.contains("Text1 and2")),
+        "footnotes numbered by first reference: {r:?}"
+    );
+}
+
+#[test]
+fn m5_opened_file_keeps_caret_at_start() {
+    let d = tempfile::tempdir().unwrap();
+    let p = d.path().join("fn.md");
+    std::fs::write(
+        &p,
+        "# Notes and Contents\n\n[TOC]\n\n## First section\n\nText[^b].\n\n[^b]: B.\n",
+    )
+    .unwrap();
+    let mut h = harness("en-US");
+    h.state_mut()
+        .engine
+        .execute("file.open", &serde_json::json!({ "path": p }))
+        .unwrap();
+    let eff = h.state_mut().engine.take_effects();
+    h.state_mut().apply_startup_effects(eff);
+    for _ in 0..4 {
+        h.step();
+    }
+    assert!(
+        h.state().engine.state.editor.sel.head <= 2,
+        "{}",
+        h.state().engine.state.editor.sel.head
+    );
+}
