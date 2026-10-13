@@ -24,6 +24,7 @@ pub mod prefs_window;
 pub mod quick_open;
 pub mod sidebar;
 pub mod status_bar;
+mod toolbar;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -149,6 +150,8 @@ pub struct Shell {
     rename: Option<String>,
     delete_confirm: Option<PathBuf>,
     properties_open: bool,
+    image_dialog: Option<(inkra_engine::imaging::ImageRef, String, String, Option<u32>)>,
+    downloads: Option<std::sync::mpsc::Receiver<Result<PathBuf, String>>>,
     updates: Option<std::sync::mpsc::Receiver<UpdateResult>>,
     update_available: Option<(String, String)>,
     page_setup: Option<modals::PageSetupForm>,
@@ -209,6 +212,8 @@ impl Shell {
             rename: None,
             delete_confirm: None,
             properties_open: false,
+            image_dialog: None,
+            downloads: None,
             updates: None,
             update_available: None,
             page_setup: None,
@@ -633,6 +638,45 @@ impl Shell {
                 }
                 Effect::ConfirmDelete(path) => self.delete_confirm = Some(path),
                 Effect::ShowProperties => self.properties_open = true,
+                Effect::CopyImage(source) => {
+                    let bytes = if source.starts_with("http://") || source.starts_with("https://") {
+                        inkra_workspace::net::get(&source)
+                    } else {
+                        std::fs::read(&source).map_err(|e| e.to_string())
+                    };
+                    match bytes.and_then(|b| image::load_from_memory(&b).map_err(|e| e.to_string()))
+                    {
+                        Ok(img) => {
+                            let mut png = Vec::new();
+                            if img
+                                .write_to(
+                                    &mut std::io::Cursor::new(&mut png),
+                                    image::ImageFormat::Png,
+                                )
+                                .is_ok()
+                            {
+                                self.clipboard.set_png(&png);
+                            }
+                        }
+                        Err(e) => self.toast(ctx, format!("✕ {e}")),
+                    }
+                }
+                Effect::OpenExternal(target) => {
+                    dialogs::open_external(&target);
+                }
+                Effect::ReloadImage(src) => {
+                    self.win().editor.images.reload(&src);
+                    ctx.request_repaint();
+                }
+                Effect::DownloadImage(url) => self.download_image(ctx, url),
+                Effect::ImageDialog(img) => {
+                    let (alt, title, width) = (
+                        img.alt.clone(),
+                        img.title.clone().unwrap_or_default(),
+                        img.width,
+                    );
+                    self.image_dialog = Some((img, alt, title, width));
+                }
                 Effect::SettingsDialog { import } => {
                     let purpose = if import {
                         dialogs::Purpose::ImportSettings
@@ -1200,6 +1244,48 @@ impl Shell {
         }
     }
 
+    /// Downloads a remote image for `image.toLocal` (ED-093) off the UI thread.
+    fn download_image(&mut self, ctx: &egui::Context, url: String) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx = ctx.clone();
+        let spawned = std::thread::Builder::new()
+            .name("inkra-download".into())
+            .spawn(move || {
+                let r = inkra_workspace::net::get(&url).and_then(|bytes| {
+                    let name = url
+                        .rsplit('/')
+                        .next()
+                        .unwrap_or("image")
+                        .split(['?', '#'])
+                        .next()
+                        .unwrap_or("image");
+                    let name = if name.contains('.') {
+                        name.to_owned()
+                    } else {
+                        format!("{name}.png")
+                    };
+                    let dir = std::env::temp_dir().join("inkra-download");
+                    inkra_workspace::assets::write_unique(&dir, &name, &bytes)
+                        .map_err(|e| e.to_string())
+                });
+                let _ = tx.send(r);
+                ctx.request_repaint();
+            });
+        if spawned.is_ok() {
+            self.downloads = Some(rx);
+        }
+    }
+
+    fn poll_downloads(&mut self, ctx: &egui::Context) {
+        let Some(rx) = &self.downloads else { return };
+        let Ok(r) = rx.try_recv() else { return };
+        self.downloads = None;
+        match r {
+            Ok(file) => self.invoke(ctx, "image.toLocal", &json!({ "file": file })),
+            Err(e) => self.toast(ctx, format!("✕ {e}")),
+        }
+    }
+
     /// Reports finished export, print and import jobs.
     fn finish_jobs(&mut self, ctx: &egui::Context) {
         use inkra_engine::exporting::JobResult;
@@ -1240,6 +1326,7 @@ impl Shell {
     fn frame_tasks(&mut self, ctx: &egui::Context) {
         self.sync_mermaid_cli();
         self.poll_updates(ctx);
+        self.poll_downloads(ctx);
         self.finish_jobs(ctx);
         self.sidebar.poll(ctx, &self.engine);
         self.last_time = ctx.input(|i| i.time);
@@ -1535,6 +1622,23 @@ impl Shell {
                 self.invoke(&ctx, &inv.id, &inv.params);
             }
         }
+        if self.engine.state.view.toolbar {
+            let mut cmd = None;
+            egui::Panel::top("inkra-toolbar")
+                .frame(
+                    egui::Frame::new()
+                        .inner_margin(egui::Margin::symmetric(8, 3))
+                        .fill(self.engine.state.style.sidebar_bg),
+                )
+                .show(ui, |ui| {
+                    cmd = toolbar::show(ui, &mut self.engine, &self.i18n)
+                });
+            if let Some(id) = cmd {
+                self.invoke(&ctx, &id, &Value::Null);
+                let eid = self.win().editor.id();
+                ctx.memory_mut(|m| m.request_focus(eid));
+            }
+        }
 
         if self.engine.state.view.sidebar_visible {
             let style = self.engine.state.style.clone();
@@ -1625,6 +1729,7 @@ impl Shell {
         modals::rename_dialog(self, &ctx);
         modals::delete_confirm(self, &ctx);
         modals::properties_dialog(self, &ctx);
+        modals::image_dialog(self, &ctx);
         modals::update_banner(self, &ctx);
         modals::import_offer(self, &ctx);
         modals::prefs_problem_dialog(self, &ctx);

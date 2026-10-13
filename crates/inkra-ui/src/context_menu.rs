@@ -43,7 +43,12 @@ fn custom(
 }
 
 /// Fills the context menu; returns commands to run.
-pub fn show(ui: &mut egui::Ui, engine: &mut Engine, i18n: &I18n) -> Vec<(String, Value)> {
+pub fn show(
+    ui: &mut egui::Ui,
+    engine: &mut Engine,
+    i18n: &I18n,
+    image_size: Option<[f32; 2]>,
+) -> Vec<(String, Value)> {
     let mut out = Vec::new();
     let e = &engine.state.editor;
     let pos = e.sel.head;
@@ -138,6 +143,47 @@ pub fn show(ui: &mut egui::Ui, engine: &mut Engine, i18n: &I18n) -> Vec<(String,
             let cmds = table_items(ui, engine, i18n);
             out.extend(cmds);
         });
+        ui.separator();
+    }
+    // ED-093: image operations.
+    if let Some(img) = inkra_engine::imaging::current(&engine.state) {
+        for id in [
+            "image.copy",
+            "image.copyAddress",
+            "image.reveal",
+            "image.open",
+            "image.reload",
+            "image.toLocal",
+        ] {
+            cmd_button(ui, engine, i18n, id, &mut out);
+        }
+        ui.menu_button(i18n.tr("ctx-image-zoom"), |ui| {
+            for pct in [50u32, 67, 100] {
+                let label = format!("{pct}%");
+                let width = image_size.map(|s| (s[0] * pct as f32 / 100.0).round().max(1.0) as u32);
+                let current = match (img.width, width) {
+                    (None, _) => pct == 100,
+                    (Some(w), Some(t)) => w == t,
+                    _ => false,
+                };
+                let params = if pct == 100 {
+                    serde_json::json!({})
+                } else {
+                    serde_json::json!({ "width": width })
+                };
+                let enabled = pct == 100 || width.is_some();
+                if ui
+                    .add_enabled(enabled, egui::Button::new(label).selected(current))
+                    .clicked()
+                {
+                    out.push(("image.resize".into(), params));
+                    ui.close();
+                }
+            }
+        });
+        for id in ["format.imageOps", "image.delete"] {
+            cmd_button(ui, engine, i18n, id, &mut out);
+        }
         ui.separator();
     }
     // MD-100: formulas and diagrams as images.

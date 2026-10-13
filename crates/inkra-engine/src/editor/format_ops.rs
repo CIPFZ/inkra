@@ -91,6 +91,11 @@ fn matches_kind(f: InlineFormat, k: &InlineKind) -> bool {
 
 /// The innermost inline node of format `f` containing `pos`: `(open, close)`
 /// absolute marker ranges.
+/// Whether the caret is inside an element of format `f` (toolbar states).
+pub fn is_inside(doc: &Doc, pos: usize, f: InlineFormat) -> bool {
+    enclosing(doc, pos, f).is_some()
+}
+
 fn enclosing(
     doc: &Doc,
     pos: usize,

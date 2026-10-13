@@ -723,3 +723,70 @@ pub(crate) fn properties_dialog(shell: &mut Shell, ctx: &egui::Context) {
         shell.properties_open = false;
     }
 }
+
+/// Image properties (ED-093): alt text, title, width.
+pub(crate) fn image_dialog(shell: &mut Shell, ctx: &egui::Context) {
+    let Some((img, mut alt, mut title, mut width)) = shell.image_dialog.take() else {
+        return;
+    };
+    let i18n = shell.i18n.clone();
+    let natural = inkra_layout::live::leaf::ImageSizes::size(&shell.win().editor.images, &img.src);
+    let mut done = None;
+    let resp = egui::Modal::new(egui::Id::new("inkra-image-dialog")).show(ctx, |ui| {
+        ui.heading(i18n.tr("cmd-format-imageOps"));
+        ui.label(egui::RichText::new(&img.src).small().weak());
+        egui::Grid::new("image-dialog")
+            .num_columns(2)
+            .spacing([12.0, 6.0])
+            .show(ui, |ui| {
+                ui.label(i18n.tr("image-dialog-alt"));
+                ui.add(egui::TextEdit::singleline(&mut alt).desired_width(280.0));
+                ui.end_row();
+                ui.label(i18n.tr("image-dialog-title"));
+                ui.add(egui::TextEdit::singleline(&mut title).desired_width(280.0));
+                ui.end_row();
+                ui.label(i18n.tr("image-dialog-width"));
+                ui.horizontal(|ui| {
+                    let mut natural_size = width.is_none();
+                    if ui
+                        .checkbox(&mut natural_size, i18n.tr("image-dialog-natural"))
+                        .changed()
+                    {
+                        width = if natural_size {
+                            None
+                        } else {
+                            Some(natural.map_or(300, |n| n[0].round() as u32))
+                        };
+                    }
+                    if let Some(w) = &mut width {
+                        ui.add(egui::DragValue::new(w).range(1..=10_000).suffix(" px"));
+                    }
+                });
+                ui.end_row();
+            });
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if ui.button(i18n.tr("dialog-ok")).clicked() {
+                done = Some(true);
+            }
+            if ui.button(i18n.tr("dialog-cancel")).clicked() {
+                done = Some(false);
+            }
+        });
+    });
+    if resp.should_close() && done.is_none() {
+        done = Some(false);
+    }
+    match done {
+        Some(true) => {
+            shell.engine.state.editor.sel = inkra_doc::Selection::caret(img.range.start + 1);
+            shell.invoke(
+                ctx,
+                "format.imageOps",
+                &json!({ "alt": alt, "title": title, "width": width }),
+            );
+        }
+        Some(false) => {}
+        None => shell.image_dialog = Some((img, alt, title, width)),
+    }
+}

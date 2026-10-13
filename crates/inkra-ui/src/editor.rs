@@ -70,6 +70,8 @@ pub struct EditorView {
     completion_dismissed: Option<usize>,
     col_handles: Vec<Rect>,
     col_drag: Option<(usize, usize)>,
+    /// Image width being dragged (ED-093): display width so far.
+    image_drag: Option<f32>,
     /// A reorder grip being dragged: table start, column?, index.
     grip_drag: Option<(usize, bool, usize)>,
     pending_top: Option<usize>,
@@ -118,6 +120,7 @@ impl EditorView {
             completion_dismissed: None,
             col_handles: Vec::new(),
             col_drag: None,
+            image_drag: None,
             grip_drag: None,
             pending_top: None,
             scroll_anim: None,
@@ -597,6 +600,9 @@ impl EditorView {
                     alphas[k],
                 ),
                 None => {
+                    if source && engine.state.view.show_whitespace {
+                        paint_whitespace(&mut shapes, &runs, offset, self.style.mark_fg);
+                    }
                     inkra_render::paint_runs(&mut shapes, &runs, offset, self.style.fg, alphas[k])
                 }
             }
@@ -649,6 +655,7 @@ impl EditorView {
         // Column borders of tables can be dragged (ED-084, display only).
         if !source {
             self.table_handles(ui, engine, &visible, offset, &mut out);
+            self.image_handle(ui, engine, &visible, offset, &mut out);
         }
 
         // Code block tools (ED-002): language and copy button when the caret is inside.
@@ -757,7 +764,9 @@ impl EditorView {
 
         // Right-click menu (ED-130).
         resp.context_menu(|ui| {
-            let cmds = crate::context_menu::show(ui, engine, i18n);
+            let natural = inkra_engine::imaging::current(&engine.state)
+                .and_then(|img| inkra_layout::live::leaf::ImageSizes::size(&self.images, &img.src));
+            let cmds = crate::context_menu::show(ui, engine, i18n, natural);
             out.commands.extend(cmds);
         });
 
@@ -768,6 +777,74 @@ impl EditorView {
     }
 
     /// Draggable column borders of visible tables.
+    /// ED-093: the image at the caret gets a frame and a resize handle; the new
+    /// width is written when the drag ends.
+    fn image_handle(
+        &mut self,
+        ui: &mut egui::Ui,
+        engine: &Engine,
+        visible: &std::ops::Range<usize>,
+        offset: Vec2,
+        out: &mut EditorOutput,
+    ) {
+        let Some(img) = inkra_engine::imaging::current(&engine.state) else {
+            self.image_drag = None;
+            return;
+        };
+        let mut found = None;
+        for i in visible.clone() {
+            let Some(l) = self.view.layout(i) else {
+                continue;
+            };
+            let top = self.view.top(i);
+            for d in &l.decos {
+                if let inkra_layout::Deco::Image { rect, src } = d
+                    && *src == img.src
+                {
+                    found = Some(rect.translate(vec2(0.0, top) + offset));
+                }
+            }
+        }
+        let Some(r) = found else { return };
+        let painter = ui.painter_at(self.last_text_rect.expand(40.0));
+        let shown = match self.image_drag {
+            Some(w) => Rect::from_min_size(r.min, vec2(w, r.height() * w / r.width().max(1.0))),
+            None => r,
+        };
+        painter.rect_stroke(
+            shown.expand(1.0),
+            2.0,
+            egui::Stroke::new(1.5, self.style.accent),
+            egui::StrokeKind::Outside,
+        );
+        let handle = Rect::from_center_size(shown.right_bottom(), vec2(10.0, 10.0));
+        painter.rect_filled(handle, 2.0, self.style.accent);
+        let resp = ui.interact(
+            handle.expand(3.0),
+            self.id.with("image-handle"),
+            Sense::drag(),
+        );
+        self.col_handles.push(handle.expand(3.0));
+        if resp.hovered() || resp.dragged() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeNwSe);
+        }
+        if resp.drag_started() {
+            self.image_drag = Some(r.width());
+        }
+        if resp.dragged()
+            && let Some(w) = &mut self.image_drag
+        {
+            *w = (*w + resp.drag_delta().x).clamp(16.0, self.last_text_rect.width().max(16.0));
+        }
+        if resp.drag_stopped()
+            && let Some(w) = self.image_drag.take()
+        {
+            let width = (w / self.zoom.max(0.1)).round().max(1.0) as u32;
+            out.commands
+                .push(("image.resize".into(), json!({ "width": width })));
+        }
+    }
+
     fn table_handles(
         &mut self,
         ui: &mut egui::Ui,
@@ -1358,6 +1435,19 @@ impl EditorView {
             e.doc.break_undo_group();
             self.touch(ctx);
         }
+        // ED-093: double-clicking an image opens it in the default viewer.
+        if resp.double_clicked() {
+            let p = self.doc_pos(screen, rect, text_rect);
+            let i = self.view.item_at_y(p.y);
+            let top = self.view.top(i);
+            let on_image = self.view.layout(i).is_some_and(|l| {
+                l.decos.iter().any(|d| matches!(d, inkra_layout::Deco::Image { rect, .. } if rect.translate(vec2(0.0, top)).contains(p)))
+            });
+            if on_image && inkra_engine::imaging::current(&engine.state).is_some() {
+                out.commands.push(("image.open".into(), Value::Null));
+                return;
+            }
+        }
         // double / triple click select word / block (ED-011)
         if resp.double_clicked() || resp.triple_clicked() {
             let p = self.doc_pos(screen, rect, text_rect);
@@ -1719,4 +1809,71 @@ impl EditorView {
 /// Source-mode row height.
 pub fn row_h(style: &Style) -> f32 {
     inkra_layout::source::row_height(style)
+}
+
+/// Visible spaces (·), tabs (→) and line ends (¶) for source mode.
+fn paint_whitespace(
+    out: &mut Vec<egui::Shape>,
+    runs: &[inkra_layout::Run<'_>],
+    offset: Vec2,
+    color: egui::Color32,
+) {
+    for r in runs {
+        let g = &r.galley;
+        let n = g.rows.len();
+        for (k, row) in g.rows.iter().enumerate() {
+            let base = r.origin + offset + row.pos.to_vec2();
+            let mid = base.y + row.row.size.y / 2.0;
+            for gl in &row.row.glyphs {
+                let x = base.x + gl.pos.x;
+                match gl.chr {
+                    ' ' => out.push(egui::Shape::circle_filled(
+                        pos2(x + gl.advance_width / 2.0, mid),
+                        1.2,
+                        color,
+                    )),
+                    '\t' => {
+                        let (a, b) = (pos2(x + 2.0, mid), pos2(x + gl.advance_width - 2.0, mid));
+                        out.push(egui::Shape::line_segment(
+                            [a, b],
+                            egui::Stroke::new(1.0, color),
+                        ));
+                        out.push(egui::Shape::line_segment(
+                            [b, b + vec2(-3.0, -3.0)],
+                            egui::Stroke::new(1.0, color),
+                        ));
+                        out.push(egui::Shape::line_segment(
+                            [b, b + vec2(-3.0, 3.0)],
+                            egui::Stroke::new(1.0, color),
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+            // Source lines are separate runs: the last row of a run ends a line.
+            if row.ends_with_newline || k + 1 == n {
+                // A small pilcrow: a filled bowl and two stems.
+                let x = base.x + row.row.size.x + 4.0;
+                let h = (row.row.size.y * 0.32).clamp(3.0, 7.0);
+                let st = egui::Stroke::new(1.0, color);
+                out.push(egui::Shape::circle_filled(
+                    pos2(x, mid - h * 0.4),
+                    h * 0.45,
+                    color,
+                ));
+                out.push(egui::Shape::line_segment(
+                    [pos2(x + h * 0.4, mid - h), pos2(x + h * 0.4, mid + h)],
+                    st,
+                ));
+                out.push(egui::Shape::line_segment(
+                    [pos2(x + h * 0.8, mid - h), pos2(x + h * 0.8, mid + h)],
+                    st,
+                ));
+                out.push(egui::Shape::line_segment(
+                    [pos2(x, mid - h), pos2(x + h * 0.8, mid - h)],
+                    st,
+                ));
+            }
+        }
+    }
 }

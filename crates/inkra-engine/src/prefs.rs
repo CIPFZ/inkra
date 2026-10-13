@@ -388,6 +388,20 @@ pub const PREFS: &[PrefSpec] = &[
         doc: "Show the status bar.",
     },
     PrefSpec {
+        key: "view.toolbar",
+        default: r#"false"#,
+        kind: PrefKind::Bool,
+        req: "FS-041",
+        doc: "Show the formatting toolbar.",
+    },
+    PrefSpec {
+        key: "view.showWhitespace",
+        default: r#"false"#,
+        kind: PrefKind::Bool,
+        req: "ED-120",
+        doc: "Show spaces (·), tabs (→) and line ends (¶) in source mode.",
+    },
+    PrefSpec {
         key: "view.menuBar",
         default: "true",
         kind: PrefKind::Bool,

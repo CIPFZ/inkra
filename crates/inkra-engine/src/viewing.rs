@@ -20,6 +20,8 @@ fn remembered_key(field: &str) -> Option<&'static str> {
     Some(match field {
         "status_bar" => "view.statusBar",
         "menu_bar" => "view.menuBar",
+        "toolbar" => "view.toolbar",
+        "show_whitespace" => "view.showWhitespace",
         "focus" => "editor.focusMode",
         "typewriter" => "editor.typewriterMode",
         _ => return None,
@@ -30,6 +32,8 @@ fn remembered_key(field: &str) -> Option<&'static str> {
 pub fn view_from_prefs(view: &mut crate::state::ViewState, prefs: &crate::prefs::Preferences) {
     view.status_bar = prefs.bool("view.statusBar");
     view.menu_bar = prefs.bool("view.menuBar");
+    view.toolbar = prefs.bool("view.toolbar");
+    view.show_whitespace = prefs.bool("view.showWhitespace");
     view.focus = prefs.bool("editor.focusMode");
     view.typewriter = prefs.bool("editor.typewriterMode");
     view.zoom = zoom(prefs.f64("editor.zoom") as f32);
@@ -74,6 +78,18 @@ pub fn register(r: &mut CommandRegistry) {
         "TH-008",
         "Show or hide the menu bar (Alt shows it temporarily).",
         menu_bar
+    );
+    toggle!(
+        "view.toggleToolbar",
+        "FS-041",
+        "Show or hide the formatting toolbar.",
+        toolbar
+    );
+    toggle!(
+        "view.showWhitespace",
+        "ED-120",
+        "Show spaces, tabs and line ends in source mode.",
+        show_whitespace
     );
     toggle!(
         "view.focusMode",

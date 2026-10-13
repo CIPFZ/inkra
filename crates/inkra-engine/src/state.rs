@@ -16,6 +16,10 @@ pub struct ViewState {
     pub status_bar: bool,
     /// Menu bar shown (TH-008, Windows/Linux).
     pub menu_bar: bool,
+    /// Editor toolbar shown (FS-041).
+    pub toolbar: bool,
+    /// Spaces, tabs and line ends drawn visibly in source mode.
+    pub show_whitespace: bool,
     /// Focus mode (WM-001).
     pub focus: bool,
     /// Typewriter mode (WM-002).
@@ -36,6 +40,8 @@ impl Default for ViewState {
             debug_overlay: false,
             status_bar: true,
             menu_bar: true,
+            toolbar: false,
+            show_whitespace: false,
             focus: false,
             typewriter: false,
             zoom: 1.0,
@@ -412,6 +418,16 @@ pub enum Effect {
     ConfirmDelete(std::path::PathBuf),
     /// Show the document properties (FS-009).
     ShowProperties,
+    /// Put the image at this file path or URL on the clipboard as a bitmap.
+    CopyImage(String),
+    /// Open a file or URL with the system's default application.
+    OpenExternal(String),
+    /// Forget a loaded image so it is loaded again.
+    ReloadImage(String),
+    /// Download a remote image, then run `image.toLocal` with the file.
+    DownloadImage(String),
+    /// Edit an image's alt text, title and width.
+    ImageDialog(crate::imaging::ImageRef),
     /// Ask for a settings file to import or a place to export to (PR-002).
     SettingsDialog {
         /// Import (else export).

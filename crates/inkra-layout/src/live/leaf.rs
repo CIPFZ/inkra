@@ -631,25 +631,43 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                     out.caret_range = Some(0..item.src.len());
                 }
                 BlockKind::HtmlBlock { .. }
-                    if !active
+                    if (!active || sole_img(&text.slice(item.src.clone())))
                         && !inkra_html::render::needs_source(&text.slice(item.src.clone())) =>
                 {
                     // MD-014: the renderable HTML subset.
                     let blocks = inkra_html::render::flatten(&text.slice(item.src.clone()));
                     let h = html_blocks(&blocks, cx, fmt, x, y + 0.2 * em, w, fonts, &mut out);
-                    let mut m = SourceMap::default();
-                    m.atomic(0..0, item.src.len()..item.src.len());
-                    out.runs.push(RunSpec {
-                        job: empty_job(&fmt, w),
-                        pos: vec2(x + w - 1.0, y),
-                        map: m,
-                    });
                     // A closing tag alone (`</details>`) takes almost no room.
                     content_h = if blocks.is_empty() {
                         0.5 * em
                     } else {
                         h.max(fmt.line_height) + 0.4 * em
                     };
+                    if active {
+                        // An `<img>` alone (ED-093): the picture stays, its source
+                        // is edited below it, like a Markdown image.
+                        let mut sf = fmt;
+                        sf.mono = true;
+                        sf.size = (em * 0.85).round();
+                        sf.color = style.fg_muted;
+                        let mut bl = Builder::new(text, base, delta, Some(cx.caret), style, w);
+                        bl.push_src(item.src.clone(), &sf);
+                        let (sh, _) = galley_height(fonts, &bl.job);
+                        out.runs.push(RunSpec {
+                            job: bl.job,
+                            pos: vec2(x, y + content_h),
+                            map: bl.map,
+                        });
+                        content_h += sh + 4.0;
+                    } else {
+                        let mut m = SourceMap::default();
+                        m.atomic(0..0, item.src.len()..item.src.len());
+                        out.runs.push(RunSpec {
+                            job: empty_job(&fmt, w),
+                            pos: vec2(x + w - 1.0, y),
+                            map: m,
+                        });
+                    }
                     first_row_h = fmt.line_height.min(content_h);
                     out.caret_range = Some(0..item.src.len());
                 }
@@ -1302,6 +1320,12 @@ fn diagram_builtin(
             (shown, Some(e.to_string()))
         }
     }
+}
+
+/// Whether an HTML block is a single `<img>` tag.
+fn sole_img(src: &str) -> bool {
+    let t = src.trim();
+    t.starts_with("<img") && t.ends_with('>') && t.matches('<').count() == 1
 }
 
 /// Height of the galley row containing char `ci`.

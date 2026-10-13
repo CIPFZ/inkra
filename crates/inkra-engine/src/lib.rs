@@ -14,6 +14,7 @@ pub mod exporting;
 pub mod files;
 pub mod formatting;
 pub mod help;
+pub mod imaging;
 pub mod keymap;
 pub mod menu;
 pub mod prefs;
@@ -197,6 +198,7 @@ pub fn builtin_registry() -> CommandRegistry {
     tables::register(&mut r);
     sidebar::register(&mut r);
     exporting::register(&mut r);
+    imaging::register(&mut r);
     r
 }
 

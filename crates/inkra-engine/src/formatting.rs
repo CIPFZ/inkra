@@ -132,8 +132,58 @@ pub fn register(r: &mut CommandRegistry) {
             |cx, _| inline(cx, InlineFormat::Math),
         ),
     ];
+    type Checked = fn(&CommandContext<'_>) -> Option<bool>;
+    let states: &[(&str, Checked)] = &[
+        ("format.bold", |cx| {
+            Some(f::is_inside(
+                &cx.app.editor.doc,
+                cx.app.editor.sel.head,
+                InlineFormat::Bold,
+            ))
+        }),
+        ("format.italic", |cx| {
+            Some(f::is_inside(
+                &cx.app.editor.doc,
+                cx.app.editor.sel.head,
+                InlineFormat::Italic,
+            ))
+        }),
+        ("format.underline", |cx| {
+            Some(f::is_inside(
+                &cx.app.editor.doc,
+                cx.app.editor.sel.head,
+                InlineFormat::Underline,
+            ))
+        }),
+        ("format.code", |cx| {
+            Some(f::is_inside(
+                &cx.app.editor.doc,
+                cx.app.editor.sel.head,
+                InlineFormat::Code,
+            ))
+        }),
+        ("format.strike", |cx| {
+            Some(f::is_inside(
+                &cx.app.editor.doc,
+                cx.app.editor.sel.head,
+                InlineFormat::Strike,
+            ))
+        }),
+        ("format.highlight", |cx| {
+            Some(f::is_inside(
+                &cx.app.editor.doc,
+                cx.app.editor.sel.head,
+                InlineFormat::Highlight,
+            ))
+        }),
+    ];
     for (id, req, doc, run) in inline_cmds {
-        r.register(FnCommand::new(edits(spec(id, Format, req, doc)), *run));
+        let mut c = FnCommand::new(edits(spec(id, Format, req, doc)), *run);
+        // FS-041: toolbar buttons show whether the caret is in the format.
+        if let Some((_, check)) = states.iter().find(|(s, _)| s == id) {
+            c = c.checked(*check);
+        }
+        r.register(c);
     }
     r.register(FnCommand::new(
         edits(params(
@@ -692,7 +742,7 @@ fn list(cx: &mut CommandContext<'_>, style: ListStyle) -> CommandResult {
 /// Where an inserted image ends up (ED-092): pasted bitmaps live in a temporary
 /// file and are always moved to the target folder; local files only when
 /// `image.applyToLocal` is set.
-fn place_image(
+pub(crate) fn place_image(
     cx: &mut CommandContext<'_>,
     src: &std::path::Path,
     pasted: bool,

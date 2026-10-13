@@ -55,6 +55,8 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `sidebar.revealCurrent` | bool | `true` | FS-023 | Expand the file tree to the opened file. |
 | `search.gitignore` | bool | `true` | FS-031 | Global search respects `.gitignore`. |
 | `view.statusBar` | bool | `true` | PR-043 | Show the status bar. |
+| `view.toolbar` | bool | `false` | FS-041 | Show the formatting toolbar. |
+| `view.showWhitespace` | bool | `false` | ED-120 | Show spaces (·), tabs (→) and line ends (¶) in source mode. |
 | `view.menuBar` | bool | `true` | TH-008 | Show the menu bar (Windows/Linux; Alt shows it temporarily). |
 | `editor.focusMode` | bool | `false` | PR-038 | Focus mode (remembered). |
 | `editor.typewriterMode` | bool | `false` | PR-038 | Typewriter mode (remembered). |

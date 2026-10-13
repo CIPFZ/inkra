@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **190**
+Registered commands: **201**
 
 
 ## App
@@ -110,6 +110,7 @@ Registered commands: **190**
 | `format.highlight` | Highlight | 高亮 |  |  | — | ED-035 | Toggle ==highlight== (needs MD-063). |
 | `format.image` | Insert Image… | 插入图像… | `Ctrl+Shift+I` | `⇧⌘I` | `{"type":"object","properties":{"src":{"type":"string"},"alt":{"type":"string"}}}` | ED-040 | Insert an image: `src` inserts directly, otherwise a file picker opens. |
 | `format.imageLocal` | Insert Local Image… | 插入本地图片… |  |  | — | ED-040 | Insert a local image file. |
+| `format.imageOps` | Image Operations… | 图片操作… |  |  | `{"type":"object","properties":{"alt":{"type":"string"},"title":{"type":"string"},"width":{"type":["integer","null"]}}}` | ED-093 | Edit the alt text, title and width of the image at the caret (opens a dialog without parameters). |
 | `format.inlineMath` | Inline Math | 行内公式 |  |  | — | ED-042 | Toggle $inline math$. |
 | `format.insertImageFile` | Insert Image File | 插入图片文件 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"},"pasted":{"type":"boolean"}}}` | ED-092 | Insert an image file, copying it per the image preferences (`pasted`: a saved clipboard bitmap). |
 | `format.italic` | Italic | 斜体 | `Ctrl+I` | `⌘I` | — | ED-031 | Toggle *italic*. |
@@ -132,6 +133,19 @@ Registered commands: **190**
 | `help.quickStart` | Quick Start | 快速入门 |  |  | — | UI-052 | Open the Quick Start guide. |
 | `help.reportIssue` | Report Issue | 报告问题 |  |  | — | UI-052 | Open the issue tracker in the browser. |
 | `help.shortcuts` | Keyboard Shortcuts | 快捷键参考 |  |  | — | UI-020 | Open the list of commands and keyboard shortcuts. |
+
+## Format
+
+| Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
+|---|---|---|---|---|---|---|---|
+| `image.copy` | Copy Image | 复制图片 |  |  | — | ED-093 | Copy the image at the caret as a bitmap. |
+| `image.copyAddress` | Copy Image Address | 复制图片地址 |  |  | — | ED-093 | Copy the address of the image at the caret. |
+| `image.delete` | Delete Image | 删除图片 |  |  | — | ED-093 | Remove the image at the caret from the document. |
+| `image.open` | Open in Default Viewer | 用默认程序打开 |  |  | — | ED-093 | Open the image with the system's default viewer. |
+| `image.reload` | Reload Image | 重新加载 |  |  | — | ED-093 | Load the image at the caret again. |
+| `image.resize` | Image Size | 图片尺寸 |  |  | `{"type":"object","properties":{"width":{"type":"integer","minimum":1}}}` | ED-093 | Set the display width of the image at the caret (`width` in px; none restores the natural size). |
+| `image.reveal` | Reveal in Folder | 在文件夹中显示 |  |  | — | ED-093 | Show the image file in the file manager. |
+| `image.toLocal` | Make Local Copy | 转为本地图片 |  |  | `{"type":"object","properties":{"file":{"type":"string"}}}` | ED-093 | Download the remote image at the caret into the assets folder and point to the copy. |
 
 ## Paragraph
 
@@ -248,11 +262,13 @@ Registered commands: **190**
 | `view.focusMode` | Focus Mode | 专注模式 | `F8` | `F8` | — | WM-001 | Focus mode: dim everything except the current block. |
 | `view.fullscreen` | Full Screen | 全屏 | `F11` | `⌃⌘F` | — | WM-003 | Toggle full screen. |
 | `view.outline` | Outline | 大纲 | `Ctrl+Shift+1` | `⇧⌘1` | — | FS-020 | Show the outline in the sidebar (again: hide). |
+| `view.showWhitespace` | Show Formatting Marks | 显示格式标记 |  |  | — | ED-120 | Show spaces, tabs and line ends in source mode. |
 | `view.sourceMode` | Source Code Mode | 源代码模式 | `Ctrl+/` | `⌘/` | — | ED-120 | Toggle between live rendering and source mode. |
 | `view.switchWindow` | Switch Window | 切换窗口 |  |  | `{"type":"object","required":["window"],"properties":{"window":{"type":"integer"}}}` | FS-040 | Bring a window to the front. |
 | `view.toggleMenuBar` | Menu Bar | 显示菜单栏 |  |  | — | TH-008 | Show or hide the menu bar (Alt shows it temporarily). |
 | `view.toggleSidebar` | Sidebar | 侧边栏 | `Ctrl+Shift+L` | `⇧⌘L` | — | FS-040 | Show or hide the sidebar. |
 | `view.toggleStatusBar` | Status Bar | 显示状态栏 |  |  | — | PR-043 | Show or hide the status bar. |
+| `view.toggleToolbar` | Toolbar | 工具栏 |  |  | — | FS-041 | Show or hide the formatting toolbar. |
 | `view.typewriterMode` | Typewriter Mode | 打字机模式 | `F9` | `F9` | — | WM-002 | Typewriter mode: keep the caret line vertically centered. |
 | `view.zoomIn` | Zoom In | 放大 | `Ctrl+Shift+=` | `⇧⌘=` | — | FS-040 | Zoom the editor in by 10% (max 300%). |
 | `view.zoomOut` | Zoom Out | 缩小 | `Ctrl+Shift+-` | `⇧⌘-` | — | FS-040 | Zoom the editor out by 10% (min 50%). |
@@ -263,6 +279,3 @@ These appear greyed out in menus.
 
 - `app.commandPalette` — Command Palette
 - `edit.emojiSymbols` — Emoji & Symbols
-- `format.imageOps` — Image Operations…
-- `view.showWhitespace` — Show Formatting Marks
-- `view.toggleToolbar` — Toolbar
