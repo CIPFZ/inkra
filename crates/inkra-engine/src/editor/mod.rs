@@ -43,6 +43,9 @@ pub struct Editor {
     pub preedit: Option<String>,
     /// File on disk, if any.
     pub path: Option<std::path::PathBuf>,
+    /// The last smart punctuation conversion: caret after it, converted text
+    /// length and the original input (Backspace reverts it, ED-102).
+    smart_undo: Option<(usize, usize, String)>,
 }
 
 impl Default for Editor {
@@ -62,6 +65,7 @@ impl Editor {
             prefs: EditPrefs::default(),
             preedit: None,
             path: None,
+            smart_undo: None,
         }
     }
 
@@ -112,6 +116,16 @@ impl Editor {
             self.apply(tx, UndoPolicy::Typing);
             return;
         }
+        // ED-102 smart punctuation.
+        if self.sel.is_empty()
+            && let Some((tx, conv_len, original)) =
+                ops::smart_punct(&self.doc, self.sel, s, &self.prefs)
+        {
+            self.apply(tx, UndoPolicy::Typing);
+            self.smart_undo = Some((self.sel.head, conv_len, original));
+            return;
+        }
+        self.smart_undo = None;
         // `|` typed into a table cell is escaped (ED-081).
         if self.mode == ViewMode::Live
             && s.contains('|')
@@ -135,8 +149,28 @@ impl Editor {
         self.apply(tx, UndoPolicy::Typing);
     }
 
+    /// Backspace right after a smart punctuation conversion restores what was
+    /// typed (ED-102).
+    fn revert_smart(&mut self) -> bool {
+        let Some((at, len, original)) = self.smart_undo.take() else {
+            return false;
+        };
+        if !self.sel.is_empty() || self.sel.head != at || at < len {
+            return false;
+        }
+        let end = at - len + original.len();
+        let tx = Transaction::single(at - len..at, &original)
+            .with_selection_before(self.sel)
+            .with_selection_after(Selection::caret(end));
+        self.apply(tx, UndoPolicy::NewGroup);
+        true
+    }
+
     /// Backspace.
     pub fn delete_backward(&mut self, unit: Unit) {
+        if unit == Unit::Char && self.revert_smart() {
+            return;
+        }
         if let Some(tx) = ops::delete_backward(&self.doc, self.sel, unit, &self.prefs) {
             let policy = if unit == Unit::Char && self.sel.is_empty() {
                 UndoPolicy::Typing
@@ -182,6 +216,9 @@ impl Editor {
 
     /// Backspace in live mode (ED-012).
     pub fn delete_backward_live(&mut self, unit: Unit) {
+        if unit == Unit::Char && self.revert_smart() {
+            return;
+        }
         if let Some(a) = table::delete(&self.doc, self.sel, false) {
             self.table_action(a);
             return;

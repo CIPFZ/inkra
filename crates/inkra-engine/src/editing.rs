@@ -36,6 +36,25 @@ fn done(cx: &mut CommandContext<'_>) -> CommandResult {
 /// Registers the editing commands.
 pub fn register(r: &mut CommandRegistry) {
     use Category::Edit;
+    r.register(FnCommand::new(
+        edits(with_params(
+            spec("edit.replaceRange", Edit, "ED-103", "Replace a source range with text and put the caret after it (completions)."),
+            r#"{"type":"object","required":["start","end","text"],"properties":{"start":{"type":"integer"},"end":{"type":"integer"},"text":{"type":"string"}}}"#,
+        )),
+        |cx, p| {
+            let e = &mut cx.app.editor;
+            let len = e.doc.text().len();
+            let t = e.doc.text();
+            let a = t.snap((p.get("start").and_then(Value::as_u64).unwrap_or(0) as usize).min(len));
+            let b = t.snap((p.get("end").and_then(Value::as_u64).unwrap_or(0) as usize).min(len)).max(a);
+            let text = p.get("text").and_then(Value::as_str).unwrap_or_default().to_owned();
+            let end = a + text.len();
+            let tx = inkra_doc::Transaction::single(a..b, &text).with_selection_before(e.sel).with_selection_after(Selection::caret(end));
+            e.doc.break_undo_group();
+            e.apply(tx, UndoPolicy::NewGroup);
+            done(cx)
+        },
+    ));
     r.register(
         FnCommand::new(
             edits(spec(

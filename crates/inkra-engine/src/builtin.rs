@@ -20,12 +20,16 @@ pub fn register_all(r: &mut CommandRegistry) {
             if key.starts_with("appearance.") || key == "markdown.mathNumbering" || key == "markdown.diagrams" || key == "markdown.tocDepth" {
                 let _ = cx.app.reload_theme();
             }
-            if key.starts_with("markdown.") {
-                // Parse options apply to every open document right away (MD-080).
+            if key.starts_with("markdown.") || key.starts_with("editor.") {
+                // Parse options and editing preferences apply to every open
+                // document right away (MD-080).
                 let o = crate::markdown_options(&cx.app.prefs);
+                let ep = crate::edit_prefs(&cx.app.prefs);
                 cx.app.editor.doc.set_options(o.clone());
+                cx.app.editor.prefs = ep.clone();
                 for w in &mut cx.app.others {
                     w.editor.doc.set_options(o.clone());
+                    w.editor.prefs = ep.clone();
                 }
             }
             Ok(Outcome::Done)

@@ -27,6 +27,13 @@ pub struct EditPrefs {
     pub list_from_one: bool,
     /// Align table pipes when tables are rewritten (ED-085).
     pub table_align: bool,
+    /// Smart quotes `(open double, close double, open single, close single)`
+    /// (ED-102); `None`: off.
+    pub smart_quotes: Option<(char, char, char, char)>,
+    /// `--` → –, `---` → — (ED-102).
+    pub smart_dashes: bool,
+    /// `...` → … (ED-102).
+    pub smart_ellipsis: bool,
 }
 
 impl Default for EditPrefs {
@@ -40,6 +47,9 @@ impl Default for EditPrefs {
             renumber: true,
             list_from_one: false,
             table_align: true,
+            smart_quotes: None,
+            smart_dashes: false,
+            smart_ellipsis: false,
         }
     }
 }
@@ -772,4 +782,98 @@ pub fn toggle_task(doc: &Doc, sel: Selection, at: Option<usize>) -> Option<Trans
             .with_selection_before(sel)
             .with_selection_after(sel),
     )
+}
+
+/// Smart punctuation for a single typed character (ED-102): quotes become
+/// typographic, `--` an en dash, `–-` an em dash, `...` an ellipsis. Not in
+/// code, math or link destinations. Returns the transaction, the length of the
+/// converted text and the original input to restore on Backspace.
+pub fn smart_punct(
+    doc: &Doc,
+    sel: Selection,
+    input: &str,
+    p: &EditPrefs,
+) -> Option<(Transaction, usize, String)> {
+    let mut chars = input.chars();
+    let c = chars.next()?;
+    if chars.next().is_some() || !matches!(c, '"' | '\'' | '-' | '.') {
+        return None;
+    }
+    let pos = sel.head;
+    if context::in_code_content(doc, pos) || context::in_inline_code(doc, pos) || in_math(doc, pos)
+    {
+        return None;
+    }
+    let t = doc.text();
+    let ls = t.line_to_byte(t.byte_to_line(pos));
+    let before = t.slice(ls..pos).into_owned();
+    // Link destinations and autolinks keep ASCII.
+    if let Some(i) = before.rfind("](")
+        && !before[i..].contains(')')
+    {
+        return None;
+    }
+    let prev = before.chars().next_back();
+    let replace = |range: std::ops::Range<usize>, s: String| -> (Transaction, usize) {
+        let end = range.start + s.len();
+        let len = s.len();
+        (
+            Transaction::single(range, &s)
+                .with_selection_before(sel)
+                .with_selection_after(Selection::caret(end)),
+            len,
+        )
+    };
+    match c {
+        '"' | '\'' => {
+            let (od, cd, os, cs) = p.smart_quotes?;
+            let opening =
+                prev.is_none_or(|ch| ch.is_whitespace() || "([{<—–-\u{a0}“‘「『«‹".contains(ch));
+            let q = match (c, opening) {
+                ('"', true) => od,
+                ('"', false) => cd,
+                (_, true) => os,
+                _ => cs,
+            };
+            let (tx, len) = replace(pos..pos, q.to_string());
+            Some((tx, len, c.to_string()))
+        }
+        '-' if p.smart_dashes => {
+            // Not in list markers, rules or table delimiter rows: the line must
+            // already contain text.
+            let has_text = before
+                .chars()
+                .any(|ch| !matches!(ch, '-' | ' ' | '\t' | '|' | ':' | '>' | '–' | '—'));
+            if !has_text {
+                return None;
+            }
+            match prev {
+                Some('-') => {
+                    let (tx, len) = replace(pos - 1..pos, "–".into());
+                    Some((tx, len, "--".into()))
+                }
+                Some('–') => {
+                    let (tx, len) = replace(pos - '–'.len_utf8()..pos, "—".into());
+                    Some((tx, len, "–-".into()))
+                }
+                _ => None,
+            }
+        }
+        '.' if p.smart_ellipsis && before.ends_with("..") => {
+            let (tx, len) = replace(pos - 2..pos, "…".into());
+            Some((tx, len, "...".into()))
+        }
+        _ => None,
+    }
+}
+
+fn in_math(doc: &Doc, pos: usize) -> bool {
+    context::path(doc, pos).iter().any(|n| {
+        matches!(n.block.kind, inkra_markdown::BlockKind::MathBlock { .. })
+            || n.block.inlines.iter().any(|i| {
+                matches!(i.kind, inkra_markdown::InlineKind::Math { .. })
+                    && n.abs(i.span.start) < pos
+                    && pos < n.abs(i.span.end)
+            })
+    })
 }

@@ -321,3 +321,4 @@ count-document = 文档
 cmd-table-moveColumnTo = 移动列
 cmd-table-moveRowTo = 移动行
 code-copy = 复制
+cmd-edit-replaceRange = 替换范围

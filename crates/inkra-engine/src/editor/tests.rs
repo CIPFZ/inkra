@@ -457,3 +457,28 @@ fn table_tab_walks_cells_in_order() {
     }
     assert_eq!(&e.text()[e.sel.range()], "v1-10");
 }
+
+#[test]
+fn smart_punctuation() {
+    let mut e = live("");
+    e.prefs.smart_quotes = Some(('“', '”', '‘', '’'));
+    e.prefs.smart_dashes = true;
+    e.prefs.smart_ellipsis = true;
+    e.prefs.pair_brackets = false;
+    typed(&mut e, "\"Hi\" it's a--b---c...");
+    assert_eq!(e.text(), "“Hi” it’s a–b—c…");
+    // Backspace right after a conversion restores the input.
+    e.delete_backward_live(Unit::Char);
+    assert_eq!(e.text(), "“Hi” it’s a–b—c...");
+    // Lists, rules and code are left alone.
+    let mut e = live("");
+    e.prefs.smart_dashes = true;
+    e.prefs.smart_quotes = Some(('“', '”', '‘', '’'));
+    typed(&mut e, "---");
+    assert_eq!(e.text(), "---");
+    let mut e = live("`xy`");
+    e.prefs.smart_quotes = Some(('“', '”', '‘', '’'));
+    e.sel = Selection::caret(2);
+    typed(&mut e, "\"");
+    assert!(e.text().contains('"'), "{}", e.text());
+}

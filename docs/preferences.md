@@ -39,6 +39,19 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `editor.rememberZoom` | bool | `true` | PR-039 | Remember the editor zoom (Ctrl+wheel, Ctrl+Shift+=/-). |
 | `editor.zoom` | number | `1.0` | PR-039 | Editor zoom factor, 0.5 to 3.0. |
 | `markdown.diagrams` | bool | `true` | MD-064 | Render ```` ```mermaid ```` blocks as diagrams (off: plain code blocks). |
+| `editor.emojiCompletion` | bool | `true` | PR-036 | Typing `:` and two letters suggests emoji (ED-103). |
+| `editor.emojiAsShortcode` | bool | `false` | ED-103 | Insert `:shortcode:` text instead of the emoji character. |
+| `editor.linkCompletion` | bool | `true` | PR-036 | Typing `[` suggests the document's headings, `[^` its footnotes (ED-105). |
+| `editor.autoPairBrackets` | bool | `true` | PR-031 | Auto-pair brackets and quotes. |
+| `editor.autoPairMarkdown` | bool | `false` | PR-032 | Auto-pair Markdown symbols `*` `_` `~` `=`. |
+| `editor.tabWidth` | number | `4` | PR-041 | Tab width in code blocks. |
+| `editor.useSpaces` | bool | `true` | PR-041 | Indent code blocks with spaces. |
+| `markdown.renumberLists` | bool | `true` | MD-076 | Renumber ordered lists after edits. |
+| `markdown.listFromOne` | bool | `false` | ED-101 | Ordered lists always start at 1 (otherwise the start number is kept). |
+| `markdown.smartPunctuation` | bool | `false` | MD-065 | Smart punctuation while typing (ED-102). |
+| `markdown.smartQuotes` | `curly` / `corner` / `guillemets` / `off` | `"curly"` | MD-066 | Quote style of smart punctuation: “” ‘’, 「」『』 or «» ‹›. |
+| `markdown.smartDashes` | bool | `true` | MD-066 | `--` becomes an en dash, `---` an em dash. |
+| `markdown.smartEllipsis` | bool | `true` | MD-066 | `...` becomes an ellipsis. |
 | `markdown.tocDepth` | number | `6` | MD-078 | Deepest heading level listed by `[TOC]`. |
 | `markdown.mathNumbering` | `none` / `ams` / `all` | `"none"` | MD-068 | Number display formulas: off, AMS environments (`equation`, `align`), or every block. |
 | `markdown.inlineMath` | bool | `false` | MD-060 | Inline math `$...$`. |

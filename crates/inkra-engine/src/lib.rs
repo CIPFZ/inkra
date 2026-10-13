@@ -52,6 +52,7 @@ impl Engine {
         state.next_window = 1;
         state.meta.recovery_id = state::recovery_id(1);
         state.editor.doc.set_options(markdown_options(&state.prefs));
+        state.editor.prefs = edit_prefs(&state.prefs);
         let _ = state.reload_theme();
         viewing::view_from_prefs(&mut state.view, &state.prefs);
         Self {
@@ -89,6 +90,33 @@ impl Engine {
     /// Takes the effects produced since the last call.
     pub fn take_effects(&mut self) -> Vec<Effect> {
         std::mem::take(&mut self.effects)
+    }
+}
+
+/// Editing preferences (ED-100, ED-101, ED-102, PR-031, PR-032, PR-041).
+pub fn edit_prefs(prefs: &Preferences) -> editor::ops::EditPrefs {
+    let smart = prefs.bool("markdown.smartPunctuation");
+    editor::ops::EditPrefs {
+        pair_brackets: prefs.bool("editor.autoPairBrackets"),
+        pair_markdown: prefs.bool("editor.autoPairMarkdown"),
+        pair_dollar: prefs.bool("markdown.inlineMath"),
+        tab_width: prefs.f64("editor.tabWidth").clamp(1.0, 16.0) as usize,
+        use_spaces: prefs.bool("editor.useSpaces"),
+        renumber: prefs.bool("markdown.renumberLists"),
+        list_from_one: prefs.bool("markdown.listFromOne"),
+        table_align: prefs.bool("markdown.tableAlign"),
+        smart_quotes: if smart {
+            match prefs.string("markdown.smartQuotes").as_str() {
+                "curly" => Some(('“', '”', '‘', '’')),
+                "corner" => Some(('「', '」', '『', '』')),
+                "guillemets" => Some(('«', '»', '‹', '›')),
+                _ => None,
+            }
+        } else {
+            None
+        },
+        smart_dashes: smart && prefs.bool("markdown.smartDashes"),
+        smart_ellipsis: smart && prefs.bool("markdown.smartEllipsis"),
     }
 }
 

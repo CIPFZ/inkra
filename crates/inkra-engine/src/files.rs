@@ -37,6 +37,7 @@ pub fn load_editor(
     let fallback = inkra_text::Encoding::from_label(&app.prefs.string("general.defaultEncoding"));
     let (doc, disk) = files::load(path, crate::markdown_options(&app.prefs), fallback)?;
     let mut e = Editor::new(doc);
+    e.prefs = crate::edit_prefs(&app.prefs);
     e.path = Some(inkra_workspace::paths::canonical(path));
     if app.prefs.string("editor.defaultMode") == "source" {
         e.mode = ViewMode::Source;

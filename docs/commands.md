@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **147**
+Registered commands: **148**
 
 
 ## App
@@ -47,6 +47,7 @@ Registered commands: **147**
 | `edit.replace` | Replace | 替换 | `Ctrl+H` | `⌘H` | — | ED-111 | Open the find bar with the replace row. |
 | `edit.replaceAll` | Replace All | 全部替换 |  |  | — | ED-111 | Replace all matches (one undo group). |
 | `edit.replaceCurrent` | Replace | 替换当前 |  |  | — | ED-111 | Replace the current match. |
+| `edit.replaceRange` | Replace Range | 替换范围 |  |  | `{"type":"object","required":["start","end","text"],"properties":{"start":{"type":"integer"},"end":{"type":"integer"},"text":{"type":"string"}}}` | ED-103 | Replace a source range with text and put the caret after it (completions). |
 | `edit.selectAll` | Select All | 全选 | `Ctrl+A` | `⌘A` | — | ED-011 | Select all (inside a code block: the block first). |
 | `edit.selectLine` | Select Line / Sentence | 选择当前行/句 | `Ctrl+L` | `⌘L` | — | ED-011 | Select the current line. |
 | `edit.selectWord` | Select Word | 选择当前词 | `Ctrl+D` | `⌘D` | — | ED-011 | Select the word at the caret. |

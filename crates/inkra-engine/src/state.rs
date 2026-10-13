@@ -213,7 +213,11 @@ impl AppState {
     }
 
     /// Creates a window (parked) and returns its id.
-    pub fn new_window(&mut self, editor: Editor) -> u64 {
+    pub fn new_window(&mut self, mut editor: Editor) -> u64 {
+        editor.prefs = crate::edit_prefs(&self.prefs);
+        if editor.doc.text().is_empty() {
+            editor.doc.set_options(crate::markdown_options(&self.prefs));
+        }
         self.next_window = self.next_window.max(self.meta.id) + 1;
         let id = self.next_window;
         let meta = WindowMeta {
