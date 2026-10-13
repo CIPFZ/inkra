@@ -12,6 +12,7 @@ pub mod encoding;
 pub mod eol;
 pub mod segment;
 pub mod sort;
+pub mod spell;
 mod text;
 
 pub use encoding::{Decoded, Encoding};

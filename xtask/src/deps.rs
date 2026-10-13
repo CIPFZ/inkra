@@ -82,6 +82,12 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         "rasterizing formulas and diagrams (also used by resvg); math/diagram examples only",
     ),
     (
+        "spellbook",
+        Scope::Only(&["inkra-text"]),
+        "MPL-2.0",
+        "Hunspell-compatible spell checking (SPEC 2.1, ED-104); file-level copyleft, used unmodified",
+    ),
+    (
         "nucleo-matcher",
         Scope::Only(&["inkra-workspace"]),
         "MPL-2.0",
