@@ -57,6 +57,8 @@ pub struct LiveCx<'a> {
     pub math_numbers: &'a std::collections::HashMap<usize, u32>,
     /// Label → equation number for `\ref`/`\eqref`.
     pub math_refs: &'a [(String, String)],
+    /// Footnote numbers and TOC headings.
+    pub doc_info: &'a super::DocInfo,
 }
 
 const PLACEHOLDER: [f32; 2] = [240.0, 135.0];
@@ -78,6 +80,7 @@ fn sole_image(b: &Block) -> Option<&inkra_markdown::Inline> {
 /// Lays out one live item.
 pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> BlockLayout {
     super::inline::set_math_refs(cx.math_refs);
+    super::inline::set_footnotes(&cx.doc_info.footnotes);
     let style = cx.style;
     let text = cx.doc.text();
     let base = item.src.start;
@@ -282,7 +285,40 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                         out.caret_range = Some(0..item.src.len());
                     } else {
                         let mut bl = Builder::new(text, base, delta, Some(cx.caret), style, w);
-                        if matches!(b.kind, BlockKind::LinkDef { .. } | BlockKind::Toc) {
+                        if matches!(b.kind, BlockKind::Toc) && !active {
+                            // MD-013: the document's headings, each a link.
+                            let depth = style.toc_depth.clamp(1, 6);
+                            let heads: Vec<_> = cx
+                                .doc_info
+                                .headings
+                                .iter()
+                                .filter(|h| h.0 <= depth)
+                                .collect();
+                            let min = heads.iter().map(|h| h.0).min().unwrap_or(1);
+                            let mut f = pf;
+                            f.color = style.accent;
+                            for (k, (lvl, t, anchor)) in heads.iter().enumerate() {
+                                if k > 0 {
+                                    bl.push("\n", &f, None, true);
+                                }
+                                let indent = "\u{2003}".repeat(usize::from(lvl - min));
+                                bl.push(&indent, &f, None, true);
+                                let s0 = bl.job.text.len();
+                                bl.push(t, &f, None, true);
+                                let s1 = bl.job.text.len();
+                                bl.map
+                                    .hits
+                                    .push((s0..s1, HitAction::Link(format!("#{anchor}"))));
+                            }
+                            if heads.is_empty() {
+                                let mut mf = pf;
+                                mf.color = style.fg_muted;
+                                bl.push("[TOC]", &mf, None, true);
+                            }
+                            // The caret enters the block at its end.
+                            let end = item.src.end;
+                            bl.push("", &pf, Some(end..end), true);
+                        } else if matches!(b.kind, BlockKind::LinkDef { .. } | BlockKind::Toc) {
                             bl.push_src(item.src.clone(), &pf);
                         } else {
                             bl.inlines(&b.inlines, &pf);
@@ -738,7 +774,10 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                 label, first: true, ..
             } => {
                 let job = LayoutJob::simple_singleline(
-                    format!("[^{label}]"),
+                    match cx.doc_info.footnote(label) {
+                        Some(n) => format!("{n}."),
+                        None => format!("[^{label}]"),
+                    },
                     FontId::new(
                         (fmt.size * 0.85).round(),
                         crate::fonts::family_of(style.body_font, false, false),
@@ -894,11 +933,42 @@ fn ms_key(req: &inkra_math::Request) -> u64 {
 /// the text layout reserved for them.
 fn place_objects(out: &mut BlockLayout, fonts: &mut FontsView<'_>) {
     let mut decos = Vec::new();
+    let mut hits = Vec::new();
     for run in &out.runs {
-        if run.map.objects.is_empty() {
+        if run.map.objects.is_empty() && run.map.hits.is_empty() {
             continue;
         }
         let g = fonts.layout_job(run.job.clone());
+        // Inline hit regions: the union of their glyph boxes.
+        for (range, action) in &run.map.hits {
+            let (a, b) = (
+                crate::run::char_index(&run.job.text, range.start),
+                crate::run::char_index(&run.job.text, range.end),
+            );
+            let mut k = 0usize;
+            let mut rect = Rect::NOTHING;
+            for r in &g.rows {
+                for gl in &r.row.glyphs {
+                    if k >= a && k < b {
+                        let min = pos2(run.pos.x + r.pos.x + gl.pos.x, run.pos.y + r.pos.y);
+                        rect = rect.union(Rect::from_min_size(
+                            min,
+                            vec2(gl.advance_width.max(4.0), r.row.size.y),
+                        ));
+                    }
+                    k += 1;
+                }
+                if r.ends_with_newline {
+                    k += 1;
+                }
+            }
+            if rect.is_positive() {
+                hits.push(Hit {
+                    rect: rect.expand(2.0),
+                    action: action.clone(),
+                });
+            }
+        }
         for obj in &run.map.objects {
             let ci = crate::run::char_index(&run.job.text, obj.at);
             // Walk rows: each glyph is one char; a row ending in `\n` skips it.
@@ -931,6 +1001,7 @@ fn place_objects(out: &mut BlockLayout, fonts: &mut FontsView<'_>) {
         }
     }
     out.decos.extend(decos);
+    out.hits.extend(hits);
 }
 
 fn empty_job(fmt: &Fmt, w: f32) -> LayoutJob {

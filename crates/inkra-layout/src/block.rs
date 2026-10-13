@@ -58,12 +58,15 @@ pub enum Deco {
 }
 
 /// Interactive region inside a block.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HitAction {
     /// Toggle the task checkbox whose `[ ]` starts at this relative offset.
     ToggleTask(usize),
     /// Open a link.
     Link(String),
+    /// A footnote reference: hovering shows the definition, clicking jumps to it
+    /// (MD-010).
+    Footnote(String),
 }
 
 /// A clickable region.

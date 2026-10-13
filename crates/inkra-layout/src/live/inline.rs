@@ -22,6 +22,20 @@ thread_local! {
     static REFS: std::cell::RefCell<Vec<(String, String)>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
+thread_local! {
+    static NOTES: std::cell::RefCell<Vec<(String, u32)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Sets the footnote numbers used while laying out on this thread.
+pub fn set_footnotes(notes: &[(String, u32)]) {
+    NOTES.with(|n| {
+        let mut n = n.borrow_mut();
+        if n.as_slice() != notes {
+            *n = notes.to_vec();
+        }
+    });
+}
+
 /// Sets the equation references used by inline math laid out on this thread.
 pub fn set_math_refs(refs: &[(String, String)]) {
     REFS.with(|r| {
@@ -420,11 +434,20 @@ impl<'a> Builder<'a> {
                 if active {
                     self.push_marker(span, fmt);
                 } else {
+                    // MD-010: numbered by order of first reference.
+                    let n = NOTES
+                        .with(|n| n.borrow().iter().find(|(l, _)| l == label).map(|(_, n)| *n));
+                    let shown = n.map_or_else(|| label.clone(), |n| n.to_string());
                     let mut f = *fmt;
                     f.size = (fmt.size * 0.75).round();
                     f.valign = epaint::emath::Align::TOP;
                     f.color = style.accent;
-                    self.push(&format!("[{label}]"), &f, Some(span), true);
+                    let start = self.job.text.len();
+                    self.push(&shown, &f, Some(span), true);
+                    let end = self.job.text.len();
+                    self.map
+                        .hits
+                        .push((start..end, crate::block::HitAction::Footnote(label.clone())));
                 }
             }
             InlineKind::Emoji { emoji } => {

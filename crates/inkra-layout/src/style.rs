@@ -69,6 +69,8 @@ pub struct Style {
     pub math_numbering: u8,
     /// Render ```` ```mermaid ```` blocks as diagrams (MD-064); a preference.
     pub diagrams: bool,
+    /// Deepest heading level shown by `[TOC]` (MD-078); a preference.
+    pub toc_depth: u8,
     /// Body font size in points.
     pub size: f32,
     /// Monospace font size in points.
@@ -172,6 +174,7 @@ impl Default for Style {
             alert_bg_alpha: 0.08,
             math_numbering: 0,
             diagrams: true,
+            toc_depth: 6,
             size: 16.0,
             mono_size: 14.0,
             line_height: 1.6,

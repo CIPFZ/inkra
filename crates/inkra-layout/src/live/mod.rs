@@ -336,3 +336,85 @@ pub fn shared_quotes(prev: Option<&LiveItem>, cur: &LiveItem) -> usize {
     }
     n
 }
+
+/// Document-wide facts some items need: footnote numbers by order of first
+/// reference (MD-010) and the headings shown by `[TOC]` (MD-013).
+#[derive(Debug, Clone, Default, PartialEq, Hash)]
+pub struct DocInfo {
+    /// Footnote label → number.
+    pub footnotes: Vec<(String, u32)>,
+    /// `(level, text, anchor)` of every heading, when the document has a `[TOC]`.
+    pub headings: Vec<(u8, String, String)>,
+}
+
+impl DocInfo {
+    /// The number of footnote `label`.
+    pub fn footnote(&self, label: &str) -> Option<u32> {
+        self.footnotes
+            .iter()
+            .find(|(l, _)| l == label)
+            .map(|(_, n)| *n)
+    }
+
+    /// Computes the info for `doc` given its flattened items.
+    pub fn compute(doc: &Doc, items: &[LiveItem]) -> Self {
+        let mut info = Self::default();
+        let has_toc = items.iter().any(|it| {
+            it.block(doc)
+                .is_some_and(|(b, _)| matches!(b.kind, BlockKind::Toc))
+        });
+        let has_notes = items.iter().any(|it| {
+            it.frames
+                .iter()
+                .any(|f| matches!(f, Frame::Footnote { .. }))
+        });
+        if !has_toc && !has_notes {
+            return info;
+        }
+        let ast = doc.ast();
+        if has_notes {
+            let mut next = 1;
+            for i in 0..ast.len() {
+                let Some(r) = ast.get(i) else { continue };
+                r.block.walk(&mut |b| {
+                    for inl in &b.inlines {
+                        inl.walk(&mut |n| {
+                            if let inkra_markdown::InlineKind::FootnoteRef { label } = &n.kind
+                                && !info.footnotes.iter().any(|(l, _)| l == label)
+                            {
+                                info.footnotes.push((label.clone(), next));
+                                next += 1;
+                            }
+                        });
+                    }
+                });
+            }
+        }
+        if has_toc {
+            let blocks = ast.to_blocks();
+            info.headings = inkra_markdown::walk::headings(doc.text(), &blocks)
+                .into_iter()
+                .map(|h| (h.level, h.text, h.anchor))
+                .collect();
+        }
+        info
+    }
+}
+
+#[cfg(test)]
+mod doc_info_tests {
+    use super::*;
+
+    #[test]
+    fn toc_and_footnotes() {
+        let doc = Doc::from_str(
+            "# A\n\n[TOC]\n\n## B\n\nx[^n] y[^m]\n\n[^m]: m\n[^n]: n\n",
+            Default::default(),
+        );
+        let items = flatten(&doc);
+        let info = DocInfo::compute(&doc, &items);
+        assert_eq!(info.footnote("n"), Some(1));
+        assert_eq!(info.footnote("m"), Some(2));
+        assert_eq!(info.headings.len(), 2, "{info:?}");
+    }
+}

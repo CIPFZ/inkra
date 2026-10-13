@@ -65,6 +65,8 @@ pub struct SourceMap {
     pub segs: Vec<Seg>,
     /// Inline objects in the run.
     pub objects: Vec<InlineObject>,
+    /// Clickable byte ranges of the run text.
+    pub hits: Vec<(Range<usize>, crate::block::HitAction)>,
 }
 
 impl SourceMap {

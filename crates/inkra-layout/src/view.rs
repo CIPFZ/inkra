@@ -98,6 +98,7 @@ pub struct ViewLayout {
     anchor_limit: f32,
     math_numbers: HashMap<usize, u32>,
     math_refs: Vec<(String, String)>,
+    doc_info: live::DocInfo,
 }
 
 impl Default for ViewLayout {
@@ -125,6 +126,7 @@ impl ViewLayout {
             height_shift_above: 0.0,
             math_numbers: HashMap::new(),
             math_refs: Vec::new(),
+            doc_info: live::DocInfo::default(),
             anchor_limit: 0.0,
         }
     }
@@ -251,6 +253,7 @@ impl ViewLayout {
                 if geometry_or_doc_changed {
                     self.live = live::flatten(doc);
                     self.number_equations(doc, style.math_numbering);
+                    self.doc_info = live::DocInfo::compute(doc, &self.live);
                 } else {
                     // Only the virtual empty line moved.
                     self.live.retain(|it| it.top != usize::MAX);
@@ -510,6 +513,7 @@ impl ViewLayout {
                     syntax_theme: cx.syntax_theme,
                     math_numbers: &self.math_numbers,
                     math_refs: &self.math_refs,
+                    doc_info: &self.doc_info,
                 };
                 (key, Arc::new(live::leaf::layout(item, &lcx, fonts)))
             }
@@ -545,9 +549,16 @@ impl ViewLayout {
             if matches!(b.kind, inkra_markdown::BlockKind::MathBlock { .. }) {
                 self.math_numbers.get(&item.src.start).hash(&mut h);
             }
-            // References can appear in any inline formula.
+            // References can appear in any inline formula; footnote numbers and
+            // the headings of `[TOC]` in any item.
             if !self.math_refs.is_empty() {
                 self.math_refs.hash(&mut h);
+            }
+            if !self.doc_info.footnotes.is_empty() {
+                self.doc_info.footnotes.hash(&mut h);
+            }
+            if matches!(b.kind, inkra_markdown::BlockKind::Toc) {
+                self.doc_info.headings.hash(&mut h);
             }
             if matches!(b.kind, inkra_markdown::BlockKind::Table { .. })
                 && let Some(ws) = cx.images.column_widths(item.src.start)
@@ -722,7 +733,14 @@ impl ViewLayout {
             let mut best: Option<usize> = None;
             for r in &l.runs {
                 for s in &r.map.segs {
-                    let (a, b) = (base + s.src.start, base + s.src.end);
+                    // Only the part of the segment inside the caret range counts.
+                    let (a, b) = (
+                        (base + s.src.start).max(base + cr.start),
+                        (base + s.src.end).min(base + cr.end),
+                    );
+                    if a > b {
+                        continue;
+                    }
                     let cand = if forward {
                         if b >= pos {
                             Some(a.max(pos).min(b))
