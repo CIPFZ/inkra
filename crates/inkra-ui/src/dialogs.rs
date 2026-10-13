@@ -46,12 +46,19 @@ pub struct Dialogs {
     tx: Sender<(Purpose, Option<PathBuf>)>,
     rx: Receiver<(Purpose, Option<PathBuf>)>,
     open: usize,
+    /// Localized filter names: images, all files, documents (NF-007).
+    names: [String; 3],
 }
 
 impl Default for Dialogs {
     fn default() -> Self {
         let (tx, rx) = channel();
-        Self { tx, rx, open: 0 }
+        Self {
+            tx,
+            rx,
+            open: 0,
+            names: ["Images".into(), "All files".into(), "Documents".into()],
+        }
     }
 }
 
@@ -63,6 +70,15 @@ const IMAGE_EXTS: &[&str] = &[
 ];
 
 impl Dialogs {
+    /// Uses `i18n` for the filter names.
+    pub fn set_language(&mut self, i18n: &inkra_i18n::I18n) {
+        self.names = [
+            i18n.tr("filter-images"),
+            i18n.tr("filter-all"),
+            i18n.tr("filter-documents"),
+        ];
+    }
+
     /// Whether a dialog is showing.
     pub fn busy(&self) -> bool {
         self.open > 0
@@ -83,23 +99,24 @@ impl Dialogs {
         self.open += 1;
         let tx = self.tx.clone();
         let ctx = ctx.clone();
+        let [images, all, documents] = self.names.clone();
         let run = move || {
             let mut d = rfd::FileDialog::new();
             if let Some(dir) = dir {
                 d = d.set_directory(dir);
             }
             let result = match &purpose {
-                Purpose::InsertImage => d.add_filter("Images", IMAGE_EXTS).pick_file(),
+                Purpose::InsertImage => d.add_filter(&images, IMAGE_EXTS).pick_file(),
                 Purpose::Open => d
                     .add_filter("Markdown", &inkra_workspace::tree::markdown_exts())
-                    .add_filter("All files", &["*"])
+                    .add_filter(&all, &["*"])
                     .pick_file(),
                 Purpose::OpenFolder | Purpose::MoveTo(_) => d.pick_folder(),
                 Purpose::Import => d
-                    .add_filter("Documents", inkra_export::pandoc::IMPORT_EXTS)
+                    .add_filter(&documents, inkra_export::pandoc::IMPORT_EXTS)
                     .pick_file(),
                 Purpose::ImportSettings => d.add_filter("JSON", &["json"]).pick_file(),
-                Purpose::RelinkImage(_) => d.add_filter("Images", IMAGE_EXTS).pick_file(),
+                Purpose::RelinkImage(_) => d.add_filter(&images, IMAGE_EXTS).pick_file(),
                 Purpose::ExportSettings => {
                     if let Some(n) = name {
                         d = d.set_file_name(n);

@@ -191,3 +191,42 @@ fn deleting_inside_quote_restores_table() {
     let o = ParseOptions::default();
     check_edit("\n|a#a\n >--\n||\n*aaa#\n*\n|-", 8..9, "", &o);
 }
+
+/// NF-002: 1 MB of random bytes (and of random Markdown punctuation, which
+/// stresses the inline delimiter stack) parses without panicking, with every
+/// extension on.
+#[test]
+fn one_megabyte_of_random_input_never_panics() {
+    let mut state = 0x9e37_79b9_7f4a_7c15u64;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+    let all = ParseOptions {
+        inline_math: true,
+        latex_delimiters: true,
+        highlight: true,
+        superscript: true,
+        subscript: true,
+        ..ParseOptions::default()
+    };
+    let bytes: Vec<u8> = (0..1 << 20).map(|_| next() as u8).collect();
+    let s = String::from_utf8_lossy(&bytes).into_owned();
+    let _ = parse(s.as_str(), &all);
+    let _ = parse(s.as_str(), &ParseOptions::commonmark());
+    const PUNCT: &[u8] = b"*_`[]()!<>#-+=|~^$\\:\n \t>1.ab\xe4\xb8\xad";
+    let marks: Vec<u8> = (0..1 << 20)
+        .map(|_| PUNCT[(next() % PUNCT.len() as u64) as usize])
+        .collect();
+    let s = String::from_utf8_lossy(&marks).into_owned();
+    let t = std::time::Instant::now();
+    let p = parse(s.as_str(), &all);
+    assert!(!p.blocks.is_empty());
+    assert!(
+        t.elapsed().as_secs() < 30,
+        "pathological input took {:?}",
+        t.elapsed()
+    );
+}

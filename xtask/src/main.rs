@@ -19,7 +19,8 @@ Tasks:
   keybindings [--check]  Generate docs/keybindings.md from the default key map
   docs [--check]     All of the above generators
   bundle-macos [--release]  Assemble target/<profile>/Inkra.app
-  dist               Release packages for this platform in target/dist (NF-006)
+  dist [--target T]  Release packages for this platform in target/dist (NF-006); T e.g.
+                     aarch64-pc-windows-msvc, universal-apple-darwin
   bench [--save]     Criterion benchmarks; fail on > 20 % regression against the saved reference (NF-001)
   corpus             Fetch the real-world Markdown corpus into target/corpus (TS-002)
 ";
@@ -219,7 +220,12 @@ fn main() -> ExitCode {
         Some("bundle-macos") => bundle_macos(args.iter().any(|a| a == "--release")),
         Some("corpus") => corpus(),
         Some("bench") => bench(args.iter().any(|a| a == "--save")),
-        Some("dist") => dist::dist().map(|files| {
+        Some("dist") => dist::dist(
+            args.iter()
+                .position(|a| a == "--target")
+                .and_then(|i| args.get(i + 1).cloned()),
+        )
+        .map(|files| {
             for f in files {
                 eprintln!("dist: {}", f.display());
             }
@@ -238,9 +244,28 @@ fn main() -> ExitCode {
     }
 }
 
-/// `cargo xtask bench [--save]` (NF-001): runs the criterion benchmarks; with a
-/// saved `reference` baseline, fails when a benchmark's median got more than
-/// 20 % slower. `--save` records the current numbers as the reference.
+/// p95 of the per-iteration times of a criterion `sample.json`.
+fn p95(path: &Path) -> Option<f64> {
+    let v: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    let iters = v["iters"].as_array()?;
+    let times = v["times"].as_array()?;
+    let mut per: Vec<f64> = iters
+        .iter()
+        .zip(times)
+        .filter_map(|(n, t)| Some(t.as_f64()? / n.as_f64()?.max(1.0)))
+        .collect();
+    if per.is_empty() {
+        return None;
+    }
+    per.sort_by(f64::total_cmp);
+    let k = ((per.len() as f64 * 0.95).ceil() as usize).clamp(1, per.len()) - 1;
+    Some(per[k])
+}
+
+/// `cargo xtask bench [--save]` (NF-001): runs the criterion benchmarks (parser
+/// and typing latency); with a saved `reference` baseline, fails when a
+/// benchmark's p95 got more than 20 % slower. `--save` records the current
+/// numbers as the reference.
 fn bench(save: bool) -> Result<(), String> {
     let target =
         std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root().join("target"), PathBuf::from);
@@ -248,14 +273,16 @@ fn bench(save: bool) -> Result<(), String> {
     let has_reference = std::fs::read_dir(&crit)
         .map(|rd| rd.flatten().any(|e| e.path().join("reference").is_dir()))
         .unwrap_or(false);
-    let mut c = cargo();
-    c.args(["bench", "-p", "inkra-markdown", "--bench", "parse", "--"]);
-    if save {
-        c.args(["--save-baseline", "reference"]);
-    } else if has_reference {
-        c.args(["--baseline", "reference"]);
+    for (pkg, name) in [("inkra-markdown", "parse"), ("inkra-layout", "typing")] {
+        let mut c = cargo();
+        c.args(["bench", "-p", pkg, "--bench", name, "--"]);
+        if save {
+            c.args(["--save-baseline", "reference"]);
+        } else if has_reference {
+            c.args(["--baseline", "reference"]);
+        }
+        run("bench", c)?;
     }
-    run("bench", c)?;
     if save || !has_reference {
         if !save {
             eprintln!("bench: no reference baseline yet (run `cargo xtask bench --save`)");
@@ -267,26 +294,28 @@ fn bench(save: bool) -> Result<(), String> {
         .map_err(|e| e.to_string())?
         .flatten()
     {
-        let change = e.path().join("change/estimates.json");
-        let Ok(text) = std::fs::read_to_string(&change) else {
+        let (Some(new), Some(old)) = (
+            p95(&e.path().join("new/sample.json")),
+            p95(&e.path().join("reference/sample.json")),
+        ) else {
             continue;
         };
-        let v: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-        let median = v["median"]["point_estimate"].as_f64().unwrap_or(0.0);
+        let change = new / old - 1.0;
         let name = e.file_name().to_string_lossy().into_owned();
         eprintln!(
-            "bench: {name}: {:+.1} % against the reference",
-            median * 100.0
+            "bench: {name}: p95 {:.3} ms ({:+.1} % against the reference)",
+            new / 1e6,
+            change * 100.0
         );
-        if median > 0.20 {
-            slower.push(format!("{name} ({:+.0} %)", median * 100.0));
+        if change > 0.20 {
+            slower.push(format!("{name} ({:+.0} %)", change * 100.0));
         }
     }
     if slower.is_empty() {
         Ok(())
     } else {
         Err(format!(
-            "benchmarks regressed by more than 20 %: {}",
+            "benchmarks regressed by more than 20 % at p95: {}",
             slower.join(", ")
         ))
     }

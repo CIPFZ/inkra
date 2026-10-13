@@ -2166,6 +2166,7 @@ dependencies = [
 name = "inkra-layout"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "epaint",
  "fontdb",
  "inkra-diagram",

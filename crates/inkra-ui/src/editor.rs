@@ -233,6 +233,81 @@ impl EditorView {
         self.drop_at
     }
 
+    /// Exposes the visible blocks to assistive technology (UI-030): headings with
+    /// their level, paragraphs, list items, quotes, code, tables and formulas.
+    fn accesskit_blocks(
+        &mut self,
+        ui: &mut egui::Ui,
+        engine: &Engine,
+        visible: std::ops::Range<usize>,
+        offset: Vec2,
+    ) {
+        use egui::accesskit::Role;
+        let t = engine.state.editor.doc.text();
+        for i in visible {
+            let Some(item) = self.view.items().get(i).cloned() else {
+                continue;
+            };
+            let src = t.slice(item.src.clone()).into_owned();
+            let head = src.trim_start();
+            let (role, level) = if let Some(h) = head.strip_prefix('#') {
+                (
+                    Role::Heading,
+                    Some(1 + h.chars().take_while(|c| *c == '#').count()),
+                )
+            } else if head.starts_with("```") || head.starts_with("~~~") {
+                (Role::Code, None)
+            } else if head.starts_with('|') {
+                (Role::Table, None)
+            } else if head.starts_with('>') {
+                (Role::Blockquote, None)
+            } else if head.starts_with("$$") {
+                (Role::Math, None)
+            } else if head.starts_with(['-', '*', '+']) && head[1..].starts_with(' ')
+                || head.split_once(['.', ')']).is_some_and(|(n, r)| {
+                    !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()) && r.starts_with(' ')
+                })
+            {
+                (Role::ListItem, None)
+            } else {
+                (Role::Paragraph, None)
+            };
+            let Some(layout) = self.view.layout(i) else {
+                continue;
+            };
+            let shown: String = layout
+                .runs
+                .iter()
+                .map(|r| r.job.text.replace('\u{2060}', ""))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let top = self.view.top(i);
+            let r = egui::Rect::from_min_size(
+                egui::pos2(offset.x, offset.y + top),
+                vec2(self.view.width(), item.height),
+            );
+            let child = ui.new_child(
+                egui::UiBuilder::new()
+                    .id_salt(("inkra-a11y", item.src.start))
+                    .accessibility_parent(self.id)
+                    .max_rect(r),
+            );
+            ui.ctx().accesskit_node_builder(child.unique_id(), |n| {
+                n.set_role(role);
+                if let Some(l) = level {
+                    n.set_level(l);
+                }
+                n.set_value(shown.trim().to_owned());
+                n.set_bounds(egui::accesskit::Rect {
+                    x0: f64::from(r.min.x),
+                    y0: f64::from(r.min.y),
+                    x1: f64::from(r.max.x),
+                    y1: f64::from(r.max.y),
+                });
+            });
+        }
+    }
+
     /// Current scroll offset.
     pub fn scroll(&self) -> f32 {
         self.scroll
@@ -274,7 +349,7 @@ impl EditorView {
             let ed = &engine.state.editor;
             let t = ed.doc.text();
             n.set_role(egui::accesskit::Role::MultilineTextInput);
-            n.set_label("Document");
+            n.set_label(self.i18n.tr("a11y-document"));
             let shown = if t.len() <= 256 * 1024 {
                 t.to_string()
             } else {
@@ -603,6 +678,10 @@ impl EditorView {
                     }
                 }
             }
+        }
+        // UI-030: visible blocks as child nodes (role and displayed text).
+        if ctx.accesskit_node_builder(self.id, |_| ()).is_some() {
+            self.accesskit_blocks(ui, engine, visible.clone(), offset);
         }
         let painter = ui.painter_at(rect);
         let mut shapes = Vec::new();
@@ -1395,7 +1474,7 @@ impl EditorView {
                                     let r = ui.add(
                                         egui::TextEdit::singleline(&mut filter)
                                             .desired_width(120.0)
-                                            .hint_text("lang"),
+                                            .hint_text(self.i18n.tr("code-language-hint")),
                                     );
                                     if !r.has_focus() && filter.is_empty() {
                                         r.request_focus();

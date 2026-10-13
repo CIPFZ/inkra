@@ -50,6 +50,11 @@ impl Jobs {
         }
     }
 
+    /// Jobs still running.
+    pub fn running(&self) -> usize {
+        self.running
+    }
+
     /// Finished jobs.
     pub fn poll(&mut self) -> Vec<Done> {
         let mut out = Vec::new();

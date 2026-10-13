@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **215**
+Registered commands: **217**
 
 
 ## App
@@ -44,6 +44,7 @@ Registered commands: **215**
 | `edit.deleteForward` | Delete Forward | 向前删除 |  |  | `{"type":"object","properties":{"unit":{"enum":["char","word","line"]}}}` | ED-012 | Delete forward by char, word or to line end. |
 | `edit.deleteLine` | Delete Line | 删除当前行 |  |  | — | ED-012 | Delete the current line. |
 | `edit.deleteWord` | Delete Word | 删除当前词 | `Ctrl+Shift+D` | `⇧⌘D` | — | ED-012 | Delete the word at the caret. |
+| `edit.emojiSymbols` | Emoji & Symbols | Emoji 与符号 |  |  | — | UI-001 | Show the Emoji & Symbols picker; the chosen character is typed at the caret. |
 | `edit.exitBlock` | Leave Block | 离开当前块 |  |  | — | ED-013 | Ctrl+Enter: leave a code/math block, or add a paragraph above the first block. |
 | `edit.find` | Find | 查找 | `Ctrl+F` | `⌘F` | — | ED-110 | Open the find bar (pre-filled with the selection). |
 | `edit.findNext` | Find Next | 查找下一个 | `F3` | `F3` | — | ED-110 | Select the next match. |
@@ -98,6 +99,7 @@ Registered commands: **215**
 | `file.pageSetup` | Page Setup… | 页面设置… |  |  | — | EX-002 | Paper size, orientation, margins, header and footer for PDF and printing. |
 | `file.print` | Print… | 打印… |  |  | — | EX-002 | Print: export a PDF and hand it to the system's print dialog. |
 | `file.properties` | Properties | 属性 |  |  | — | FS-009 | Show the document's path, size, dates, encoding, line endings and counts. |
+| `file.quickExport` | Quick Export (Same Folder) | 快捷导出（同目录同名） |  |  | — | EX-005 | Export next to the document with the same name, in the format of `export.quickFormat`. |
 | `file.quickOpen` | Quick Open… | 快速打开… | `Ctrl+P` | `⌘P`, `⇧⌘O` | — | FS-030 | Fuzzy-find a file of the root folder or the recent files. |
 | `file.reload` | Reload from Disk | 从磁盘重新加载 |  |  | — | FS-007 | Reload the file from disk, discarding local changes. |
 | `file.rename` | Rename… | 重命名… |  |  | `{"type":"object","properties":{"name":{"type":"string"}}}` | FS-022 | Rename the current file (asks for the name unless `name` is given). |
@@ -297,4 +299,3 @@ Registered commands: **215**
 These appear greyed out in menus.
 
 - `app.commandPalette` — Command Palette
-- `edit.emojiSymbols` — Emoji & Symbols

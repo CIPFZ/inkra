@@ -151,12 +151,47 @@ fn session_restores_sidebar_scroll_and_caret() {
 }
 
 #[test]
+fn emoji_and_symbols_picker_types_the_choice() {
+    let mut h = editor_harness("");
+    let ctx = h.ctx.clone();
+    h.state_mut()
+        .invoke(&ctx, "edit.emojiSymbols", &serde_json::json!({}));
+    h.run();
+    h.get_by_label("Emoji & Symbols");
+    h.get_by_label("→").click();
+    h.run();
+    assert_eq!(text(&h), "→");
+    h.state_mut()
+        .invoke(&ctx, "edit.emojiSymbols", &serde_json::json!({}));
+    h.run();
+    h.event(egui::Event::Text("tada".into()));
+    h.run();
+    h.key_press(egui::Key::Enter);
+    h.run();
+    assert_eq!(text(&h), "→🎉");
+}
+
+#[test]
+fn reloading_the_window_applies_the_language() {
+    let mut h = harness("en-US");
+    h.state_mut()
+        .engine
+        .state
+        .prefs
+        .set("general.language", serde_json::json!("zh-CN"));
+    let ctx = h.ctx.clone();
+    h.state_mut().reload_window(&ctx);
+    h.run();
+    h.get_by_label("文件");
+}
+
+#[test]
 fn closing_the_last_window_can_keep_the_app_running() {
     let mut sh = shell("en-US");
     sh.engine
         .state
         .prefs
-        .set("general.quitOnLastWindow", serde_json::json!(false));
+        .set("general.lastWindowClosed", serde_json::json!("keep"));
     sh.engine.state.editor = inkra_engine::editor::Editor::from_text("saved text");
     let mut h = Harness::builder()
         .with_size(egui::vec2(900.0, 600.0))
@@ -828,4 +863,9 @@ fn m7_document_is_exposed_to_assistive_technology() {
         node.accesskit_node().description().is_some(),
         "caret line and column"
     );
+    // Visible blocks are child nodes with roles and the displayed text.
+    let heading = h.get_by_role(egui::accesskit::Role::Heading);
+    assert_eq!(heading.accesskit_node().level(), Some(1));
+    let para = h.get_by_role(egui::accesskit::Role::Paragraph);
+    assert_eq!(para.accesskit_node().value().as_deref(), Some("world"));
 }

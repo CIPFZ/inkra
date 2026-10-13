@@ -343,6 +343,8 @@ pub enum Effect {
     Quit,
     /// Show the About dialog.
     ShowAbout,
+    /// Show the Emoji & Symbols picker (UI-001).
+    EmojiPicker,
     /// Show a notice.
     Notify(Notice),
     /// Put text on the clipboard (`text/plain` and optional `text/html`).

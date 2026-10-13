@@ -9,7 +9,16 @@ use inkra_i18n::I18n;
 
 /// Whether windows draw their own title bar.
 pub(crate) fn integrated(engine: &Engine) -> bool {
-    engine.state.prefs.string("appearance.titleBar") == "integrated"
+    integrated_pref(&engine.state.prefs.string("appearance.titleBar"))
+}
+
+/// `appearance.titleBar`: `auto` is integrated on Windows only.
+pub fn integrated_pref(v: &str) -> bool {
+    match v {
+        "integrated" => true,
+        "native" => false,
+        _ => cfg!(windows),
+    }
 }
 
 /// Height of the bar.

@@ -144,6 +144,7 @@ pub const MENU_BAR: &[Menu] = &[
                     c("file.exportHtmlPlain"),
                     c("file.exportPdf"),
                     c("file.exportImage"),
+                    c("file.quickExport"),
                     S,
                     p(
                         "file.exportPandoc",

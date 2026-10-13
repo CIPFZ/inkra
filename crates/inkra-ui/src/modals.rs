@@ -115,7 +115,7 @@ pub(crate) fn recovery_offer(shell: &mut Shell, ctx: &egui::Context) {
                 }
             });
         ui.add_space(6.0);
-        if ui.button(i18n.tr("dialog-close")).clicked() {
+        if ui.button(i18n.tr("dialog-close")).clicked() || enter_pressed(ui) {
             close = true;
         }
     });
@@ -297,7 +297,7 @@ pub(crate) fn about_dialog(shell: &mut Shell, ctx: &egui::Context) {
                 }
             });
             ui.add_space(8.0);
-            ui.button(i18n.tr("dialog-ok")).clicked()
+            ui.button(i18n.tr("dialog-ok")).clicked() || enter_pressed(ui)
         })
         .inner
     });
@@ -319,17 +319,149 @@ pub(crate) fn prefs_problem_dialog(shell: &mut Shell, ctx: &egui::Context) {
         ui.set_max_width(420.0);
         ui.label(text.as_str());
         ui.add_space(8.0);
-        ui.vertical_centered(|ui| ui.button(ok).clicked()).inner
+        ui.vertical_centered(|ui| ui.button(ok).clicked() || enter_pressed(ui))
+            .inner
     });
     if response.inner || response.should_close() {
         shell.prefs_problem = None;
     }
 }
 
-/// Toasts (UI-041), bottom right.
+/// UI-032: Enter confirms a dialog's default button.
+fn enter_pressed(ui: &egui::Ui) -> bool {
+    ui.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.is_none())
+}
+
+/// Symbols offered next to the emoji (UI-001 "Emoji 与符号").
+const SYMBOLS: &str = "→←↑↓↔⇒⇐✓✗×÷±≈≠≤≥∞°′″€£¥©®™§¶•…—–«»“”‘’「」『』〈〉【】※★☆♪";
+
+/// The Emoji & Symbols picker (UI-001): search by shortcode, click to type.
+pub(crate) fn emoji_picker(shell: &mut Shell, ctx: &egui::Context) {
+    let Some(mut query) = shell.emoji_picker.clone() else {
+        return;
+    };
+    let i18n = shell.i18n.clone();
+    let mut chosen: Option<String> = None;
+    let mut open = true;
+    egui::Window::new(i18n.tr("cmd-edit-emojiSymbols"))
+        .id(egui::Id::new("inkra-emoji"))
+        .open(&mut open)
+        .collapsible(false)
+        .resizable(false)
+        .default_width(360.0)
+        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+        .show(ctx, |ui| {
+            let r = ui.add(
+                egui::TextEdit::singleline(&mut query)
+                    .hint_text(i18n.tr("emoji-search"))
+                    .desired_width(f32::INFINITY),
+            );
+            if !r.has_focus() && query.is_empty() {
+                r.request_focus();
+            }
+            let q = query.trim().trim_matches(':').to_ascii_lowercase();
+            let list: Vec<(&str, &str)> = if q.is_empty() {
+                inkra_markdown::emoji::all().to_vec()
+            } else {
+                inkra_markdown::emoji::complete(&q, 400)
+            };
+            if r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                chosen = list.first().map(|(_, e)| (*e).to_owned());
+            }
+            ui.add_space(4.0);
+            if q.is_empty() {
+                ui.horizontal_wrapped(|ui| {
+                    for c in SYMBOLS.chars() {
+                        if ui
+                            .button(egui::RichText::new(c.to_string()).size(16.0))
+                            .clicked()
+                        {
+                            chosen = Some(c.to_string());
+                        }
+                    }
+                });
+                ui.separator();
+            }
+            egui::ScrollArea::vertical()
+                .max_height(280.0)
+                .show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        for (code, e) in list {
+                            let b = ui.add(
+                                egui::Button::new(egui::RichText::new(e).size(18.0)).frame(false),
+                            );
+                            if b.on_hover_text(format!(":{code}:")).clicked() {
+                                chosen = Some(
+                                    if shell.engine.state.prefs.bool("editor.emojiAsShortcode") {
+                                        format!(":{code}:")
+                                    } else {
+                                        e.to_owned()
+                                    },
+                                );
+                            }
+                        }
+                    });
+                });
+        });
+    if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        open = false;
+    }
+    shell.emoji_picker = (open && chosen.is_none()).then_some(query);
+    if let Some(text) = chosen {
+        shell.invoke(ctx, "edit.insertText", &json!({ "text": text }));
+        let eid = shell.win().editor.id();
+        ctx.memory_mut(|m| m.request_focus(eid));
+    }
+}
+
+/// A failed export, print or import with its full message (EX-004).
+pub(crate) fn job_error(shell: &mut Shell, ctx: &egui::Context) {
+    let Some(text) = shell.job_error.clone() else {
+        return;
+    };
+    let i18n = shell.i18n.clone();
+    let mut close = false;
+    let resp = egui::Modal::new(egui::Id::new("inkra-job-error")).show(ctx, |ui| {
+        ui.set_max_width(560.0);
+        ui.heading(i18n.tr("export-failed-title"));
+        ui.add_space(4.0);
+        egui::ScrollArea::vertical()
+            .max_height(260.0)
+            .show(ui, |ui| {
+                ui.add(egui::Label::new(egui::RichText::new(&text).monospace()).selectable(true));
+            });
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if ui.button(i18n.tr("dialog-ok")).clicked() || enter_pressed(ui) {
+                close = true;
+            }
+            if ui.button(i18n.tr("dialog-copy")).clicked() {
+                ui.ctx().copy_text(text.clone());
+            }
+        });
+    });
+    if close || resp.should_close() {
+        shell.job_error = None;
+    }
+}
+
+/// Toasts (UI-041), bottom right; a running export shows a progress note.
 pub(crate) fn toasts(shell: &mut Shell, ctx: &egui::Context) {
     let now = ctx.input(|i| i.time);
     shell.toasts.retain(|t| t.until > now);
+    if shell.jobs.running() > 0 {
+        let text = shell.i18n.tr("export-running");
+        egui::Area::new(egui::Id::new("inkra-job-progress"))
+            .anchor(egui::Align2::LEFT_BOTTOM, egui::vec2(16.0, -32.0))
+            .show(ctx, |ui| {
+                egui::Frame::popup(ui.style()).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(text);
+                    });
+                });
+            });
+    }
     if shell.toasts.is_empty() {
         return;
     }
@@ -475,7 +607,7 @@ pub(crate) fn page_setup(shell: &mut Shell, ctx: &egui::Context) {
         );
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            if ui.button(i18n.tr("dialog-ok")).clicked() {
+            if ui.button(i18n.tr("dialog-ok")).clicked() || enter_pressed(ui) {
                 done = Some(true);
             }
             if ui.button(i18n.tr("dialog-cancel")).clicked() {
@@ -528,7 +660,7 @@ pub(crate) fn import_offer(shell: &mut Shell, ctx: &egui::Context) {
         ui.label(i18n.tr_args("import-offer", &[("name", name.into())]));
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            if ui.button(i18n.tr("cmd-file-import")).clicked() {
+            if ui.button(i18n.tr("cmd-file-import")).clicked() || enter_pressed(ui) {
                 done = Some(true);
             }
             if ui.button(i18n.tr("dialog-cancel")).clicked() {
@@ -626,7 +758,7 @@ pub(crate) fn delete_confirm(shell: &mut Shell, ctx: &egui::Context) {
         ui.label(i18n.tr_args("delete-confirm", &[("name", name.into())]));
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            if ui.button(i18n.tr("cmd-file-delete")).clicked() {
+            if ui.button(i18n.tr("cmd-file-delete")).clicked() || enter_pressed(ui) {
                 done = Some(true);
             }
             if ui.button(i18n.tr("dialog-cancel")).clicked() {
@@ -745,7 +877,7 @@ pub(crate) fn properties_dialog(shell: &mut Shell, ctx: &egui::Context) {
             });
         ui.label(egui::RichText::new(i18n.tr("props-on-save")).small().weak());
         ui.add_space(6.0);
-        if ui.button(i18n.tr("dialog-ok")).clicked() {
+        if ui.button(i18n.tr("dialog-ok")).clicked() || enter_pressed(ui) {
             close = true;
         }
     });
@@ -799,7 +931,7 @@ pub(crate) fn image_dialog(shell: &mut Shell, ctx: &egui::Context) {
             });
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            if ui.button(i18n.tr("dialog-ok")).clicked() {
+            if ui.button(i18n.tr("dialog-ok")).clicked() || enter_pressed(ui) {
                 done = Some(true);
             }
             if ui.button(i18n.tr("dialog-cancel")).clicked() {
@@ -919,7 +1051,7 @@ pub(crate) fn link_dialog(shell: &mut Shell, ctx: &egui::Context) {
             });
         ui.add_space(6.0);
         ui.horizontal(|ui| {
-            if ui.button(i18n.tr("dialog-ok")).clicked() {
+            if ui.button(i18n.tr("dialog-ok")).clicked() || enter_pressed(ui) {
                 done = Some(true);
             }
             if ui.button(i18n.tr("dialog-cancel")).clicked() {

@@ -28,6 +28,8 @@ pub enum Page {
     Keymap,
     /// Advanced.
     Advanced,
+    /// Version, license and acknowledgements.
+    About,
 }
 
 const PAGES: &[(Page, &str)] = &[
@@ -40,6 +42,7 @@ const PAGES: &[(Page, &str)] = &[
     (Page::Export, "export"),
     (Page::Keymap, "keymap"),
     (Page::Advanced, "advanced"),
+    (Page::About, "about"),
 ];
 
 /// Keys shown on each page, in order (`None` = a separator).
@@ -49,7 +52,7 @@ fn keys(page: Page) -> &'static [Option<&'static str>] {
             Some("general.language"),
             Some("general.startup"),
             Some("general.startupFolder"),
-            Some("general.quitOnLastWindow"),
+            Some("general.lastWindowClosed"),
             Some("general.openFileIn"),
             Some("general.dropMarkdown"),
             None,
@@ -179,6 +182,7 @@ fn keys(page: Page) -> &'static [Option<&'static str>] {
         Page::Export => &[
             Some("export.theme"),
             Some("export.openAfter"),
+            Some("export.quickFormat"),
             None,
             Some("export.pdf.paper"),
             Some("export.pdf.customWidth"),
@@ -202,12 +206,13 @@ fn keys(page: Page) -> &'static [Option<&'static str>] {
             None,
             Some("export.image.scale"),
             Some("export.image.paged"),
+            Some("export.image.background"),
             None,
             Some("export.pandocPath"),
             Some("export.pandocArgs"),
             Some("export.custom"),
         ],
-        Page::Keymap | Page::Advanced => &[],
+        Page::Keymap | Page::Advanced | Page::About => &[],
     }
 }
 
@@ -278,6 +283,8 @@ pub enum Request {
     Invoke(String, Value),
     /// The keymap changed: save `keybindings.json`.
     SaveKeymap,
+    /// Apply settings marked "needs reloading".
+    ReloadWindow,
 }
 
 fn label(i18n: &I18n, key: &str) -> String {
@@ -385,6 +392,26 @@ impl PrefsWindow {
                     match self.page {
                         Page::Keymap => self.keymap_page(ui, engine, i18n, os, &mut out),
                         Page::Advanced => self.advanced_page(ui, i18n, &mut out),
+                        Page::About => {
+                            // SPEC 9 About: version, license, acknowledgements, updates.
+                            ui.label(format!(
+                                "{} · {}",
+                                i18n.tr("app-name"),
+                                i18n.tr("app-name-zh")
+                            ));
+                            ui.label(i18n.tr_args(
+                                "about-version",
+                                &[("version", env!("CARGO_PKG_VERSION").into())],
+                            ));
+                            ui.weak(i18n.tr("about-license"));
+                            ui.add_space(8.0);
+                            for id in ["help.thirdParty", "help.checkUpdates", "help.changelog"] {
+                                let label = i18n.tr(&format!("cmd-{}", id.replace('.', "-")));
+                                if ui.button(label).clicked() {
+                                    out.push(Request::Invoke(id.into(), json!({})));
+                                }
+                            }
+                        }
                         p => self.form(ui, engine, i18n, themes, keys(p).iter().copied(), &mut out),
                     }
                     // PR-002 on General, TH-003 on Appearance.
@@ -582,7 +609,14 @@ impl PrefsWindow {
                     ui.end_row();
                     if RESTART.contains(&key) {
                         ui.label("");
-                        ui.label(egui::RichText::new(i18n.tr("prefs-restart")).small().weak());
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new(i18n.tr("prefs-restart")).small().weak());
+                            if key != "appearance.rememberWindowSize"
+                                && ui.small_button(i18n.tr("prefs-reload-window")).clicked()
+                            {
+                                out.push(Request::ReloadWindow);
+                            }
+                        });
                         ui.end_row();
                     }
                 }

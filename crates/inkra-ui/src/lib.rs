@@ -25,6 +25,7 @@ pub mod quick_open;
 pub mod sidebar;
 pub mod status_bar;
 mod titlebar;
+pub use titlebar::integrated_pref as titlebar_integrated;
 mod toolbar;
 
 use std::collections::BTreeMap;
@@ -154,6 +155,10 @@ pub struct Shell {
     mmdc_conf: String,
     theme_names_at: f64,
     jobs: jobs::Jobs,
+    /// The Emoji & Symbols picker's search text, while open (UI-001).
+    emoji_picker: Option<String>,
+    /// A failed export's message (EX-004).
+    job_error: Option<String>,
     restore_flags: bool,
     font_gen: u64,
     welcome_dismissed: Vec<u64>,
@@ -222,6 +227,8 @@ impl Shell {
             theme_names: Vec::new(),
             mmdc_conf: String::new(),
             jobs: Default::default(),
+            emoji_picker: None,
+            job_error: None,
             restore_flags: false,
             font_gen: 0,
             welcome_dismissed: Vec::new(),
@@ -258,6 +265,7 @@ impl Shell {
         let t0 = std::time::Instant::now();
         ctx.set_fonts(inkra_layout::fonts::definitions());
         self.font_gen = inkra_layout::fonts::generation();
+        self.dialogs.set_language(&self.i18n);
         // TH-006: without a CJK font, Chinese and Japanese text shows boxes.
         if inkra_layout::fonts::cjk_missing() {
             self.toast(ctx, self.i18n.tr("notice-no-cjk-font"));
@@ -273,29 +281,7 @@ impl Shell {
         self.engine.state.system_dark = ctx.system_theme() == Some(egui::Theme::Dark);
         let _ = self.engine.state.reload_theme();
         self.sync_style(ctx);
-        // The spell checker loads in the background too (ED-104).
-        let c = ctx.clone();
-        // PR-035: a configured personal dictionary, else the default one.
-        let configured = self
-            .engine
-            .state
-            .prefs
-            .string("editor.spellcheckDictionary");
-        let personal = if configured.trim().is_empty() {
-            self.engine
-                .state
-                .paths
-                .as_ref()
-                .map(inkra_workspace::Paths::dictionary_file)
-        } else {
-            Some(PathBuf::from(configured.trim()))
-        };
-        // PR-035: the writing language (system locale by default).
-        let lang = match self.engine.state.prefs.string("editor.spellcheckLanguage") {
-            l if l.trim().is_empty() || l == "system" => inkra_i18n::system_language(),
-            l => l,
-        };
-        inkra_text::spell::load_language(personal, &lang, move || c.request_repaint());
+        self.load_spelling(ctx);
         let c = ctx.clone();
         inkra_diagram::external::on_ready(move || c.request_repaint());
         // Syntax definitions load in the background (AD-5).
@@ -457,6 +443,48 @@ impl Shell {
         }
     }
 
+    /// Loads the spell checker in the background (ED-104, PR-035).
+    fn load_spelling(&mut self, ctx: &egui::Context) {
+        let c = ctx.clone();
+        // PR-035: a configured personal dictionary, else the default one.
+        let configured = self
+            .engine
+            .state
+            .prefs
+            .string("editor.spellcheckDictionary");
+        let personal = if configured.trim().is_empty() {
+            self.engine
+                .state
+                .paths
+                .as_ref()
+                .map(inkra_workspace::Paths::dictionary_file)
+        } else {
+            Some(PathBuf::from(configured.trim()))
+        };
+        // PR-035: the writing language (system locale by default).
+        let lang = match self.engine.state.prefs.string("editor.spellcheckLanguage") {
+            l if l.trim().is_empty() || l == "system" => inkra_i18n::system_language(),
+            l => l,
+        };
+        inkra_text::spell::load_language(personal, &lang, move || c.request_repaint());
+    }
+
+    /// Applies settings that otherwise need a restart (SPEC 9 "重新加载窗口"):
+    /// the interface language and the spelling language.
+    pub fn reload_window(&mut self, ctx: &egui::Context) {
+        let lang = match self.engine.state.prefs.string("general.language").as_str() {
+            "" | "system" => inkra_i18n::system_language(),
+            other => other.to_owned(),
+        };
+        self.i18n = I18n::new(&lang);
+        self.dialogs.set_language(&self.i18n);
+        self.load_spelling(ctx);
+        for w in self.windows.values_mut() {
+            w.title.clear();
+        }
+        ctx.request_repaint();
+    }
+
     /// The current session (FS-006).
     pub fn session(&self) -> inkra_workspace::session::Session {
         let mut s = self.engine.state.session.clone();
@@ -521,7 +549,9 @@ impl Shell {
         if let Err(e) = self.engine.execute(id, params) {
             log::debug!("{e}");
             if let inkra_engine::CommandError::Failed { msg, .. } = &e {
-                self.toast(ctx, format!("✕ {msg}"));
+                // NF-007: the localized command name, then the detail.
+                let title = self.i18n.tr(&format!("cmd-{}", id.replace('.', "-")));
+                self.toast(ctx, format!("✕ {title}: {msg}"));
             }
         }
         self.apply_effects(ctx, None);
@@ -559,6 +589,7 @@ impl Shell {
             match effect {
                 Effect::Quit => self.begin_quit(),
                 Effect::ShowAbout => self.about_open = true,
+                Effect::EmojiPicker => self.emoji_picker = Some(String::new()),
                 Effect::CheckUpdates { manual } => self.check_updates(ctx, manual),
                 Effect::SetClipboard { text, html } => self.clipboard.set(&text, html.as_deref()),
                 Effect::RequestPaste { plain } => {
@@ -862,10 +893,18 @@ impl Shell {
                 }
             }
         }
-        if self.windows.len() <= 1
-            && !self.quitting
-            && !self.engine.state.prefs.bool("general.quitOnLastWindow")
+        let keep = match self
+            .engine
+            .state
+            .prefs
+            .string("general.lastWindowClosed")
+            .as_str()
         {
+            "keep" => true,
+            "quit" => false,
+            _ => cfg!(target_os = "macos"),
+        };
+        if self.windows.len() <= 1 && !self.quitting && keep {
             // FS-005: the application keeps running with a blank document.
             self.engine.state.editor = inkra_engine::editor::Editor::default();
             self.engine.state.meta.disk = None;
@@ -1530,10 +1569,8 @@ impl Shell {
                 Ok(JobResult::Imported(md)) => {
                     self.invoke(ctx, "file.open", &json!({ "path": md }))
                 }
-                Err(e) => self.toast(
-                    ctx,
-                    self.i18n.tr_args("export-failed", &[("error", e.into())]),
-                ),
+                // EX-004: the whole error output (Pandoc's stderr) in a dialog.
+                Err(e) => self.job_error = Some(e),
             }
         }
     }
@@ -1852,6 +1889,7 @@ impl Shell {
                             self.toast(&vctx, format!("✕ {e}"));
                         }
                     }
+                    prefs_window::Request::ReloadWindow => self.reload_window(&vctx),
                 }
             }
         });
@@ -2098,6 +2136,8 @@ impl Shell {
         modals::update_banner(self, &ctx);
         modals::import_offer(self, &ctx);
         modals::prefs_problem_dialog(self, &ctx);
+        modals::job_error(self, &ctx);
+        modals::emoji_picker(self, &ctx);
         modals::toasts(self, &ctx);
     }
 

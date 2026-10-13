@@ -260,6 +260,18 @@ pub fn register_all(r: &mut CommandRegistry) {
     ));
     r.register(FnCommand::new(
         spec(
+            "edit.emojiSymbols",
+            Category::Edit,
+            "UI-001",
+            "Show the Emoji & Symbols picker; the chosen character is typed at the caret.",
+        ),
+        |cx, _| {
+            cx.effects.push(Effect::EmojiPicker);
+            Ok(Outcome::Done)
+        },
+    ));
+    r.register(FnCommand::new(
+        spec(
             "app.about",
             Category::App,
             "UI-052",

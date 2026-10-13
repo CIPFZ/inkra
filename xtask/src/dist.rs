@@ -41,15 +41,48 @@ fn have(tool: &str) -> bool {
         .is_ok_and(|o| o.status.success() || !o.stderr.is_empty() || !o.stdout.is_empty())
 }
 
-/// Builds the release binaries and the packages; returns the files made.
-pub fn dist() -> Result<Vec<PathBuf>, String> {
+/// The target triple being packaged (`--target`), or the host's.
+static TRIPLE: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
+fn release_build(triple: Option<&str>) -> Result<PathBuf, String> {
     let mut build = cargo();
     build.args(["build", "--release", "-p", "inkra", "-p", "inkra-cli"]);
+    if let Some(t) = triple {
+        build.args(["--target", t]);
+    }
     run("build", build)?;
+    Ok(match triple {
+        Some(t) => target_dir().join(t).join("release"),
+        None => target_dir().join("release"),
+    })
+}
+
+/// Builds the release binaries and the packages; returns the files made.
+/// `target` cross-builds for another architecture of the host OS, e.g.
+/// `aarch64-pc-windows-msvc` (arm64 MSI) or `universal-apple-darwin` (an
+/// x86_64 + arm64 universal app, joined with `lipo`).
+pub fn dist(target: Option<String>) -> Result<Vec<PathBuf>, String> {
+    let _ = TRIPLE.set(target.clone());
     let root = root();
-    let target = target_dir();
-    let release = target.join("release");
-    let out = target.join("dist");
+    let release = if target.as_deref() == Some("universal-apple-darwin") {
+        let x86 = release_build(Some("x86_64-apple-darwin"))?;
+        let arm = release_build(Some("aarch64-apple-darwin"))?;
+        let uni = target_dir().join("universal-apple-darwin/release");
+        std::fs::create_dir_all(&uni).map_err(io)?;
+        for b in ["inkra", "inkra-cli"] {
+            let mut c = Command::new("lipo");
+            c.arg("-create")
+                .arg(x86.join(b))
+                .arg(arm.join(b))
+                .arg("-output")
+                .arg(uni.join(b));
+            run("lipo", c)?;
+        }
+        uni
+    } else {
+        release_build(target.as_deref())?
+    };
+    let out = target_dir().join("dist");
     let _ = std::fs::remove_dir_all(&out);
     std::fs::create_dir_all(&out).map_err(io)?;
     if cfg!(windows) {
@@ -66,12 +99,21 @@ fn target_dir() -> PathBuf {
     std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root().join("target"), PathBuf::from)
 }
 
-fn arch() -> &'static str {
-    if cfg!(target_arch = "aarch64") {
-        "arm64"
-    } else {
-        "x86_64"
+/// Whether the packaged binaries are arm64.
+fn is_arm() -> bool {
+    match TRIPLE.get().and_then(Option::as_deref) {
+        Some(t) => t.starts_with("aarch64"),
+        None => cfg!(target_arch = "aarch64"),
     }
+}
+
+fn arch() -> &'static str {
+    if is_arm() { "arm64" } else { "x86_64" }
+}
+
+/// Windows names: `x64` or `arm64`.
+fn win_arch() -> &'static str {
+    if is_arm() { "arm64" } else { "x64" }
 }
 
 // ---- Linux ----
@@ -163,11 +205,7 @@ fn deb(staging: &Path, out: &Path) -> Result<PathBuf, String> {
     std::fs::create_dir_all(&control).map_err(io)?;
     linux_tree(&root(), &target_dir().join("release"), &data.join("usr"))?;
     let size_kb = dir_size(&data) / 1024;
-    let arch = if cfg!(target_arch = "aarch64") {
-        "arm64"
-    } else {
-        "amd64"
-    };
+    let arch = if is_arm() { "arm64" } else { "amd64" };
     let text = format!(
         "Package: inkra\nVersion: {VERSION}\nArchitecture: {arch}\nMaintainer: Inkra <inkra@users.noreply.github.com>\nInstalled-Size: {size_kb}\nDepends: libc6 (>= 2.31)\nRecommends: xdg-desktop-portal\nSuggests: pandoc\nSection: editors\nPriority: optional\nHomepage: {}\nDescription: Native WYSIWYM Markdown editor\n Inkra renders Markdown as you type: math, diagrams, tables, footnotes,\n export to HTML, PDF and images.\n",
         env!("CARGO_PKG_REPOSITORY")
@@ -340,7 +378,7 @@ fn wxs(release: &Path, root: &Path) -> String {
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*" Name="Inkra" Language="1033" Version="{VERSION}" Manufacturer="Inkra" UpgradeCode="6B8C3B5E-6F4E-4C3A-9F7B-1E7C2A9D4B10">
-    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64" Description="Inkra Markdown editor" />
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="{platform}" Description="Inkra Markdown editor" />
     <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of Inkra is already installed." />
     <MediaTemplate EmbedCab="yes" />
     <Icon Id="InkraIcon" SourceFile="{icon}" />
@@ -379,13 +417,14 @@ fn wxs(release: &Path, root: &Path) -> String {
         icon = icon.display(),
         exe = exe.display(),
         cli = cli.display(),
+        platform = win_arch(),
     )
 }
 
 fn windows(root: &Path, release: &Path, out: &Path) -> Result<Vec<PathBuf>, String> {
     let staging = target_dir().join("dist-staging");
     let _ = std::fs::remove_dir_all(&staging);
-    let name = format!("inkra-{VERSION}-windows-x64");
+    let name = format!("inkra-{VERSION}-windows-{}", win_arch());
     let dir = staging.join(&name);
     for f in ["inkra.exe", "inkra-cli.exe"] {
         copy(&release.join(f), &dir.join(f))?;
@@ -412,12 +451,12 @@ fn windows(root: &Path, release: &Path, out: &Path) -> Result<Vec<PathBuf>, Stri
             let mut c = Command::new(candle);
             c.arg("-nologo")
                 .arg("-arch")
-                .arg("x64")
+                .arg(win_arch())
                 .arg("-out")
                 .arg(&obj)
                 .arg(&src);
             run("candle", c)?;
-            let msi = out.join(format!("inkra-{VERSION}-x64.msi"));
+            let msi = out.join(format!("inkra-{VERSION}-{}.msi", win_arch()));
             let mut l = Command::new(light);
             l.arg("-nologo")
                 .arg("-sval")
@@ -448,7 +487,10 @@ fn macos(root: &Path, release: &Path, out: &Path) -> Result<Vec<PathBuf>, String
         &root.join("assets/brand/inkra.icns"),
         &app.join("Resources/inkra.icns"),
     )?;
-    let dmg = out.join(format!("Inkra-{VERSION}.dmg"));
+    let dmg = match TRIPLE.get().and_then(Option::as_deref) {
+        Some("universal-apple-darwin") => out.join(format!("Inkra-{VERSION}-universal.dmg")),
+        _ => out.join(format!("Inkra-{VERSION}.dmg")),
+    };
     let mut c = Command::new("hdiutil");
     c.args([
         "create",

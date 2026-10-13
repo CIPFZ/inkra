@@ -157,15 +157,11 @@ pub const PREFS: &[PrefSpec] = &[
         doc: "File extensions treated as Markdown (file tree, open dialog, drops).",
     },
     PrefSpec {
-        key: "general.quitOnLastWindow",
-        default: if cfg!(target_os = "macos") {
-            "false"
-        } else {
-            "true"
-        },
-        kind: PrefKind::Bool,
+        key: "general.lastWindowClosed",
+        default: r#""auto""#,
+        kind: PrefKind::Enum(&["auto", "quit", "keep"]),
         req: "FS-005",
-        doc: "Closing the last window quits; otherwise it stays open with a blank document (default off on macOS).",
+        doc: "Closing the last window quits, or keeps the app running with a blank document (`auto`: keep on macOS, quit elsewhere).",
     },
     PrefSpec {
         key: "editor.linkedFileIn",
@@ -176,14 +172,10 @@ pub const PREFS: &[PrefSpec] = &[
     },
     PrefSpec {
         key: "appearance.titleBar",
-        default: if cfg!(windows) {
-            r#""integrated""#
-        } else {
-            r#""native""#
-        },
-        kind: PrefKind::Enum(&["integrated", "native"]),
+        default: r#""auto""#,
+        kind: PrefKind::Enum(&["auto", "integrated", "native"]),
         req: "TH-008",
-        doc: "Integrated title bar (menus and window buttons in one row; default on Windows) or the system's.",
+        doc: "Integrated title bar (menus and window buttons in one row) or the system's (`auto`: integrated on Windows).",
     },
     PrefSpec {
         key: "general.dropMarkdown",
@@ -744,6 +736,35 @@ pub const PREFS: &[PrefSpec] = &[
         kind: PrefKind::Bool,
         req: "EX-003",
         doc: "Export one image per page instead of one long image.",
+    },
+    PrefSpec {
+        key: "export.quickFormat",
+        default: r#""pdf""#,
+        kind: PrefKind::Enum(&[
+            "pdf",
+            "html",
+            "htmlPlain",
+            "image",
+            "docx",
+            "odt",
+            "rtf",
+            "epub",
+            "latex",
+            "mediawiki",
+            "rst",
+            "textile",
+            "opml",
+            "org",
+        ]),
+        req: "EX-005",
+        doc: "Format of `file.quickExport` (export next to the document with the same name).",
+    },
+    PrefSpec {
+        key: "export.image.background",
+        default: r#""""#,
+        kind: PrefKind::String,
+        req: "EX-003",
+        doc: "Background color of exported images (`#rrggbb`; empty: the theme's).",
     },
     PrefSpec {
         key: "export.pandocPath",

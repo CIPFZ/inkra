@@ -338,7 +338,7 @@ pub fn job(app: &AppState, format: &ExportFormat, out: PathBuf) -> Result<Export
             JobKind::Image(Box::new(ImageExport {
                 pdf: pdf_options(app),
                 scale,
-                background: None,
+                background: crate::theme::parse_color(&app.prefs.string("export.image.background")),
                 width: app.style.max_width.clamp(480.0, 1200.0),
                 paged: app.prefs.bool("export.image.paged"),
                 jpeg: out.extension().is_some_and(|e| {
@@ -690,6 +690,34 @@ pub fn register(r: &mut CommandRegistry) {
         ),
         |cx, p| export(cx, p, ExportFormat::Image),
     ));
+    r.register(
+        FnCommand::new(
+            spec(
+                "file.quickExport",
+                File,
+                "EX-005",
+                "Export next to the document with the same name, in the format of `export.quickFormat`.",
+            ),
+            |cx, _| {
+                let p = serde_json::json!({ "sameFolder": true });
+                match cx.app.prefs.string("export.quickFormat").as_str() {
+                    "html" => export(cx, &p, ExportFormat::Html),
+                    "htmlPlain" => export(cx, &p, ExportFormat::HtmlPlain),
+                    "image" => export(cx, &p, ExportFormat::Image),
+                    "pdf" => export(cx, &p, ExportFormat::Pdf),
+                    w => {
+                        let f = inkra_export::pandoc::format(w)
+                            .ok_or_else(|| fail("file.quickExport", format!("unknown format `{w}`")))?;
+                        if pandoc(cx.app).is_none() {
+                            return Err(fail("file.quickExport", "Pandoc is not installed"));
+                        }
+                        export(cx, &p, ExportFormat::Pandoc(f.writer.to_owned()))
+                    }
+                }
+            },
+        )
+        .enabled(|cx| cx.app.editor.path.is_some()),
+    );
     r.register(FnCommand::new(
         spec(
             "help.installPandoc",
@@ -852,6 +880,27 @@ mod tests {
         };
         assert_eq!(md, d.path().join("page.md"));
         assert_eq!(std::fs::read_to_string(md).unwrap(), "## Imported");
+        // EX-005: quick export writes next to the document; image background.
+        let doc = d.path().join("notes.md");
+        std::fs::write(&doc, "# Notes\n").unwrap();
+        e.state.editor.path = Some(doc.clone());
+        e.state.prefs.set("export.quickFormat", json!("image"));
+        e.state
+            .prefs
+            .set("export.image.background", json!("#ff0000"));
+        e.execute("file.quickExport", &json!({})).unwrap();
+        let effects = e.take_effects();
+        let [Effect::RunJob(job)] = effects.as_slice() else {
+            panic!("{effects:?}")
+        };
+        let JobKind::Image(img) = &job.kind else {
+            panic!()
+        };
+        assert_eq!(img.background, crate::theme::parse_color("#ff0000"));
+        assert_eq!(
+            run(job).unwrap(),
+            JobResult::Exported(vec![d.path().join("notes.png")])
+        );
     }
 
     #[test]

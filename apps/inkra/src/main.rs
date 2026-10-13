@@ -318,7 +318,9 @@ fn main() -> std::process::ExitCode {
         // TH-008: the integrated title bar replaces the system's.
         .with_decorations(
             cfg!(target_os = "macos")
-                || engine.state.prefs.string("appearance.titleBar") != "integrated",
+                || !inkra_ui::titlebar_integrated(
+                    &engine.state.prefs.string("appearance.titleBar"),
+                ),
         );
     if let Some(icon) = icon() {
         viewport = viewport.with_icon(Arc::new(icon));
@@ -335,15 +337,26 @@ fn main() -> std::process::ExitCode {
     let raw = Arc::new(inkra_ui::RawKeys::default());
     let raw_for_app = raw.clone();
     log::info!("startup: engine ready after {:.1} ms", process_ms());
-    let event_loop =
-        match winit::event_loop::EventLoop::<eframe::UserEvent>::with_user_event().build() {
-            Ok(l) => l,
-            Err(e) => {
-                log::error!("fatal: cannot create event loop: {e}");
-                eprintln!("inkra: {e}");
-                return std::process::ExitCode::from(2);
-            }
-        };
+    let mut builder = winit::event_loop::EventLoop::<eframe::UserEvent>::with_user_event();
+    // NF-006: under Wayland, winit cannot receive dropped files, so Inkra runs
+    // through XWayland when it is available; `INKRA_WAYLAND=1` forces Wayland.
+    #[cfg(all(unix, not(target_os = "macos")))]
+    if std::env::var_os("WAYLAND_DISPLAY").is_some()
+        && std::env::var_os("DISPLAY").is_some()
+        && std::env::var("INKRA_WAYLAND").as_deref() != Ok("1")
+    {
+        use winit::platform::x11::EventLoopBuilderExtX11;
+        log::info!("Wayland session: using XWayland (INKRA_WAYLAND=1 for native Wayland)");
+        builder.with_x11();
+    }
+    let event_loop = match builder.build() {
+        Ok(l) => l,
+        Err(e) => {
+            log::error!("fatal: cannot create event loop: {e}");
+            eprintln!("inkra: {e}");
+            return std::process::ExitCode::from(2);
+        }
+    };
     let inner = eframe::create_native(
         APP_ID,
         options,

@@ -22,9 +22,9 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `general.trimTrailingOnSave` | bool | `false` | PR-013 | Remove trailing whitespace when saving (hard line breaks keep two spaces). |
 | `general.normalizeOnSave` | bool | `false` | MD-092 | Normalize when saving: pad tables, renumber ordered lists, trim trailing whitespace, end with one newline. |
 | `general.markdownExtensions` | string[] | `["md", "markdown", "mdown", "mmd", "text", "txt", "mdx", "rmarkdown", "rmd", "mkd", "mdwn", "mdtxt", "mdtext", "apib"]` | PR-015 | File extensions treated as Markdown (file tree, open dialog, drops). |
-| `general.quitOnLastWindow` | bool | `true` | FS-005 | Closing the last window quits; otherwise it stays open with a blank document (default off on macOS). |
+| `general.lastWindowClosed` | `auto` / `quit` / `keep` | `"auto"` | FS-005 | Closing the last window quits, or keeps the app running with a blank document (`auto`: keep on macOS, quit elsewhere). |
 | `editor.linkedFileIn` | `current` / `new` | `"current"` | MD-033 | A clicked link to a Markdown file opens in the current window (a modified document is never replaced) or a new one. |
-| `appearance.titleBar` | `integrated` / `native` | `"native"` | TH-008 | Integrated title bar (menus and window buttons in one row; default on Windows) or the system's. |
+| `appearance.titleBar` | `auto` / `integrated` / `native` | `"auto"` | TH-008 | Integrated title bar (menus and window buttons in one row) or the system's (`auto`: integrated on Windows). |
 | `general.dropMarkdown` | `open` / `link` | `"open"` | ED-017 | A Markdown file dropped on the editor opens, or is inserted as a link. |
 | `general.saveToast` | bool | `true` | UI-041 | Show a short notice after saving. |
 | `general.checkUpdates` | bool | `true` | PR-020 | Check GitHub Releases for a newer version at startup (never downloads). |
@@ -105,6 +105,8 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `export.html.css` | string | `""` | EX-001 | Extra CSS for exported HTML. |
 | `export.image.scale` | number | `2` | EX-003 | Resolution multiplier for image export (1–3). |
 | `export.image.paged` | bool | `false` | EX-003 | Export one image per page instead of one long image. |
+| `export.quickFormat` | `pdf` / `html` / `htmlPlain` / `image` / `docx` / `odt` / `rtf` / `epub` / `latex` / `mediawiki` / `rst` / `textile` / `opml` / `org` | `"pdf"` | EX-005 | Format of `file.quickExport` (export next to the document with the same name). |
+| `export.image.background` | string | `""` | EX-003 | Background color of exported images (`#rrggbb`; empty: the theme's). |
 | `export.pandocPath` | string | `""` | EX-004 | Pandoc executable (empty: search PATH). |
 | `export.custom` | string[] | `[]` | EX-004 | Custom export commands, each `Label\|extension\|command template` with `$input`, `$output` and `$outputDir`, e.g. `Word (reference)\|docx\|pandoc $input -o $output --reference-doc ref.docx`. |
 | `export.pandocArgs` | string | `""` | EX-004 | Extra Pandoc arguments, e.g. `--reference-doc ref.docx`. |

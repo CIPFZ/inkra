@@ -10,6 +10,11 @@ pub fn lookup(name: &str) -> Option<&'static str> {
         .map(|i| EMOJI[i].1)
 }
 
+/// Every `(shortcode, emoji)`, sorted by shortcode (the Emoji & Symbols picker).
+pub fn all() -> &'static [(&'static str, &'static str)] {
+    EMOJI
+}
+
 /// Shortcodes for completion (ED-103): those starting with `prefix` first,
 /// then those containing it; at most `limit`.
 pub fn complete(prefix: &str, limit: usize) -> Vec<(&'static str, &'static str)> {
