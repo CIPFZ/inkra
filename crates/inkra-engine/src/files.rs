@@ -138,6 +138,132 @@ fn save(cx: &mut CommandContext<'_>, close_after: bool, quit: bool) -> CommandRe
 /// Registers file commands.
 pub fn register(r: &mut CommandRegistry) {
     use Category::File;
+    let saved = |cx: &CommandContext<'_>| cx.app.editor.path.is_some();
+    r.register(
+        FnCommand::new(
+            {
+                let mut s = spec(
+                    "file.rename",
+                    File,
+                    "FS-022",
+                    "Rename the current file (asks for the name unless `name` is given).",
+                );
+                s.params = Some(r#"{"type":"object","properties":{"name":{"type":"string"}}}"#);
+                s
+            },
+            |cx, p| {
+                let path = cx
+                    .app
+                    .editor
+                    .path
+                    .clone()
+                    .ok_or_else(|| err("file.rename", "the document has not been saved"))?;
+                match p.get("name").and_then(serde_json::Value::as_str) {
+                    Some(n) => crate::sidebar::rename_path(cx, &path, n, "file.rename"),
+                    None => {
+                        cx.effects.push(Effect::RenameDialog);
+                        Ok(Outcome::Done)
+                    }
+                }
+            },
+        )
+        .enabled(saved),
+    );
+    r.register(
+        FnCommand::new(
+            {
+                let mut s = spec(
+                    "file.moveTo",
+                    File,
+                    "FS-022",
+                    "Move the current file to another folder (asks unless `dest` is given).",
+                );
+                s.params = Some(r#"{"type":"object","properties":{"dest":{"type":"string"}}}"#);
+                s
+            },
+            |cx, p| {
+                let path = cx
+                    .app
+                    .editor
+                    .path
+                    .clone()
+                    .ok_or_else(|| err("file.moveTo", "the document has not been saved"))?;
+                match p.get("dest").and_then(serde_json::Value::as_str) {
+                    Some(d) => crate::sidebar::move_path(cx, &path, Path::new(d), "file.moveTo"),
+                    None => {
+                        cx.effects.push(Effect::MoveDialog(path));
+                        Ok(Outcome::Done)
+                    }
+                }
+            },
+        )
+        .enabled(saved),
+    );
+    r.register(
+        FnCommand::new(
+            {
+                let mut s = spec(
+                    "file.delete",
+                    File,
+                    "FS-022",
+                    "Move the current file to the recycle bin (asks first unless `confirmed`).",
+                );
+                s.params =
+                    Some(r#"{"type":"object","properties":{"confirmed":{"type":"boolean"}}}"#);
+                s
+            },
+            |cx, p| {
+                let path = cx
+                    .app
+                    .editor
+                    .path
+                    .clone()
+                    .ok_or_else(|| err("file.delete", "the document has not been saved"))?;
+                if p.get("confirmed")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false)
+                {
+                    crate::sidebar::trash_path(cx, &path, "file.delete")
+                } else {
+                    cx.effects.push(Effect::ConfirmDelete(path));
+                    Ok(Outcome::Done)
+                }
+            },
+        )
+        .enabled(saved),
+    );
+    r.register(FnCommand::new(
+        {
+            let mut s = spec("file.setEncoding", File, "FS-009", "Encoding used the next time the document is saved.");
+            s.params = Some(r#"{"type":"object","required":["encoding"],"properties":{"encoding":{"enum":["utf-8","utf-16le","utf-16be","gbk","gb18030"]},"bom":{"type":"boolean"}}}"#);
+            s
+        },
+        |cx, p| {
+            let name = p.get("encoding").and_then(serde_json::Value::as_str).unwrap_or("utf-8");
+            let enc = inkra_text::Encoding::from_label(name).ok_or_else(|| err("file.setEncoding", format!("unknown encoding `{name}`")))?;
+            let d = &mut cx.app.editor.doc;
+            if d.encoding != enc || p.get("bom").and_then(serde_json::Value::as_bool).is_some_and(|b| b != d.bom) {
+                d.encoding = enc;
+                if let Some(b) = p.get("bom").and_then(serde_json::Value::as_bool) {
+                    d.bom = b;
+                }
+                d.mark_dirty();
+            }
+            Ok(Outcome::Done)
+        },
+    ));
+    r.register(FnCommand::new(
+        spec(
+            "file.properties",
+            File,
+            "FS-009",
+            "Show the document's path, size, dates, encoding, line endings and counts.",
+        ),
+        |cx, _| {
+            cx.effects.push(Effect::ShowProperties);
+            Ok(Outcome::Done)
+        },
+    ));
     for (id, doc) in [
         ("file.new", "New blank document in a new window (FS-001)."),
         ("file.newWindow", "New window (same as file.new)."),

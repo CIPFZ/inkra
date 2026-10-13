@@ -541,3 +541,185 @@ pub(crate) fn update_banner(shell: &mut Shell, ctx: &egui::Context) {
         shell.update_available = None;
     }
 }
+
+/// Renaming the current file (FS-022): the name without the folder.
+pub(crate) fn rename_dialog(shell: &mut Shell, ctx: &egui::Context) {
+    let Some(mut name) = shell.rename.take() else {
+        return;
+    };
+    let i18n = shell.i18n.clone();
+    let mut done = None;
+    let resp = egui::Modal::new(egui::Id::new("inkra-rename")).show(ctx, |ui| {
+        ui.heading(i18n.tr("cmd-file-rename"));
+        let r = ui.add(egui::TextEdit::singleline(&mut name).desired_width(320.0));
+        if !r.has_focus() && !r.lost_focus() {
+            r.request_focus();
+        }
+        let enter = r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if ui.button(i18n.tr("dialog-ok")).clicked() || enter {
+                done = Some(true);
+            }
+            if ui.button(i18n.tr("dialog-cancel")).clicked() {
+                done = Some(false);
+            }
+        });
+    });
+    if resp.should_close() && done.is_none() {
+        done = Some(false);
+    }
+    match done {
+        Some(true) if !name.trim().is_empty() => {
+            shell.invoke(ctx, "file.rename", &json!({ "name": name.trim() }))
+        }
+        Some(_) => {}
+        None => shell.rename = Some(name),
+    }
+}
+
+/// Confirms moving the current file to the recycle bin.
+pub(crate) fn delete_confirm(shell: &mut Shell, ctx: &egui::Context) {
+    let Some(path) = shell.delete_confirm.clone() else {
+        return;
+    };
+    let i18n = shell.i18n.clone();
+    let mut done = None;
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let resp = egui::Modal::new(egui::Id::new("inkra-delete")).show(ctx, |ui| {
+        ui.label(i18n.tr_args("delete-confirm", &[("name", name.into())]));
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if ui.button(i18n.tr("cmd-file-delete")).clicked() {
+                done = Some(true);
+            }
+            if ui.button(i18n.tr("dialog-cancel")).clicked() {
+                done = Some(false);
+            }
+        });
+    });
+    if resp.should_close() && done.is_none() {
+        done = Some(false);
+    }
+    if let Some(yes) = done {
+        shell.delete_confirm = None;
+        if yes {
+            shell.invoke(ctx, "file.delete", &json!({ "confirmed": true }));
+        }
+    }
+}
+
+fn format_time(t: Option<std::time::SystemTime>) -> String {
+    let Some(t) = t else { return "—".into() };
+    let u = inkra_workspace::time::Utc::from_system(t);
+    format!(
+        "{:04}-{:02}-{:02} {:02}:{:02} UTC",
+        u.year, u.month, u.day, u.hour, u.minute
+    )
+}
+
+/// Document properties (FS-009): path, size, dates, encoding, line endings and
+/// counts; encoding and line endings can be changed (applied on save).
+pub(crate) fn properties_dialog(shell: &mut Shell, ctx: &egui::Context) {
+    if !shell.properties_open {
+        return;
+    }
+    let i18n = shell.i18n.clone();
+    let e = &shell.engine.state.editor;
+    let path = e.path.clone();
+    let meta = path.as_ref().and_then(|p| std::fs::metadata(p).ok());
+    let text = e.doc.text().to_string();
+    let counts = inkra_text::count::Counts::of(&text);
+    let enc = e.doc.encoding;
+    let bom = e.doc.bom;
+    let crlf = e.doc.line_ending == inkra_text::LineEnding::Crlf;
+    let mut close = false;
+    let mut cmds: Vec<(&str, Value)> = Vec::new();
+    let resp = egui::Modal::new(egui::Id::new("inkra-properties")).show(ctx, |ui| {
+        ui.heading(i18n.tr("cmd-file-properties"));
+        ui.add_space(4.0);
+        egui::Grid::new("props")
+            .num_columns(2)
+            .spacing([16.0, 6.0])
+            .show(ui, |ui| {
+                ui.label(i18n.tr("props-path"));
+                ui.label(
+                    path.as_ref()
+                        .map_or_else(|| i18n.tr("props-unsaved"), |p| p.display().to_string()),
+                );
+                ui.end_row();
+                ui.label(i18n.tr("props-size"));
+                ui.label(
+                    meta.as_ref()
+                        .map_or_else(|| "—".to_owned(), |m| format!("{} B", m.len())),
+                );
+                ui.end_row();
+                ui.label(i18n.tr("props-created"));
+                ui.label(format_time(meta.as_ref().and_then(|m| m.created().ok())));
+                ui.end_row();
+                ui.label(i18n.tr("props-modified"));
+                ui.label(format_time(meta.as_ref().and_then(|m| m.modified().ok())));
+                ui.end_row();
+                ui.label(i18n.tr("props-encoding"));
+                egui::ComboBox::from_id_salt("props-enc")
+                    .selected_text(format!("{}{}", enc.label(), if bom { " BOM" } else { "" }))
+                    .show_ui(ui, |ui| {
+                        for (label, key, b) in [
+                            ("UTF-8", "utf-8", false),
+                            ("UTF-8 BOM", "utf-8", true),
+                            ("UTF-16 LE", "utf-16le", true),
+                            ("UTF-16 BE", "utf-16be", true),
+                            ("GBK", "gbk", false),
+                            ("GB18030", "gb18030", false),
+                        ] {
+                            if ui
+                                .selectable_label(
+                                    enc.label() == label.trim_end_matches(" BOM") && bom == b,
+                                    label,
+                                )
+                                .clicked()
+                            {
+                                cmds.push((
+                                    "file.setEncoding",
+                                    json!({ "encoding": key, "bom": b }),
+                                ));
+                            }
+                        }
+                    });
+                ui.end_row();
+                ui.label(i18n.tr("props-line-endings"));
+                ui.horizontal(|ui| {
+                    if ui.radio(!crlf, "LF").clicked() && crlf {
+                        cmds.push(("edit.lineEnding", json!({ "style": "lf" })));
+                    }
+                    if ui.radio(crlf, "CRLF").clicked() && !crlf {
+                        cmds.push(("edit.lineEnding", json!({ "style": "crlf" })));
+                    }
+                });
+                ui.end_row();
+                ui.label(i18n.tr("count-words"));
+                ui.label(counts.words.to_string());
+                ui.end_row();
+                ui.label(i18n.tr("count-chars"));
+                ui.label(counts.chars.to_string());
+                ui.end_row();
+                ui.label(i18n.tr("count-lines"));
+                ui.label(counts.lines.to_string());
+                ui.end_row();
+            });
+        ui.label(egui::RichText::new(i18n.tr("props-on-save")).small().weak());
+        ui.add_space(6.0);
+        if ui.button(i18n.tr("dialog-ok")).clicked() {
+            close = true;
+        }
+    });
+    for (id, p) in cmds {
+        shell.invoke(ctx, id, &p);
+    }
+    if close || resp.should_close() {
+        shell.properties_open = false;
+    }
+}

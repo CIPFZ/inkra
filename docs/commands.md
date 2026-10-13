@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **185**
+Registered commands: **190**
 
 
 ## App
@@ -70,6 +70,7 @@ Registered commands: **185**
 |---|---|---|---|---|---|---|---|
 | `file.clearRecent` | Clear Recent Files | 清除最近文件 |  |  | — | FS-002 | Forget the recent files list. |
 | `file.close` | Close | 关闭 | `Ctrl+W` | `⌘W` | — | FS-005 | Close the window (asks to save changes). |
+| `file.delete` | Delete | 删除 |  |  | `{"type":"object","properties":{"confirmed":{"type":"boolean"}}}` | FS-022 | Move the current file to the recycle bin (asks first unless `confirmed`). |
 | `file.exportBlockImage` | Export Image… | 导出图片… |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-003 | Export the formula or diagram at the caret as PNG or SVG (by extension). |
 | `file.exportCustom` | Custom Export | 自定义导出 |  |  | `{"type":"object","required":["index"],"properties":{"index":{"type":"integer","minimum":0},"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-004 | Run a custom export command from the `export.custom` preference. |
 | `file.exportHtml` | HTML | HTML |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-001 | Export as HTML with the theme's styles (asks for the file unless `path` is given). |
@@ -79,6 +80,7 @@ Registered commands: **185**
 | `file.exportPdf` | PDF | PDF |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-002 | Export as PDF using the page setup. |
 | `file.import` | Import… | 导入… |  |  | `{"type":"object","properties":{"path":{"type":"string"}}}` | EX-020 | Import a document (docx, odt, rtf, epub, tex, rst, org, wiki, textile, opml, html) as Markdown next to it and open it. |
 | `file.keepLocal` | Keep Local Version | 保留本地版本 |  |  | — | FS-007 | Keep the local version after an external change. |
+| `file.moveTo` | Move To… | 移动到… |  |  | `{"type":"object","properties":{"dest":{"type":"string"}}}` | FS-022 | Move the current file to another folder (asks unless `dest` is given). |
 | `file.new` | New | 新建 | `Ctrl+N` | `⌘N` | — | FS-001 | New blank document in a new window (FS-001). |
 | `file.newWindow` | New Window | 新建窗口 | `Ctrl+Shift+N` | `⇧⌘N` | — | FS-001 | New window (same as file.new). |
 | `file.open` | Open… | 打开… | `Ctrl+O` | `⌘O` | `{"type":"object","properties":{"path":{"type":"string"}}}` | FS-002 | Open a file (dialog without `path`). |
@@ -86,13 +88,16 @@ Registered commands: **185**
 | `file.openRecent` | Open Recent File | 打开最近文件 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"}}}` | FS-002 | Open a recently used file. |
 | `file.pageSetup` | Page Setup… | 页面设置… |  |  | — | EX-002 | Paper size, orientation, margins, header and footer for PDF and printing. |
 | `file.print` | Print… | 打印… |  |  | — | EX-002 | Print: export a PDF and hand it to the system's print dialog. |
+| `file.properties` | Properties | 属性 |  |  | — | FS-009 | Show the document's path, size, dates, encoding, line endings and counts. |
 | `file.quickOpen` | Quick Open… | 快速打开… | `Ctrl+P` | `⌘P`, `⇧⌘O` | — | FS-030 | Fuzzy-find a file of the root folder or the recent files. |
 | `file.reload` | Reload from Disk | 从磁盘重新加载 |  |  | — | FS-007 | Reload the file from disk, discarding local changes. |
+| `file.rename` | Rename… | 重命名… |  |  | `{"type":"object","properties":{"name":{"type":"string"}}}` | FS-022 | Rename the current file (asks for the name unless `name` is given). |
 | `file.revealInFolder` | Reveal in Folder | 在文件夹中显示 |  |  | — | FS-010 | Show the file in the system file manager. |
 | `file.revealInSidebar` | Reveal in Sidebar | 在侧边栏中显示 |  |  | — | FS-023 | Show the current file in the sidebar file tree. |
 | `file.save` | Save | 保存 | `Ctrl+S` | `⌘S` | — | FS-003 | Save (asks for a name for new documents). |
 | `file.saveAll` | Save All | 保存全部 |  |  | — | FS-003 | Save every modified document that has a file. |
 | `file.saveAs` | Save As… | 另存为… | `Ctrl+Shift+S` | `⇧⌘S` | `{"type":"object","properties":{"path":{"type":"string"}}}` | FS-003 | Save under a new name (dialog without `path`). |
+| `file.setEncoding` | Encoding | 编码 |  |  | `{"type":"object","required":["encoding"],"properties":{"encoding":{"enum":["utf-8","utf-16le","utf-16be","gbk","gb18030"]},"bom":{"type":"boolean"}}}` | FS-009 | Encoding used the next time the document is saved. |
 
 ## Format
 
@@ -258,10 +263,6 @@ These appear greyed out in menus.
 
 - `app.commandPalette` — Command Palette
 - `edit.emojiSymbols` — Emoji & Symbols
-- `file.delete` — Delete
-- `file.moveTo` — Move To…
-- `file.properties` — Properties
-- `file.rename` — Rename…
 - `format.imageOps` — Image Operations…
 - `view.showWhitespace` — Show Formatting Marks
 - `view.toggleToolbar` — Toolbar

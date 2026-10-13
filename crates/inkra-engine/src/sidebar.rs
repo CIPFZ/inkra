@@ -77,6 +77,41 @@ pub fn retarget_open_documents(app: &mut AppState, from: &Path, to: &Path) {
     }
 }
 
+/// Renames `path` to `name`; open documents follow.
+pub(crate) fn rename_path(
+    cx: &mut CommandContext<'_>,
+    path: &Path,
+    name: &str,
+    id: &str,
+) -> CommandResult {
+    let to = fileops::rename(path, name.trim()).map_err(|e| fail(id, e))?;
+    let to = inkra_workspace::paths::canonical(&to);
+    retarget_open_documents(cx.app, path, &to);
+    cx.effects.push(Effect::RevealInTree(to));
+    Ok(Outcome::Done)
+}
+
+/// Moves `path` into `dest`; open documents follow.
+pub(crate) fn move_path(
+    cx: &mut CommandContext<'_>,
+    path: &Path,
+    dest: &Path,
+    id: &str,
+) -> CommandResult {
+    let to = fileops::move_into(path, dest).map_err(|e| fail(id, e))?;
+    let to = inkra_workspace::paths::canonical(&to);
+    retarget_open_documents(cx.app, path, &to);
+    cx.effects.push(Effect::RevealInTree(to));
+    Ok(Outcome::Done)
+}
+
+/// Moves `path` to the recycle bin; open documents show it as deleted.
+pub(crate) fn trash_path(cx: &mut CommandContext<'_>, path: &Path, id: &str) -> CommandResult {
+    fileops::to_trash(path).map_err(|e| fail(id, e))?;
+    mark_deleted(cx.app, path);
+    Ok(Outcome::Done)
+}
+
 fn mark_deleted(app: &mut AppState, gone: &Path) {
     if app
         .editor
@@ -285,11 +320,7 @@ pub fn register(r: &mut CommandRegistry) {
         |cx, p| {
             let path = path_param(p, "path").ok_or_else(|| fail("sidebar.rename", "no path"))?;
             let name = p.get("name").and_then(Value::as_str).unwrap_or_default();
-            let to = fileops::rename(&path, name.trim()).map_err(|e| fail("sidebar.rename", e))?;
-            let to = inkra_workspace::paths::canonical(&to);
-            retarget_open_documents(cx.app, &path, &to);
-            cx.effects.push(Effect::RevealInTree(to));
-            Ok(Outcome::Done)
+            rename_path(cx, &path, name, "sidebar.rename")
         },
     ));
     r.register(FnCommand::new(
@@ -300,11 +331,7 @@ pub fn register(r: &mut CommandRegistry) {
         |cx, p| {
             let path = path_param(p, "path").ok_or_else(|| fail("sidebar.move", "no path"))?;
             let dest = path_param(p, "dest").ok_or_else(|| fail("sidebar.move", "no destination"))?;
-            let to = fileops::move_into(&path, &dest).map_err(|e| fail("sidebar.move", e))?;
-            let to = inkra_workspace::paths::canonical(&to);
-            retarget_open_documents(cx.app, &path, &to);
-            cx.effects.push(Effect::RevealInTree(to));
-            Ok(Outcome::Done)
+            move_path(cx, &path, &dest, "sidebar.move")
         },
     ));
     r.register(FnCommand::new(
@@ -319,9 +346,7 @@ pub fn register(r: &mut CommandRegistry) {
         ),
         |cx, p| {
             let path = path_param(p, "path").ok_or_else(|| fail("sidebar.delete", "no path"))?;
-            fileops::to_trash(&path).map_err(|e| fail("sidebar.delete", e))?;
-            mark_deleted(cx.app, &path);
-            Ok(Outcome::Done)
+            trash_path(cx, &path, "sidebar.delete")
         },
     ));
     r.register(FnCommand::new(

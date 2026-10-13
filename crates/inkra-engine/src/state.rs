@@ -404,6 +404,14 @@ pub enum Effect {
     ShowPageSetup,
     /// Show the Preferences window.
     ShowPreferences,
+    /// Ask for a new name of the current file.
+    RenameDialog,
+    /// Ask for the folder to move `path` into.
+    MoveDialog(std::path::PathBuf),
+    /// Ask before moving `path` to the recycle bin.
+    ConfirmDelete(std::path::PathBuf),
+    /// Show the document properties (FS-009).
+    ShowProperties,
     /// Ask for a settings file to import or a place to export to (PR-002).
     SettingsDialog {
         /// Import (else export).

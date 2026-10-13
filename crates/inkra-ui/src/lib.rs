@@ -146,6 +146,9 @@ pub struct Shell {
     theme_names_at: f64,
     jobs: jobs::Jobs,
     prefs: prefs_window::PrefsWindow,
+    rename: Option<String>,
+    delete_confirm: Option<PathBuf>,
+    properties_open: bool,
     updates: Option<std::sync::mpsc::Receiver<UpdateResult>>,
     update_available: Option<(String, String)>,
     page_setup: Option<modals::PageSetupForm>,
@@ -203,6 +206,9 @@ impl Shell {
             mmdc_conf: String::new(),
             jobs: Default::default(),
             prefs: Default::default(),
+            rename: None,
+            delete_confirm: None,
+            properties_open: false,
             updates: None,
             update_available: None,
             page_setup: None,
@@ -610,6 +616,23 @@ impl Shell {
                 }
                 Effect::SetClipboardImage(png) => self.clipboard.set_png(&png),
                 Effect::ShowPreferences => self.prefs.open = true,
+                Effect::RenameDialog => {
+                    self.rename = self
+                        .engine
+                        .state
+                        .editor
+                        .path
+                        .as_ref()
+                        .and_then(|p| p.file_name())
+                        .map(|n| n.to_string_lossy().into_owned());
+                }
+                Effect::MoveDialog(path) => {
+                    let dir = path.parent().map(Path::to_owned);
+                    self.dialogs
+                        .open(ctx, dialogs::Purpose::MoveTo(path), dir, None);
+                }
+                Effect::ConfirmDelete(path) => self.delete_confirm = Some(path),
+                Effect::ShowProperties => self.properties_open = true,
                 Effect::SettingsDialog { import } => {
                     let purpose = if import {
                         dialogs::Purpose::ImportSettings
@@ -1599,6 +1622,9 @@ impl Shell {
         modals::confirm_close(self, &ctx, id);
         modals::about_dialog(self, &ctx);
         modals::page_setup(self, &ctx);
+        modals::rename_dialog(self, &ctx);
+        modals::delete_confirm(self, &ctx);
+        modals::properties_dialog(self, &ctx);
         modals::update_banner(self, &ctx);
         modals::import_offer(self, &ctx);
         modals::prefs_problem_dialog(self, &ctx);

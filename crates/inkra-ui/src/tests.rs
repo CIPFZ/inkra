@@ -701,3 +701,43 @@ fn preferences_window_changes_settings() {
         "applied to the open document"
     );
 }
+
+#[test]
+fn m7_rename_and_properties_of_the_current_file() {
+    let d = tempfile::tempdir().unwrap();
+    let r = inkra_workspace::paths::canonical(d.path());
+    std::fs::write(r.join("old.md"), "# Hello\n\nsome words here\n").unwrap();
+    let mut h = harness("en-US");
+    h.state_mut()
+        .engine
+        .execute(
+            "file.open",
+            &serde_json::json!({ "path": r.join("old.md") }),
+        )
+        .unwrap();
+    h.run();
+    h.get_by_label("File").click();
+    h.run();
+    h.get_by_label_contains("Rename").click();
+    h.run();
+    assert_eq!(
+        h.state().rename.as_deref(),
+        Some("old.md"),
+        "the dialog starts with the name"
+    );
+    h.state_mut().rename = Some("new.md".into());
+    h.run();
+    h.get_by_label("OK").click();
+    h.run();
+    assert!(r.join("new.md").is_file() && !r.join("old.md").exists());
+    assert_eq!(
+        h.state().engine.state.editor.path.as_deref(),
+        Some(r.join("new.md").as_path())
+    );
+    h.get_by_label("File").click();
+    h.run();
+    h.get_by_label_contains("Properties").click();
+    h.run();
+    h.get_by_label_contains("new.md");
+    h.get_by_label("Words");
+}
