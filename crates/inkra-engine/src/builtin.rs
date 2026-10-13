@@ -292,3 +292,31 @@ pub fn register_all(r: &mut CommandRegistry) {
         .checked(|cx| Some(cx.app.view.debug_overlay)),
     );
 }
+
+#[cfg(test)]
+mod settings_tests {
+    use serde_json::json;
+
+    #[test]
+    fn export_import_and_reset_settings() {
+        let d = tempfile::tempdir().unwrap();
+        let file = d.path().join("s.json");
+        let mut e = crate::Engine::new(crate::Preferences::default());
+        e.execute(
+            "app.setPreference",
+            &json!({ "key": "editor.tabWidth", "value": 2 }),
+        )
+        .unwrap();
+        e.execute("app.exportSettings", &json!({ "path": file }))
+            .unwrap();
+        e.execute("app.resetSettings", &json!({})).unwrap();
+        assert_eq!(e.state.prefs.f64("editor.tabWidth"), 4.0);
+        e.execute("app.importSettings", &json!({ "path": file }))
+            .unwrap();
+        assert_eq!(e.state.prefs.f64("editor.tabWidth"), 2.0);
+        assert_eq!(
+            e.state.editor.prefs.tab_width, 2,
+            "applied to the open document"
+        );
+    }
+}

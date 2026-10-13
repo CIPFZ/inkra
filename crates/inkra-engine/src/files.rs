@@ -564,3 +564,37 @@ pub fn write_recovery(app: &AppState) {
         }
     }
 }
+
+#[cfg(test)]
+mod readonly_tests {
+    use serde_json::json;
+
+    #[test]
+    fn saving_a_read_only_file_asks_for_another_name() {
+        let d = tempfile::tempdir().unwrap();
+        let f = d.path().join("ro.md");
+        std::fs::write(&f, "x").unwrap();
+        let mut perm = std::fs::metadata(&f).unwrap().permissions();
+        perm.set_readonly(true);
+        std::fs::set_permissions(&f, perm).unwrap();
+        let mut e = crate::Engine::new(crate::Preferences::default());
+        e.execute("file.open", &json!({ "path": f })).unwrap();
+        e.take_effects();
+        e.execute("edit.insertText", &json!({ "text": "y" })).ok();
+        e.execute("file.save", &json!({})).unwrap();
+        assert!(
+            e.take_effects()
+                .iter()
+                .any(|x| matches!(x, crate::Effect::SaveAsDialog { .. }))
+        );
+        assert_eq!(
+            std::fs::read_to_string(&f).unwrap(),
+            "x",
+            "the file is untouched"
+        );
+        let mut perm = std::fs::metadata(&f).unwrap().permissions();
+        #[allow(clippy::permissions_set_readonly_false)]
+        perm.set_readonly(false);
+        let _ = std::fs::set_permissions(&f, perm);
+    }
+}
