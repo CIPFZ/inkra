@@ -298,10 +298,15 @@ fn linux(root: &Path, release: &Path, out: &Path) -> Result<Vec<PathBuf>, String
 // ---- Windows ----
 
 fn wix_tool(name: &str) -> Option<PathBuf> {
+    // `WIX` points at an installation (`bin\`) or the unpacked binaries zip.
     if let Some(w) = std::env::var_os("WIX") {
-        let p = PathBuf::from(w).join("bin").join(format!("{name}.exe"));
-        if p.is_file() {
-            return Some(p);
+        for p in [
+            PathBuf::from(&w).join("bin").join(format!("{name}.exe")),
+            PathBuf::from(&w).join(format!("{name}.exe")),
+        ] {
+            if p.is_file() {
+                return Some(p);
+            }
         }
     }
     have(name).then(|| PathBuf::from(name))
