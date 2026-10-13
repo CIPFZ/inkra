@@ -215,10 +215,13 @@ impl<'o> BlockParser<'o> {
         }
     }
 
-    /// If the last fed line started a new top-level block, the offset of the start
-    /// of that block's first line.
+    /// If the last fed line started a new *fresh* top-level block (one whose parse
+    /// does not depend on earlier lines; a table split off a paragraph does), the
+    /// offset of the start of that block's first line.
     pub fn new_top_level(&self) -> Option<usize> {
-        self.new_top.map(|i| self.nodes[i].start)
+        self.new_top
+            .filter(|&i| self.nodes[i].fresh)
+            .map(|i| self.nodes[i].start)
     }
 
     /// Discards the top-level block started by the last fed line and finishes. Used

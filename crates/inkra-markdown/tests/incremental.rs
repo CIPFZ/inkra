@@ -162,3 +162,32 @@ proptest! {
         let _ = parse(s.as_str(), &ParseOptions::commonmark());
     }
 }
+
+#[test]
+fn lazy_quote_edit_keeps_list_after_it() {
+    // Found by the inkra-doc proptest: a table must not start at a list item line.
+    let o = ParseOptions::default();
+    check_edit("\n|a#a\n >-\n||\n*aaa#\n*\n|-", 8..8, "-", &o);
+}
+
+#[test]
+fn fresh_flags_survive_incremental_edits() {
+    let o = ParseOptions::default();
+    let mut text = String::from("\n|a#a\n >-\n||\n*aaa#\n*\n|");
+    let mut doc = Document::parse(text.as_str(), o.clone());
+    for (at, ins) in [(22, "-"), (8, "-")] {
+        text.insert_str(at, ins);
+        doc.edit(text.as_str(), at..at, ins.len());
+        assert_eq!(
+            doc.to_blocks(),
+            parse(text.as_str(), &o).blocks,
+            "after inserting at {at}: {text:?}"
+        );
+    }
+}
+
+#[test]
+fn deleting_inside_quote_restores_table() {
+    let o = ParseOptions::default();
+    check_edit("\n|a#a\n >--\n||\n*aaa#\n*\n|-", 8..9, "", &o);
+}

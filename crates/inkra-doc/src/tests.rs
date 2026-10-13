@@ -141,3 +141,27 @@ fn dirty_since_merges_edits() {
     assert_eq!(d.dirty_since(d.version()), Some((0..0, 0)));
     assert!(d.dirty_since(v0.wrapping_sub(1)).is_none() || v0 == 0);
 }
+
+#[test]
+fn incremental_edits_match_full_parse_regression() {
+    let o = ParseOptions::default();
+    let mut d = Doc::from_str("\n|a#a\n >-\n||\n*aaa#\n*\n|", o.clone());
+    let mut model = d.text().to_string();
+    for (at, ins) in [(22, "-"), (8, "-")] {
+        model.insert_str(at, ins);
+        d.apply(Transaction::single(at..at, ins), UndoPolicy::NewGroup);
+        assert_eq!(
+            d.ast().to_blocks(),
+            inkra_markdown::parse(model.as_str(), &o).blocks,
+            "after {at}"
+        );
+    }
+    while d.undo().is_some() {
+        let t = d.text().to_string();
+        assert_eq!(
+            d.ast().to_blocks(),
+            inkra_markdown::parse(t.as_str(), &o).blocks,
+            "undo -> {t:?}"
+        );
+    }
+}

@@ -266,7 +266,9 @@ impl Document {
                         hi = mid
                     }
                 }
-                if lo < this.blocks.len() && this.start(lo) == old_x {
+                // Only a fresh old block parsed independently of what preceded it
+                // (a table split off a paragraph did not, for example).
+                if lo < this.blocks.len() && this.start(lo) == old_x && this.fresh[lo] {
                     matched_old = Some(lo);
                     true
                 } else {
