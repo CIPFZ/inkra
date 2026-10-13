@@ -67,6 +67,8 @@ pub struct Style {
     /// Equation numbering (MD-068): 0 off, 1 AMS environments, 2 all blocks.
     /// A rendering option set from preferences, not by themes.
     pub math_numbering: u8,
+    /// Render ```` ```mermaid ```` blocks as diagrams (MD-064); a preference.
+    pub diagrams: bool,
     /// Body font size in points.
     pub size: f32,
     /// Monospace font size in points.
@@ -169,6 +171,7 @@ impl Default for Style {
             statusbar_fg: rgb(0x99, 0x99, 0x99),
             alert_bg_alpha: 0.08,
             math_numbering: 0,
+            diagrams: true,
             size: 16.0,
             mono_size: 14.0,
             line_height: 1.6,

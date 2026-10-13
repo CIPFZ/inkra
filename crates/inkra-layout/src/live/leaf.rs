@@ -318,28 +318,105 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                         .unwrap_or_default();
                     let pad = style.code_padding;
                     let (job, map, body) = code_job(cx, b, delta, &lang, w - 2.0 * pad, base);
-                    let (h, fr) = galley_height(fonts, &job);
-                    let rect = Rect::from_min_size(pos2(x, y), vec2(w, h + 2.0 * pad));
-                    out.decos.push(Deco::Rect {
-                        rect,
-                        fill: style.code_bg,
-                        stroke: Stroke::new(1.0, style.code_border),
-                        radius: style.code_radius,
-                    });
-                    out.overlays.push(Overlay::Code {
-                        rect,
-                        lang,
-                        info: fence.as_ref().and_then(|f| f.info.as_ref().map(abs)),
-                        body: body.clone(),
-                    });
-                    out.runs.push(RunSpec {
-                        job,
-                        pos: vec2(x + pad, y + pad),
-                        map,
-                    });
-                    content_h = rect.height();
-                    first_row_h = fr + pad;
-                    out.caret_range = Some(body.start - base..body.end - base);
+                    let is_diagram = style.diagrams && lang.eq_ignore_ascii_case("mermaid");
+                    if is_diagram && !active {
+                        // MD-100: the diagram instead of its source.
+                        let src = text.slice(body.clone()).into_owned();
+                        let (shown, err) = diagram(&src, style, w, item.src.start);
+                        let top = y + 0.3 * em;
+                        let mut h = 0.6 * em;
+                        if let Some(ms) = shown {
+                            let sc = ms.scene.clone();
+                            let fx = x + ((w - sc.width) / 2.0).max(0.0);
+                            out.decos.push(Deco::Math {
+                                rect: Rect::from_min_size(pos2(fx, top), vec2(sc.width, sc.height)),
+                                math: ms,
+                            });
+                            h += sc.height;
+                        }
+                        if let Some(e) = err {
+                            let mut ef = fmt;
+                            ef.size = (em * 0.8).round();
+                            ef.color = Color32::from_rgb(220, 38, 38);
+                            let mut bl = Builder::new(text, base, delta, None, style, w);
+                            bl.push(&e, &ef, None, true);
+                            let (eh, _) = galley_height(fonts, &bl.job);
+                            out.runs.push(RunSpec {
+                                job: bl.job,
+                                pos: vec2(x, top + h - 0.3 * em),
+                                map: bl.map,
+                            });
+                            h += eh + 4.0;
+                        }
+                        // Clicking puts the caret at the end of the code, which
+                        // opens the source with a live preview.
+                        let at = body.end - base;
+                        let mut m = SourceMap::default();
+                        m.atomic(0..0, at..at);
+                        out.runs.push(RunSpec {
+                            job: empty_job(&fmt, w),
+                            pos: vec2(x + w - 1.0, top),
+                            map: m,
+                        });
+                        content_h = h;
+                        first_row_h = h;
+                        out.caret_range = Some(at..at);
+                    } else {
+                        let (h, fr) = galley_height(fonts, &job);
+                        let rect = Rect::from_min_size(pos2(x, y), vec2(w, h + 2.0 * pad));
+                        out.decos.push(Deco::Rect {
+                            rect,
+                            fill: style.code_bg,
+                            stroke: Stroke::new(1.0, style.code_border),
+                            radius: style.code_radius,
+                        });
+                        out.overlays.push(Overlay::Code {
+                            rect,
+                            lang,
+                            info: fence.as_ref().and_then(|f| f.info.as_ref().map(abs)),
+                            body: body.clone(),
+                        });
+                        out.runs.push(RunSpec {
+                            job,
+                            pos: vec2(x + pad, y + pad),
+                            map,
+                        });
+                        content_h = rect.height();
+                        first_row_h = fr + pad;
+                        out.caret_range = Some(body.start - base..body.end - base);
+                        if is_diagram {
+                            // Live preview below the source while editing (MD-100).
+                            let src = text.slice(body.clone()).into_owned();
+                            let (shown, err) = diagram(&src, style, w, item.src.start);
+                            let top = y + content_h + 0.4 * em;
+                            if let Some(ms) = shown {
+                                let sc = ms.scene.clone();
+                                let fx = x + ((w - sc.width) / 2.0).max(0.0);
+                                out.decos.push(Deco::Math {
+                                    rect: Rect::from_min_size(
+                                        pos2(fx, top),
+                                        vec2(sc.width, sc.height),
+                                    ),
+                                    math: ms,
+                                });
+                                content_h += sc.height + 0.6 * em;
+                            }
+                            if let Some(e) = err {
+                                let mut ef = fmt;
+                                ef.size = (em * 0.8).round();
+                                ef.color = Color32::from_rgb(220, 38, 38);
+                                let mut bl = Builder::new(text, base, delta, None, style, w);
+                                bl.push(&e, &ef, None, true);
+                                let (eh, _) = galley_height(fonts, &bl.job);
+                                out.runs.push(RunSpec {
+                                    job: bl.job,
+                                    pos: vec2(x, y + content_h + 2.0),
+                                    map: bl.map,
+                                });
+                                content_h += eh + 6.0;
+                            }
+                        }
+                    }
                 }
                 BlockKind::ThematicBreak => {
                     let ly = y + 0.6 * em;
@@ -681,6 +758,115 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
     out.height = height;
     place_objects(&mut out, fonts);
     out
+}
+
+/// Diagram colors from the theme (MD-102).
+fn diagram_palette(style: &Style) -> inkra_diagram::Palette {
+    let c = |c: Color32| [c.r(), c.g(), c.b(), 255];
+    let mix = |a: Color32, b: Color32, t: f32| {
+        let m = |x: u8, y: u8| (f32::from(x) * (1.0 - t) + f32::from(y) * t).round() as u8;
+        [m(a.r(), b.r()), m(a.g(), b.g()), m(a.b(), b.b()), 255]
+    };
+    let mut p = if style.dark {
+        inkra_diagram::Palette::dark()
+    } else {
+        inkra_diagram::Palette::light()
+    };
+    p.fg = c(style.fg);
+    p.bg = c(style.bg);
+    p.node_fill = mix(style.bg, style.accent, if style.dark { 0.28 } else { 0.1 });
+    p.node_stroke = mix(style.bg, style.accent, 0.75);
+    p.edge = mix(style.bg, style.fg, 0.8);
+    p.lifeline = c(style.fg_muted);
+    p.cluster_fill = c(style.code_bg);
+    p.cluster_stroke = c(style.code_border);
+    p.label_bg = c(style.code_bg);
+    p.pie_text = c(style.fg);
+    p
+}
+
+/// Converts a diagram to a paintable scene, scaled down to `max_w`.
+fn to_math_scene(
+    d: &inkra_diagram::Scene,
+    max_w: f32,
+    key: u64,
+    dim: Option<Color32>,
+) -> crate::run::MathScene {
+    let s = if d.width > max_w && d.width > 0.0 {
+        max_w / d.width
+    } else {
+        1.0
+    };
+    let ts = tiny_skia_path::Transform::from_scale(s, s);
+    let fills = d
+        .fills
+        .iter()
+        .filter_map(|f| {
+            let path = f.path.clone().transform(ts)?;
+            let [r, g, b, _] = f.color;
+            let color = match dim {
+                // A failed edit shows the last good diagram faded toward the page.
+                Some(bg) => {
+                    let m = |x: u8, y: u8| ((u16::from(x) + u16::from(y)) / 2) as u8;
+                    [m(r, bg.r()), m(g, bg.g()), m(b, bg.b())]
+                }
+                None => [r, g, b],
+            };
+            Some(inkra_math::Fill {
+                path,
+                color: Some(color),
+            })
+        })
+        .collect();
+    let scene = inkra_math::Scene {
+        width: d.width * s,
+        height: d.height * s,
+        baseline: 0.0,
+        fills,
+    };
+    crate::run::MathScene {
+        scene: std::sync::Arc::new(scene),
+        key: key ^ u64::from(dim.is_some()),
+        color: Color32::BLACK,
+    }
+}
+
+type LastGood =
+    std::sync::Mutex<std::collections::HashMap<usize, (u64, std::sync::Arc<inkra_diagram::Scene>)>>;
+static LAST_GOOD: std::sync::OnceLock<LastGood> = std::sync::OnceLock::new();
+
+/// The diagram of `src` and its error. On a parse error the last successful
+/// rendering of the block (keyed by its position) is shown faded (MD-100).
+fn diagram(
+    src: &str,
+    style: &Style,
+    max_w: f32,
+    block: usize,
+) -> (Option<crate::run::MathScene>, Option<String>) {
+    use std::hash::{Hash, Hasher};
+    let pal = diagram_palette(style);
+    let r = inkra_diagram::render(src, &pal);
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (src, &pal, max_w.to_bits()).hash(&mut h);
+    let key = h.finish();
+    let last = LAST_GOOD.get_or_init(Default::default);
+    match r.as_ref() {
+        Ok(sc) => {
+            let arc = std::sync::Arc::new(sc.clone());
+            if let Ok(mut m) = last.lock() {
+                if m.len() > 256 {
+                    m.clear();
+                }
+                m.insert(block, (key, arc));
+            }
+            (Some(to_math_scene(sc, max_w, key, None)), None)
+        }
+        Err(e) => {
+            let prev = last.lock().ok().and_then(|m| m.get(&block).cloned());
+            let shown = prev.map(|(k, sc)| to_math_scene(&sc, max_w, k, Some(style.bg)));
+            (shown, Some(e.to_string()))
+        }
+    }
 }
 
 /// The TeX source between `$$` delimiters.

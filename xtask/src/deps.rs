@@ -63,6 +63,7 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         Scope::Only(&[
             "inkra-math",
             "inkra-diagram",
+            "inkra-layout",
             "inkra-render",
             "inkra-export",
         ]),

@@ -265,9 +265,28 @@ pub fn cjk_font_data() -> Option<(&'static [u8], u32)> {
     })
 }
 
+/// Gives the diagram engine the label fonts (Inter, then the CJK fallback).
+pub fn init_vector_fonts() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let mut f: Vec<(&'static [u8], u32)> = vec![(
+            FONTS
+                .iter()
+                .find(|(n, _)| *n == BODY)
+                .map_or(&[][..], |(_, b)| *b),
+            0,
+        )];
+        if let Some(c) = cjk_font_data() {
+            f.push(c);
+        }
+        inkra_diagram::draw::set_fonts(f);
+    });
+}
+
 /// Font definitions: egui's emoji fallbacks, the bundled Inter / JetBrains Mono
 /// families (also used for the UI) and a system CJK fallback when available.
 pub fn definitions() -> FontDefinitions {
+    init_vector_fonts();
     let mut defs = FontDefinitions::default();
     for (name, bytes) in FONTS {
         defs.font_data
