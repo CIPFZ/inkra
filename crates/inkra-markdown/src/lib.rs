@@ -14,6 +14,7 @@ pub mod anchor;
 pub mod ast;
 mod block;
 pub mod emoji;
+mod emoji_table;
 mod entities;
 pub mod html;
 mod incremental;
