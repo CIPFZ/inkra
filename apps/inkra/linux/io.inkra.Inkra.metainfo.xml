@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.inkra.Inkra</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <name>Inkra</name>
+  <name xml:lang="zh-CN">墨刻</name>
+  <summary>Native WYSIWYM Markdown editor</summary>
+  <summary xml:lang="zh-CN">原生、轻量的所见即所得 Markdown 编辑器</summary>
+  <description>
+    <p>Inkra renders Markdown as you type: math, diagrams, tables, footnotes and more,
+    and exports to HTML, PDF and images.</p>
+  </description>
+  <launchable type="desktop-id">io.inkra.Inkra.desktop</launchable>
+  <provides>
+    <binary>inkra</binary>
+    <binary>inkra-cli</binary>
+    <mediatype>text/markdown</mediatype>
+  </provides>
+  <categories>
+    <category>Office</category>
+    <category>TextEditor</category>
+  </categories>
+</component>

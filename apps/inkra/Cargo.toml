@@ -28,14 +28,22 @@ inkra-engine.workspace = true
 inkra-ui.workspace = true
 inkra-doc.workspace = true
 serde_json.workspace = true
-eframe = { workspace = true, features = ["wgpu", "accesskit", "x11", "wayland", "persistence", "default_fonts"] }
+eframe = { workspace = true, features = ["wgpu_no_default_features", "accesskit", "x11", "wayland", "persistence", "default_fonts"] }
 log.workspace = true
 winit.workspace = true
 fern.workspace = true
 anyhow.workspace = true
 
+# Only the graphics backends each platform uses (binary size, SPEC 2.5).
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Console", "Win32_UI_Shell"] }
+wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "wgsl", "dx12"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "wgsl", "metal"] }
+
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+wgpu = { version = "30", default-features = false, features = ["std", "parking_lot", "wgsl", "vulkan", "gles"] }
 
 [build-dependencies]
 winresource = "0.1"

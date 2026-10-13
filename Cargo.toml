@@ -85,9 +85,81 @@ arboard = { version = "3.6", default-features = false, features = ["image-data"]
 muda = { version = "0.21", default-features = false }
 
 [profile.release]
-lto = "thin"
-codegen-units = 4
-strip = "debuginfo"
+lto = "fat"
+codegen-units = 1
+strip = true
+
+# Code off the typing path is optimized for size (binary budget, SPEC 2.5).
+[profile.release.package.naga]
+opt-level = "s"
+[profile.release.package.krilla]
+opt-level = "s"
+[profile.release.package.resvg]
+opt-level = "s"
+[profile.release.package.usvg]
+opt-level = "s"
+[profile.release.package.html5ever]
+opt-level = "s"
+[profile.release.package.markup5ever]
+opt-level = "s"
+[profile.release.package.zbus]
+opt-level = "s"
+[profile.release.package.accesskit_unix]
+opt-level = "s"
+[profile.release.package.accesskit_windows]
+opt-level = "s"
+[profile.release.package.rustls]
+opt-level = "s"
+[profile.release.package.ring]
+opt-level = "s"
+[profile.release.package.image]
+opt-level = "s"
+[profile.release.package.image-webp]
+opt-level = "s"
+[profile.release.package.zune-jpeg]
+opt-level = "s"
+[profile.release.package.harfrust]
+opt-level = "s"
+[profile.release.package.skrifa]
+opt-level = "s"
+[profile.release.package.read-fonts]
+opt-level = "s"
+[profile.release.package.subsetter]
+opt-level = "s"
+[profile.release.package.ureq]
+opt-level = "s"
+[profile.release.package.ureq-proto]
+opt-level = "s"
+[profile.release.package.spellbook]
+opt-level = "s"
+[profile.release.package.fontdb]
+opt-level = "s"
+[profile.release.package.pdf-writer]
+opt-level = "s"
+[profile.release.package.gif]
+opt-level = "s"
+[profile.release.package.png]
+opt-level = "s"
+[profile.release.package.flate2]
+opt-level = "s"
+[profile.release.package.miniz_oxide]
+opt-level = "s"
+[profile.release.package.rustls-platform-verifier]
+opt-level = "s"
+[profile.release.package.rustls-webpki]
+opt-level = "s"
+[profile.release.package.xmlwriter]
+opt-level = "s"
+[profile.release.package.roxmltree]
+opt-level = "s"
+[profile.release.package.svgtypes]
+opt-level = "s"
+[profile.release.package.zvariant]
+opt-level = "s"
+[profile.release.package.async-io]
+opt-level = "s"
+[profile.release.package.async-executor]
+opt-level = "s"
 
 [profile.dev]
 # Line tables are enough for backtraces and keep target/ small.

@@ -23,6 +23,12 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         "text shaping/layout and shapes (SPEC 2.1)",
     ),
     (
+        "wgpu",
+        Scope::Only(&["inkra"]),
+        "MIT OR Apache-2.0",
+        "selects the platform's graphics backends for eframe (SPEC 2.1, binary size)",
+    ),
+    (
         "eframe",
         Scope::Only(&["inkra"]),
         "MIT OR Apache-2.0",

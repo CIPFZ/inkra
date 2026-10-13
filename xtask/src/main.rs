@@ -1,6 +1,7 @@
 //! Inkra build tooling. Run with `cargo xtask <task>`.
 
 mod deps;
+mod dist;
 mod docgen;
 mod layering;
 
@@ -18,6 +19,7 @@ Tasks:
   keybindings [--check]  Generate docs/keybindings.md from the default key map
   docs [--check]     All of the above generators
   bundle-macos [--release]  Assemble target/<profile>/Inkra.app
+  dist               Release packages for this platform in target/dist (NF-006)
   corpus             Fetch the real-world Markdown corpus into target/corpus (TS-002)
 ";
 
@@ -212,6 +214,11 @@ fn main() -> ExitCode {
         Some(t @ ("commands" | "prefs" | "keybindings" | "docs")) => docs(t, check),
         Some("bundle-macos") => bundle_macos(args.iter().any(|a| a == "--release")),
         Some("corpus") => corpus(),
+        Some("dist") => dist::dist().map(|files| {
+            for f in files {
+                eprintln!("dist: {}", f.display());
+            }
+        }),
         _ => {
             eprint!("{USAGE}");
             return ExitCode::from(1);
