@@ -285,13 +285,13 @@ fn copy_with(cx: &mut crate::state::CommandContext<'_>, kind: u8) -> crate::comm
             let src = d.text().slice(s.range()).into_owned();
             (
                 plain(d, s),
-                Some(inkra_markdown::html::to_html(&src, d.options())),
+                Some(crate::exporting::clipboard_html(cx.app, &src)),
             )
         }
         2 => (plain(d, s), None),
         _ => {
             let src = d.text().slice(s.range()).into_owned();
-            (inkra_markdown::html::to_html(&src, d.options()), None)
+            (crate::exporting::clipboard_html(cx.app, &src), None)
         }
     };
     cx.effects.push(Effect::SetClipboard { text, html });

@@ -14,6 +14,7 @@ workspace = true
 [dependencies]
 resvg.workspace = true
 inkra-diagram.workspace = true
+inkra-export.workspace = true
 inkra-i18n.workspace = true
 inkra-engine.workspace = true
 inkra-layout.workspace = true

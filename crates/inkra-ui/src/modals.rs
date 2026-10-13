@@ -336,3 +336,180 @@ pub(crate) fn toasts(shell: &mut Shell, ctx: &egui::Context) {
         .fold(f64::INFINITY, f64::min);
     ctx.request_repaint_after(Duration::from_secs_f64((next - now).max(0.0)));
 }
+
+/// Page setup form state (EX-002).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct PageSetupForm {
+    paper: String,
+    landscape: bool,
+    width: f64,
+    height: f64,
+    margins: [f64; 4],
+    header: String,
+    footer: String,
+    background: bool,
+}
+
+impl PageSetupForm {
+    pub(crate) fn from_prefs(p: &inkra_engine::Preferences) -> Self {
+        Self {
+            paper: p.string("export.pdf.paper"),
+            landscape: p.string("export.pdf.orientation") == "landscape",
+            width: p.f64("export.pdf.customWidth"),
+            height: p.f64("export.pdf.customHeight"),
+            margins: [
+                p.f64("export.pdf.marginTop"),
+                p.f64("export.pdf.marginRight"),
+                p.f64("export.pdf.marginBottom"),
+                p.f64("export.pdf.marginLeft"),
+            ],
+            header: p.string("export.pdf.header"),
+            footer: p.string("export.pdf.footer"),
+            background: p.bool("export.pdf.background"),
+        }
+    }
+}
+
+/// The page setup dialog: paper, orientation, margins, header and footer.
+pub(crate) fn page_setup(shell: &mut Shell, ctx: &egui::Context) {
+    let Some(mut f) = shell.page_setup.take() else {
+        return;
+    };
+    let i18n = shell.i18n.clone();
+    let mut done = None;
+    let resp = egui::Modal::new(egui::Id::new("inkra-page-setup")).show(ctx, |ui| {
+        ui.heading(i18n.tr("cmd-file-pageSetup"));
+        ui.add_space(4.0);
+        egui::Grid::new("page-setup")
+            .num_columns(2)
+            .spacing([12.0, 6.0])
+            .show(ui, |ui| {
+                ui.label(i18n.tr("page-paper"));
+                egui::ComboBox::from_id_salt("paper")
+                    .selected_text(f.paper.clone())
+                    .show_ui(ui, |ui| {
+                        for p in ["A4", "A3", "A5", "B5", "Letter", "Legal", "Custom"] {
+                            ui.selectable_value(&mut f.paper, p.to_owned(), p);
+                        }
+                    });
+                ui.end_row();
+                if f.paper == "Custom" {
+                    ui.label(i18n.tr("page-size-mm"));
+                    ui.horizontal(|ui| {
+                        ui.add(egui::DragValue::new(&mut f.width).range(50.0..=1000.0));
+                        ui.label("×");
+                        ui.add(egui::DragValue::new(&mut f.height).range(50.0..=1000.0));
+                    });
+                    ui.end_row();
+                }
+                ui.label(i18n.tr("page-orientation"));
+                ui.horizontal(|ui| {
+                    ui.radio_value(&mut f.landscape, false, i18n.tr("page-portrait"));
+                    ui.radio_value(&mut f.landscape, true, i18n.tr("page-landscape"));
+                });
+                ui.end_row();
+                for (k, key) in [
+                    "page-margin-top",
+                    "page-margin-right",
+                    "page-margin-bottom",
+                    "page-margin-left",
+                ]
+                .iter()
+                .enumerate()
+                {
+                    ui.label(i18n.tr(key));
+                    ui.add(
+                        egui::DragValue::new(&mut f.margins[k])
+                            .range(0.0..=100.0)
+                            .suffix(" mm"),
+                    );
+                    ui.end_row();
+                }
+                ui.label(i18n.tr("page-header"));
+                ui.text_edit_singleline(&mut f.header);
+                ui.end_row();
+                ui.label(i18n.tr("page-footer"));
+                ui.text_edit_singleline(&mut f.footer);
+                ui.end_row();
+                ui.label("");
+                ui.checkbox(&mut f.background, i18n.tr("page-background"));
+                ui.end_row();
+            });
+        ui.label(
+            egui::RichText::new(i18n.tr("page-template-help"))
+                .small()
+                .weak(),
+        );
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if ui.button(i18n.tr("dialog-ok")).clicked() {
+                done = Some(true);
+            }
+            if ui.button(i18n.tr("dialog-cancel")).clicked() {
+                done = Some(false);
+            }
+        });
+    });
+    if resp.should_close() && done.is_none() {
+        done = Some(false);
+    }
+    match done {
+        Some(true) => {
+            let set = [
+                ("export.pdf.paper", json!(f.paper)),
+                (
+                    "export.pdf.orientation",
+                    json!(if f.landscape { "landscape" } else { "portrait" }),
+                ),
+                ("export.pdf.customWidth", json!(f.width)),
+                ("export.pdf.customHeight", json!(f.height)),
+                ("export.pdf.marginTop", json!(f.margins[0])),
+                ("export.pdf.marginRight", json!(f.margins[1])),
+                ("export.pdf.marginBottom", json!(f.margins[2])),
+                ("export.pdf.marginLeft", json!(f.margins[3])),
+                ("export.pdf.header", json!(f.header)),
+                ("export.pdf.footer", json!(f.footer)),
+                ("export.pdf.background", json!(f.background)),
+            ];
+            for (k, v) in set {
+                shell.invoke(ctx, "app.setPreference", &json!({ "key": k, "value": v }));
+            }
+        }
+        Some(false) => {}
+        None => shell.page_setup = Some(f),
+    }
+}
+
+/// Asks whether a dropped document should be imported (EX-021).
+pub(crate) fn import_offer(shell: &mut Shell, ctx: &egui::Context) {
+    let Some(path) = shell.import_offer.clone() else {
+        return;
+    };
+    let i18n = shell.i18n.clone();
+    let mut done = None;
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let resp = egui::Modal::new(egui::Id::new("inkra-import-offer")).show(ctx, |ui| {
+        ui.label(i18n.tr_args("import-offer", &[("name", name.into())]));
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if ui.button(i18n.tr("cmd-file-import")).clicked() {
+                done = Some(true);
+            }
+            if ui.button(i18n.tr("dialog-cancel")).clicked() {
+                done = Some(false);
+            }
+        });
+    });
+    if resp.should_close() && done.is_none() {
+        done = Some(false);
+    }
+    if let Some(yes) = done {
+        shell.import_offer = None;
+        if yes {
+            shell.invoke(ctx, "file.import", &json!({ "path": path }));
+        }
+    }
+}

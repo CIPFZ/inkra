@@ -79,8 +79,25 @@ fn unimplemented_items_are_disabled_and_about_opens() {
 
     h.get_by_label("File").click();
     h.run();
-    let setup = h.get_by_label_contains("Page Setup");
-    assert!(setup.accesskit_node().is_disabled());
+    h.get_by_label_contains("Page Setup").click();
+    h.run();
+    h.get_by_label("Landscape").click();
+    h.run();
+    h.get_by_label("OK").click();
+    h.run();
+    assert_eq!(
+        h.state()
+            .engine
+            .state
+            .prefs
+            .string("export.pdf.orientation"),
+        "landscape"
+    );
+
+    h.get_by_label("Help").click();
+    h.run();
+    let updates = h.get_by_label_contains("Check for Updates");
+    assert!(updates.accesskit_node().is_disabled());
 }
 
 #[test]

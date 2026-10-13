@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **160**
+Registered commands: **168**
 
 
 ## App
@@ -63,12 +63,20 @@ Registered commands: **160**
 |---|---|---|---|---|---|---|---|
 | `file.clearRecent` | Clear Recent Files | 清除最近文件 |  |  | — | FS-002 | Forget the recent files list. |
 | `file.close` | Close | 关闭 | `Ctrl+W` | `⌘W` | — | FS-005 | Close the window (asks to save changes). |
+| `file.exportHtml` | HTML | HTML |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-001 | Export as HTML with the theme's styles (asks for the file unless `path` is given). |
+| `file.exportHtmlPlain` | HTML (without styles) | HTML（不含样式） |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-001 | Export as an HTML fragment without styles. |
+| `file.exportImage` | Image | 图片 |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-003 | Export as a PNG image (one long image, or one per page). |
+| `file.exportPandoc` | Export with Pandoc | 通过 Pandoc 导出 |  |  | `{"type":"object","required":["format"],"properties":{"format":{"enum":["docx","odt","rtf","epub","latex","mediawiki","rst","textile","opml","org"]},"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-004 | Export through Pandoc (docx, odt, rtf, epub, latex, mediawiki, rst, textile, opml, org). |
+| `file.exportPdf` | PDF | PDF |  |  | `{"type":"object","properties":{"path":{"type":"string"},"sameFolder":{"type":"boolean"}}}` | EX-002 | Export as PDF using the page setup. |
+| `file.import` | Import… | 导入… |  |  | `{"type":"object","properties":{"path":{"type":"string"}}}` | EX-020 | Import a document (docx, odt, rtf, epub, tex, rst, org, wiki, textile, opml, html) as Markdown next to it and open it. |
 | `file.keepLocal` | Keep Local Version | 保留本地版本 |  |  | — | FS-007 | Keep the local version after an external change. |
 | `file.new` | New | 新建 | `Ctrl+N` | `⌘N` | — | FS-001 | New blank document in a new window (FS-001). |
 | `file.newWindow` | New Window | 新建窗口 | `Ctrl+Shift+N` | `⇧⌘N` | — | FS-001 | New window (same as file.new). |
 | `file.open` | Open… | 打开… | `Ctrl+O` | `⌘O` | `{"type":"object","properties":{"path":{"type":"string"}}}` | FS-002 | Open a file (dialog without `path`). |
 | `file.openFolder` | Open Folder… | 打开文件夹… | `Ctrl+Shift+O` |  | — | FS-002 | Open a folder as the sidebar root. |
 | `file.openRecent` | Open Recent File | 打开最近文件 |  |  | `{"type":"object","required":["path"],"properties":{"path":{"type":"string"}}}` | FS-002 | Open a recently used file. |
+| `file.pageSetup` | Page Setup… | 页面设置… |  |  | — | EX-002 | Paper size, orientation, margins, header and footer for PDF and printing. |
+| `file.print` | Print… | 打印… |  |  | — | EX-002 | Print: export a PDF and hand it to the system's print dialog. |
 | `file.quickOpen` | Quick Open… | 快速打开… | `Ctrl+P` | `⌘P`, `⇧⌘O` | — | FS-030 | Fuzzy-find a file of the root folder or the recent files. |
 | `file.reload` | Reload from Disk | 从磁盘重新加载 |  |  | — | FS-007 | Reload the file from disk, discarding local changes. |
 | `file.revealInFolder` | Reveal in Folder | 在文件夹中显示 |  |  | — | FS-010 | Show the file in the system file manager. |
@@ -230,15 +238,7 @@ These appear greyed out in menus.
 - `app.preferences` — Preferences…
 - `edit.emojiSymbols` — Emoji & Symbols
 - `file.delete` — Delete
-- `file.exportHtml` — HTML
-- `file.exportHtmlPlain` — HTML (without styles)
-- `file.exportImage` — Image
-- `file.exportPandoc` — Export with Pandoc
-- `file.exportPdf` — PDF
-- `file.import` — Import…
 - `file.moveTo` — Move To…
-- `file.pageSetup` — Page Setup…
-- `file.print` — Print…
 - `file.properties` — Properties
 - `file.rename` — Rename…
 - `format.imageOps` — Image Operations…

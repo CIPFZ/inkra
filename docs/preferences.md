@@ -38,6 +38,30 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `editor.typewriterMode` | bool | `false` | PR-038 | Typewriter mode (remembered). |
 | `editor.rememberZoom` | bool | `true` | PR-039 | Remember the editor zoom (Ctrl+wheel, Ctrl+Shift+=/-). |
 | `editor.zoom` | number | `1.0` | PR-039 | Editor zoom factor, 0.5 to 3.0. |
+| `export.theme` | string | `""` | EX-005 | Theme used for exports (empty: the current theme). |
+| `export.openAfter` | bool | `true` | EX-002 | Open the exported file when done. |
+| `export.pdf.paper` | `A4` / `A3` / `A5` / `B5` / `Letter` / `Legal` / `Custom` | `"A4"` | EX-002 | Paper size for PDF export and printing. |
+| `export.pdf.customWidth` | number | `210` | EX-002 | Custom paper width in millimetres. |
+| `export.pdf.customHeight` | number | `297` | EX-002 | Custom paper height in millimetres. |
+| `export.pdf.orientation` | `portrait` / `landscape` | `"portrait"` | EX-002 | Page orientation. |
+| `export.pdf.marginTop` | number | `20` | EX-002 | Top margin in millimetres. |
+| `export.pdf.marginRight` | number | `18` | EX-002 | Right margin in millimetres. |
+| `export.pdf.marginBottom` | number | `20` | EX-002 | Bottom margin in millimetres. |
+| `export.pdf.marginLeft` | number | `18` | EX-002 | Left margin in millimetres. |
+| `export.pdf.header` | string | `""` | EX-002 | Page header template: `{{title}}`, `{{page}}`, `{{pages}}`, `{{date}}`. |
+| `export.pdf.footer` | string | `"{{page}} / {{pages}}"` | EX-002 | Page footer template. |
+| `export.pdf.background` | bool | `false` | EX-002 | Paint the theme's background on PDF pages (otherwise white pages and, for dark themes, the light default theme). |
+| `export.html.images` | `keep` / `absolute` / `embed` | `"keep"` | EX-001 | Image paths in HTML: as written, absolute file URLs, or embedded as base64. |
+| `export.html.math` | `svg` / `tex` | `"svg"` | EX-001 | Formulas in HTML: inline SVG, or TeX in `$$` for MathJax/KaTeX pages. |
+| `export.html.highlight` | bool | `true` | EX-001 | Syntax-highlight code blocks in HTML. |
+| `export.html.softBreakAsBr` | bool | `false` | MD-079 | Export soft line breaks as `<br>`. |
+| `export.html.head` | string | `""` | EX-001 | Extra HTML appended to `<head>` of exported HTML. |
+| `export.html.foot` | string | `""` | EX-001 | Extra HTML before `</body>` of exported HTML. |
+| `export.html.css` | string | `""` | EX-001 | Extra CSS for exported HTML. |
+| `export.image.scale` | number | `2` | EX-003 | Resolution multiplier for image export (1–3). |
+| `export.image.paged` | bool | `false` | EX-003 | Export one image per page instead of one long image. |
+| `export.pandocPath` | string | `""` | EX-004 | Pandoc executable (empty: search PATH). |
+| `export.pandocArgs` | string | `""` | EX-004 | Extra Pandoc arguments, e.g. `--reference-doc ref.docx`. |
 | `markdown.mermaidCli` | string | `""` | MD-100 | Path of the Mermaid CLI (`mmdc`) used for diagram types Inkra does not draw itself (empty: off). |
 | `markdown.diagrams` | bool | `true` | MD-064 | Render ```` ```mermaid ```` blocks as diagrams (off: plain code blocks). |
 | `editor.emojiCompletion` | bool | `true` | PR-036 | Typing `:` and two letters suggests emoji (ED-103). |

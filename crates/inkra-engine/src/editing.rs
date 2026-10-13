@@ -114,9 +114,11 @@ pub fn register(r: &mut CommandRegistry) {
                 "Copy the selection as Markdown (text/plain) and rendered HTML (text/html).",
             ),
             |cx, _| {
-                if let Some((text, html)) =
+                if let Some((text, _)) =
                     crate::editor::clipboard::copy_payload(&cx.app.editor.doc, cx.app.editor.sel)
                 {
+                    // EX-006: the same generator as HTML export.
+                    let html = crate::exporting::clipboard_html(cx.app, &text);
                     cx.effects.push(Effect::SetClipboard {
                         text,
                         html: Some(html),

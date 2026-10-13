@@ -670,8 +670,10 @@ impl EditorView {
                 painter.extend(caret_shapes);
             }
             if blinking {
+                // At least one frame away, so a phase change never asks for an
+                // immediate repaint.
                 let next = BLINK - (idle % BLINK);
-                ctx.request_repaint_after(Duration::from_secs_f64(next.max(0.01)));
+                ctx.request_repaint_after(Duration::from_secs_f64(next.max(0.05)));
             }
             ctx.output_mut(|o| {
                 o.ime = Some(egui::output::IMEOutput {
@@ -1227,8 +1229,10 @@ impl EditorView {
         let i = self.view.item_at_y(p.y);
         let top = self.view.top(i);
         let l = self.view.layout(i)?;
+        // Ordinary links are handled as text (Ctrl+click, PR-040).
         l.hits
             .iter()
+            .filter(|h| !matches!(h.action, HitAction::InlineLink(_)))
             .find(|h| h.rect.translate(vec2(0.0, top)).contains(p))
             .map(|h| h.action.clone())
     }
@@ -1277,7 +1281,7 @@ impl EditorView {
                         out.commands
                             .push(("paragraph.taskStatus".into(), json!({ "at": at })));
                     }
-                    HitAction::Link(url) => out
+                    HitAction::Link(url) | HitAction::InlineLink(url) => out
                         .commands
                         .push(("app.openUrl".into(), json!({ "url": url }))),
                     HitAction::Footnote(label) => {

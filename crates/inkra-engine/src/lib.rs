@@ -10,6 +10,7 @@ pub mod builtin;
 pub mod command;
 pub mod editing;
 pub mod editor;
+pub mod exporting;
 pub mod files;
 pub mod formatting;
 pub mod keymap;
@@ -145,6 +146,7 @@ pub fn builtin_registry() -> CommandRegistry {
     viewing::register(&mut r);
     tables::register(&mut r);
     sidebar::register(&mut r);
+    exporting::register(&mut r);
     r
 }
 
@@ -157,7 +159,7 @@ mod tests {
         let mut e = Engine::new(Preferences::new());
         assert!(e.is_enabled("app.quit"));
         assert!(
-            !e.is_enabled("file.exportPdf"),
+            !e.is_enabled("help.checkUpdates"),
             "unregistered commands are disabled"
         );
         assert_eq!(e.is_checked("view.toggleSidebar"), Some(false));

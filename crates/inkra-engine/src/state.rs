@@ -349,6 +349,22 @@ pub enum Effect {
     RenameInTree(std::path::PathBuf),
     /// The sidebar root changed: rebuild the tree, index and article list.
     RootChanged,
+    /// Ask where to export (EX-001 … EX-004), then run the format's command
+    /// with the chosen `path`.
+    ExportDialog {
+        /// Format.
+        format: crate::exporting::ExportFormat,
+        /// Suggested file name.
+        name: String,
+        /// Starting folder.
+        dir: Option<std::path::PathBuf>,
+    },
+    /// Run an export, print or import job in the background.
+    RunJob(Box<crate::exporting::ExportJob>),
+    /// Show the page setup dialog (EX-002).
+    ShowPageSetup,
+    /// Ask for a file to import (EX-020).
+    ImportDialog,
 }
 
 /// Context passed to every command.

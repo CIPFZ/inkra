@@ -14,5 +14,6 @@ workspace = true
 [dependencies]
 inkra-engine.workspace = true
 inkra-export.workspace = true
+inkra-markdown.workspace = true
 inkra-workspace.workspace = true
 anyhow.workspace = true

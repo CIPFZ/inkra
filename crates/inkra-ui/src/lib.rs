@@ -13,6 +13,7 @@ pub mod dialogs;
 pub mod editor;
 pub mod find_bar;
 pub mod images;
+mod jobs;
 pub mod keys;
 pub mod menubar;
 mod modals;
@@ -139,6 +140,9 @@ pub struct Shell {
     theme_names: Vec<String>,
     mmdc_conf: String,
     theme_names_at: f64,
+    jobs: jobs::Jobs,
+    page_setup: Option<modals::PageSetupForm>,
+    import_offer: Option<PathBuf>,
     #[cfg(target_os = "macos")]
     native_menu: Option<native_menu::NativeMenu>,
 }
@@ -188,6 +192,9 @@ impl Shell {
             last_time: 0.0,
             theme_names: Vec::new(),
             mmdc_conf: String::new(),
+            jobs: Default::default(),
+            page_setup: None,
+            import_offer: None,
             theme_names_at: f64::NEG_INFINITY,
             #[cfg(target_os = "macos")]
             native_menu: None,
@@ -544,6 +551,44 @@ impl Shell {
                     self.sidebar.sync_root(ctx, &self.engine, true);
                     self.sidebar.invalidate();
                 }
+                Effect::ExportDialog { format, name, dir } => {
+                    let window = self.engine.state.active();
+                    self.dialogs.open(
+                        ctx,
+                        dialogs::Purpose::Export { format, window },
+                        dir,
+                        Some(name),
+                    );
+                }
+                Effect::RunJob(job) => {
+                    let name = job
+                        .out
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    if !matches!(job.kind, inkra_engine::exporting::JobKind::Print(_)) {
+                        self.toast(
+                            ctx,
+                            self.i18n
+                                .tr_args("export-running", &[("name", name.into())]),
+                        );
+                    }
+                    self.jobs.spawn(ctx, *job);
+                }
+                Effect::ShowPageSetup => {
+                    self.page_setup =
+                        Some(modals::PageSetupForm::from_prefs(&self.engine.state.prefs));
+                }
+                Effect::ImportDialog => {
+                    let dir = self
+                        .engine
+                        .state
+                        .editor
+                        .path
+                        .as_ref()
+                        .and_then(|p| p.parent().map(Path::to_owned));
+                    self.dialogs.open(ctx, dialogs::Purpose::Import, dir, None);
+                }
                 Effect::WindowFlags => {
                     let v = &self.engine.state.view;
                     let vid = if self.engine.state.active() == self.root {
@@ -671,6 +716,9 @@ impl Shell {
                 "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "svg" | "tif" | "tiff"
             ) {
                 self.invoke(ctx, "format.insertImageFile", &json!({ "path": path }));
+            } else if inkra_export::pandoc::IMPORT_EXTS.contains(&ext.as_str()) {
+                // EX-021: dropped documents are imported after asking.
+                self.import_offer = Some(path);
             } else {
                 self.invoke(ctx, "edit.paste", &json!({ "files": [path] }));
             }
@@ -756,6 +804,15 @@ impl Shell {
                     }
                 }
                 (dialogs::Purpose::SaveAs { quit: true, .. }, None) => self.quitting = false,
+                (dialogs::Purpose::Export { format, window }, Some(path)) => {
+                    self.engine.state.activate(window);
+                    let mut p = format.params();
+                    p["path"] = json!(path);
+                    self.invoke(ctx, format.command(), &p);
+                }
+                (dialogs::Purpose::Import, Some(path)) => {
+                    self.invoke(ctx, "file.import", &json!({ "path": path }));
+                }
                 _ => {}
             }
         }
@@ -1024,8 +1081,46 @@ impl Shell {
     }
 
     /// Frame-level work shared by all windows.
+    /// Reports finished export, print and import jobs.
+    fn finish_jobs(&mut self, ctx: &egui::Context) {
+        use inkra_engine::exporting::JobResult;
+        for (job, result) in self.jobs.poll() {
+            match result {
+                Ok(JobResult::Exported(files)) => {
+                    let name = files
+                        .first()
+                        .and_then(|f| f.file_name())
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    self.toast(
+                        ctx,
+                        self.i18n.tr_args("export-done", &[("name", name.into())]),
+                    );
+                    if job.open_after
+                        && let Some(f) = files.first()
+                    {
+                        dialogs::open_external(&f.to_string_lossy());
+                    }
+                }
+                Ok(JobResult::Print(pdf)) => {
+                    if let Err(e) = jobs::print_pdf(&pdf) {
+                        self.toast(ctx, format!("✕ {e}"));
+                    }
+                }
+                Ok(JobResult::Imported(md)) => {
+                    self.invoke(ctx, "file.open", &json!({ "path": md }))
+                }
+                Err(e) => self.toast(
+                    ctx,
+                    self.i18n.tr_args("export-failed", &[("error", e.into())]),
+                ),
+            }
+        }
+    }
+
     fn frame_tasks(&mut self, ctx: &egui::Context) {
         self.sync_mermaid_cli();
+        self.finish_jobs(ctx);
         self.sidebar.poll(ctx, &self.engine);
         self.last_time = ctx.input(|i| i.time);
         self.refresh_theme_names(self.last_time);
@@ -1360,6 +1455,8 @@ impl Shell {
         modals::table_dialog(self, &ctx);
         modals::confirm_close(self, &ctx, id);
         modals::about_dialog(self, &ctx);
+        modals::page_setup(self, &ctx);
+        modals::import_offer(self, &ctx);
         modals::prefs_problem_dialog(self, &ctx);
         modals::toasts(self, &ctx);
     }

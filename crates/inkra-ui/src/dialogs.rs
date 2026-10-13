@@ -15,6 +15,15 @@ pub enum Purpose {
     OpenFolder,
     /// Choose the folder to move a file into (FS-022).
     MoveTo(PathBuf),
+    /// Where to export (EX-001 … EX-004).
+    Export {
+        /// Format.
+        format: inkra_engine::exporting::ExportFormat,
+        /// Window being exported.
+        window: u64,
+    },
+    /// A document to import (EX-020).
+    Import,
     /// Save as (FS-003); then close the window if `close_after`.
     SaveAs {
         /// Close after saving.
@@ -80,6 +89,20 @@ impl Dialogs {
                     .add_filter("All files", &["*"])
                     .pick_file(),
                 Purpose::OpenFolder | Purpose::MoveTo(_) => d.pick_folder(),
+                Purpose::Import => d
+                    .add_filter("Documents", inkra_export::pandoc::IMPORT_EXTS)
+                    .pick_file(),
+                Purpose::Export { format, .. } => {
+                    if let Some(n) = name {
+                        d = d.set_file_name(n);
+                    }
+                    let ext = format.ext().to_owned();
+                    let mut d = d.add_filter(ext.to_uppercase(), &[ext.as_str()]);
+                    if ext == "png" {
+                        d = d.add_filter("JPEG", &["jpg", "jpeg"]);
+                    }
+                    d.save_file()
+                }
                 Purpose::SaveAs { .. } => {
                     if let Some(n) = name {
                         d = d.set_file_name(n);
