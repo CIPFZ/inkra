@@ -10,6 +10,8 @@
 - UI-040：插入链接对话框（目前 `Ctrl+K` 直接插入并取剪贴板地址）。
 - NF-006：Wayland 实测；Flatpak 清单；Windows arm64 构建。
 - 性能：Windows（虚拟 GPU）冷启动 ~390 ms，高于 300 ms 预算；DX12 设备创建约占 330 ms，需在实体机上复测并评估延迟创建表面。
+- 内存：Windows 空文档工作集 211 MB / 专用 376 MB，主要来自 GPU 驱动；需在实体机上用 VMMap 拆分并评估 GL 后端、较小的帧延迟与字体图集；Linux 匿名内存 57 MB（其中系统 CJK 字体 19 MB 读入内存，`forbid(unsafe)` 下无法 mmap）。
+- deb 包未在 Debian/Ubuntu 上实际安装验证。
 
 ## 1.x（SPEC 13 P2 汇总）
 

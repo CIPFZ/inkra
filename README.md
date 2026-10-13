@@ -22,7 +22,20 @@ cargo run -p inkra-cli -- --help
 cargo xtask ci                     # fmt + clippy -D warnings + test + layering + 生成文档检查
 cargo xtask docs                   # 重新生成 docs/commands.md、preferences.md、keybindings.md
 cargo xtask bundle-macos --release # 生成 target/release/Inkra.app
+cargo xtask dist                   # 本平台安装包到 target/dist（Linux：tar.gz/deb/rpm/AppImage；Windows：zip/MSI；macOS：app/dmg）
 ```
+
+命令行（CM-002）：
+
+```sh
+inkra-cli convert doc.md doc.pdf          # 也支持 .html .png .jpg；装有 Pandoc 时 .docx .odt .epub .tex 等
+inkra-cli inspect doc.md --json           # 标题、链接、图片、字数
+inkra-cli lint doc.md                     # 断链、缺图、未闭合围栏、未定义脚注
+inkra-cli fmt doc.md --write              # 规范化表格、编号、空白
+inkra-cli run doc.md --cmd edit.selectAll --cmd format.bold --save out.md
+```
+
+打包工具（可选）：Linux `rpmbuild`、`appimagetool`；Windows WiX Toolset 3（`candle`/`light` 在 PATH 或 `WIX` 指向其目录）；macOS `hdiutil`。
 
 平台依赖：
 

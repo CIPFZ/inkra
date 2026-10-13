@@ -5,6 +5,27 @@ All notable changes to Inkra are documented here. The format follows
 
 ## [Unreleased]
 
+### M7 — Polish and 1.0
+- Preferences window with every setting of SPEC chapter 9, search, import /
+  export / reset, and a keymap editor (record, conflicts, reset);
+  `keybindings.json` overrides and removals.
+- File menu: properties (encoding, line endings, counts), rename, move, delete
+  to the recycle bin; read-only files say so and save elsewhere.
+- Formatting toolbar; visible whitespace in source mode; drag and drop of text
+  and of files from the sidebar.
+- Image operations: copy, copy address, reveal, open, reload, make local, zoom,
+  properties, delete; selection frame with a resize handle.
+- Remote images and an update check over HTTPS (system trust store).
+- Help documents (quick start, Markdown reference, themes) in Chinese and
+  English; welcome panel (off by default).
+- Reduced motion, save and export toasts, text column width / centering /
+  auto-hiding scrollbar, interface font size, first-line indent, code line
+  numbers and no-wrap code, preserved blank lines, image captions.
+- AccessKit node for the document (text and caret position).
+- `inkra-cli inspect`, `lint`, `fmt`, `run`, Pandoc formats in `convert`.
+- `cargo xtask dist`: tar.gz, deb, rpm, AppImage, zip, MSI, app/dmg with
+  Markdown file associations; smaller release binary.
+
 ### M6 — Export and import
 - HTML export with the theme's styles (only the rules in use) or as a plain
   fragment: heading anchors, `[TOC]`, footnotes, highlighted code, SVG formulas

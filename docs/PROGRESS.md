@@ -1,11 +1,12 @@
 # Inkra 开发进度
 
 更新时间：2026-10-13
-当前里程碑：M7 打磨与 1.0（M0～M6 已完成）
+当前里程碑：1.0 收尾（M0～M7 已完成，剩余项见 docs/ROADMAP.md）
 CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 测试机均通过；macOS 仅做交叉 `cargo clippy --target aarch64-apple-darwin`，未实机运行；无 GitHub 远程仓库，Actions 未实际运行）
 
 ## 已完成的需求编号
 - M0：AD-3（命令注册表）、CM-001（框架 + 3 个样例命令）、PR-001、PR-003、PR-018（键）、UI-001（菜单骨架，macOS muda 原生菜单）、UI-002、UI-010（默认快捷键表）、UI-050、NF-002（命令边界 catch_unwind）、NF-008、CM-004（`--version` / `--help` / `--measure-startup` / `--config` 等参数解析）
+- M7：第 9 章偏好全部项、UI-020 快捷键编辑、PR-002/PR-021、UI-030 AccessKit、UI-033、UI-041、FS-009/010/011、FS-024、FS-041、ED-017、ED-093、WM-004、WM-005、TH-007、PR-020 更新检查、CM-002 CLI、NF-006 安装包与文件关联、帮助文档
 - M6：EX-001～EX-006、EX-020、EX-021（HTML 两种、PDF、图片、Pandoc 导出/导入、页面设置、打印、复制为 HTML、自定义导出项）
 - M5：MD-008（数学块、自动编号、`\tag`/`\label`/`\eqref`）、MD-035（行内公式）、MD-004、MD-010、MD-013、MD-014、MD-039/040、MD-064、MD-068、MD-078、MD-100～MD-102（Mermaid flowchart/sequence/pie、mmdc 兜底、主题配色）、ED-018、ED-041、ED-102～ED-105、PR-031/032/035/036/041
 - M4：ED-080～ED-085（表格呈现、单元格编辑、工具条、命令、拖拽列宽与重排、源码对齐）、FS-020～FS-025（大纲、文章列表、文件树、当前文件定位、搜索入口、字数详情）、FS-030（快速打开）、FS-031（全局搜索）、PR-011（`current` 选项）、PR-014、PR-038、PR-039、PR-043、窗口状态记忆
@@ -50,8 +51,11 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 ### M6
 见 `docs/acceptance/m6.md`：134 页 PDF 0.32 s；书签、可搜索文字、内外链接、表头重复；docx 往返。
 
+### M7
+见 `docs/acceptance/m7.md` 与 `docs/acceptance/behavior-checklist.md`（185 条，通过率 95.7%）。
+
 ## 进行中
-- [ ] M7：偏好设置窗口（全部 P1 偏好项）、自定义快捷键 UI、配置导入导出、文件菜单剩余项（属性、重命名、移动、删除当前文件）、帮助菜单文档、CLI（inspect/lint/fmt/run）、AccessKit、安装包与文件关联、更新检查、行为清单 ≥ 95%
+- [ ] ROADMAP 中的 ⚠ 项与预算问题（Windows 内存与冷启动）
 
 ## 已知问题
 - 增量解析器修复：表格从段落中拆分出来的块不能作为重新同步点（proptest 发现，已加回归测试）。
@@ -93,4 +97,4 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 - 语料：`cargo xtask corpus` 拉取固定提交的 7 个仓库到 `target/corpus`（不入库）。
 
 ## 下次会话从这里继续
-- M7：先做偏好设置窗口与快捷键 UI（PR-0xx），再补文件菜单剩余命令与 CLI，最后生成 behavior-checklist 并逐项验收。
+- 在实体 Windows 机器上复测冷启动与内存；按 ROADMAP 逐项处理 ⚠ 项。
