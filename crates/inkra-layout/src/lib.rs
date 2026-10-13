@@ -18,7 +18,7 @@ pub mod style;
 pub mod view;
 
 pub use block::{BlockLayout, Deco, Hit, HitAction, Overlay};
-pub use run::{InlineObject, MathScene, Run, RunSpec, Seg, SourceMap};
+pub use run::{InlineObject, MathScene, ObjectKind, Run, RunSpec, Seg, SourceMap};
 pub use style::Style;
 pub use view::{Ctx, Item, Mode, ViewLayout};
 

@@ -46,8 +46,22 @@ impl std::hash::Hash for MathScene {
     }
 }
 
-/// An object (inline math) drawn in space reserved inside a run: the reserved
-/// width ends at the placeholder character at byte `at`.
+/// What an inline object shows.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ObjectKind {
+    /// A formula.
+    Math(MathScene),
+    /// An image of a given size (bits of `[w, h]`), bottom on the baseline.
+    Image {
+        /// Source as written.
+        src: String,
+        /// Size in points as bits.
+        size: [u32; 2],
+    },
+}
+
+/// An object (inline math, inline image) drawn in space reserved inside a run:
+/// the reserved width ends at the placeholder character at byte `at`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InlineObject {
     /// Byte offset (in the run text) of the placeholder after the reserved space.
@@ -55,7 +69,7 @@ pub struct InlineObject {
     /// Reserved width in points (as bits for hashing).
     pub width_bits: u32,
     /// What to draw.
-    pub math: MathScene,
+    pub kind: ObjectKind,
 }
 
 /// Mapping between a run's text and the source; segments are in text order.

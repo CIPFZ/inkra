@@ -549,6 +549,21 @@ impl ViewLayout {
             if matches!(b.kind, inkra_markdown::BlockKind::MathBlock { .. }) {
                 self.math_numbers.get(&item.src.start).hash(&mut h);
             }
+            // Images inside HTML blocks change the layout once loaded.
+            if matches!(b.kind, inkra_markdown::BlockKind::HtmlBlock { .. }) {
+                let src = cx.doc.text().slice(item.src.clone());
+                let mut rest: &str = &src;
+                while let Some(i) = rest.find("<img") {
+                    rest = &rest[i + 4..];
+                    let end = rest.find('>').unwrap_or(rest.len());
+                    if let Some(s) = inkra_html::render::tag_attr(&rest[..end], "src") {
+                        cx.images
+                            .size(&s)
+                            .map(|v| (v[0].to_bits(), v[1].to_bits()))
+                            .hash(&mut h);
+                    }
+                }
+            }
             // References can appear in any inline formula; footnote numbers and
             // the headings of `[TOC]` in any item.
             if !self.math_refs.is_empty() {

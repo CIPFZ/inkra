@@ -536,6 +536,29 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                     out.caret_range = Some(0..item.src.len());
                 }
                 BlockKind::HtmlBlock { .. }
+                    if !active
+                        && !inkra_html::render::needs_source(&text.slice(item.src.clone())) =>
+                {
+                    // MD-014: the renderable HTML subset.
+                    let blocks = inkra_html::render::flatten(&text.slice(item.src.clone()));
+                    let h = html_blocks(&blocks, cx, fmt, x, y + 0.2 * em, w, fonts, &mut out);
+                    let mut m = SourceMap::default();
+                    m.atomic(0..0, item.src.len()..item.src.len());
+                    out.runs.push(RunSpec {
+                        job: empty_job(&fmt, w),
+                        pos: vec2(x + w - 1.0, y),
+                        map: m,
+                    });
+                    // A closing tag alone (`</details>`) takes almost no room.
+                    content_h = if blocks.is_empty() {
+                        0.5 * em
+                    } else {
+                        h.max(fmt.line_height) + 0.4 * em
+                    };
+                    first_row_h = fmt.line_height.min(content_h);
+                    out.caret_range = Some(0..item.src.len());
+                }
+                BlockKind::HtmlBlock { .. }
                 | BlockKind::FrontMatter { .. }
                 | BlockKind::MathBlock { .. } => {
                     // Shown as their source in a quiet box (HTML rendering is MD-014,
@@ -800,6 +823,234 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
     out
 }
 
+/// Text format of an HTML span.
+fn span_fmt(sp: &inkra_html::render::Span, base: Fmt, style: &Style) -> Fmt {
+    let mut f = base;
+    f.bold |= sp.bold;
+    f.italic |= sp.italic;
+    f.underline |= sp.underline;
+    f.strike |= sp.strike;
+    if sp.code || sp.kbd {
+        f.mono = true;
+        f.size = (base.size * 0.88).round();
+        f.bg = style.code_bg;
+    }
+    if sp.mark {
+        f.bg = style.highlight_bg;
+    }
+    if sp.sup || sp.sub {
+        f.size = (base.size * 0.75).round();
+        f.valign = if sp.sup {
+            epaint::emath::Align::TOP
+        } else {
+            epaint::emath::Align::BOTTOM
+        };
+    }
+    if let Some(s) = sp.size {
+        f.size = (base.size * s).round();
+    }
+    if let Some([r, g, b]) = sp.color {
+        f.color = Color32::from_rgb(r, g, b);
+    }
+    if sp.link.is_some() {
+        f.color = style.accent;
+        f.underline = true;
+    }
+    f
+}
+
+/// Lays out flattened HTML blocks from `y`; returns the height used.
+#[allow(clippy::too_many_arguments)]
+fn html_blocks(
+    blocks: &[inkra_html::render::HBlock],
+    cx: &LiveCx<'_>,
+    fmt: Fmt,
+    x: f32,
+    y: f32,
+    w: f32,
+    fonts: &mut FontsView<'_>,
+    out: &mut BlockLayout,
+) -> f32 {
+    use inkra_html::render::{Align as HAlign, HBlock};
+    let style = cx.style;
+    let em = style.size;
+    let text = cx.doc.text();
+    let mut cy = y;
+    let spans_into =
+        |bl: &mut Builder<'_>, spans: &[inkra_html::render::Span], base: Fmt, max_w: f32| {
+            for sp in spans {
+                let f = span_fmt(sp, base, style);
+                if let Some((src, ww, hh)) = &sp.image {
+                    let natural = cx.images.size(src);
+                    let (iw, ih) = match (ww, hh, natural) {
+                        (Some(a), Some(b), _) => (*a, *b),
+                        (Some(a), None, Some(n)) => (*a, a * n[1] / n[0].max(1.0)),
+                        (None, Some(b), Some(n)) => (b * n[0] / n[1].max(1.0), *b),
+                        (Some(a), None, None) => (*a, *a * 0.56),
+                        (None, Some(b), None) => (*b * 1.6, *b),
+                        (None, None, Some(n)) => (n[0], n[1]),
+                        (None, None, None) => (96.0, 20.0),
+                    };
+                    let s = if iw > max_w { max_w / iw } else { 1.0 };
+                    bl.push_image(src, iw * s, ih * s, &f);
+                    continue;
+                }
+                let start = bl.job.text.len();
+                bl.push(&sp.text, &f, None, true);
+                if let Some(href) = &sp.link {
+                    let end = bl.job.text.len();
+                    bl.map
+                        .hits
+                        .push((start..end, HitAction::Link(href.clone())));
+                }
+            }
+        };
+    for b in blocks {
+        match b {
+            HBlock::Para {
+                align,
+                spans,
+                heading,
+                marker,
+                indent,
+            } => {
+                let ix = f32::from(*indent) * 1.5 * em;
+                let mut f = fmt;
+                if let Some(l) = heading {
+                    let hs = style.headings[usize::from((*l).clamp(1, 6)) - 1];
+                    f.size = (em * hs.size).round();
+                    f.bold = true;
+                    f.kind = style.heading_font;
+                    f.line_height = (f.size * 1.3).round();
+                }
+                let pw = (w - ix).max(40.0);
+                let mut bl = Builder::new(text, 0, 0, None, style, pw);
+                if let Some(m) = marker {
+                    bl.push(&format!("{m} "), &f, None, true);
+                }
+                spans_into(&mut bl, spans, f, pw);
+                let mut job = bl.job;
+                let px = match align {
+                    HAlign::Left => x + ix,
+                    HAlign::Center => {
+                        job.halign = epaint::emath::Align::Center;
+                        x + ix + pw / 2.0
+                    }
+                    HAlign::Right => {
+                        job.halign = epaint::emath::Align::RIGHT;
+                        x + ix + pw
+                    }
+                };
+                let (h, _) = galley_height(fonts, &job);
+                out.runs.push(RunSpec {
+                    job,
+                    pos: vec2(px, cy),
+                    map: bl.map,
+                });
+                cy += h + 0.4 * em;
+            }
+            HBlock::Pre(t) => {
+                let mut f = fmt;
+                f.mono = true;
+                f.size = (em * 0.88).round();
+                let mut bl = Builder::new(text, 0, 0, None, style, w - 2.0 * style.code_padding);
+                bl.push(t, &f, None, true);
+                let (h, _) = galley_height(fonts, &bl.job);
+                let r = Rect::from_min_size(pos2(x, cy), vec2(w, h + 2.0 * style.code_padding));
+                out.decos.push(Deco::Rect {
+                    rect: r,
+                    fill: style.code_bg,
+                    stroke: Stroke::new(1.0, style.code_border),
+                    radius: style.code_radius,
+                });
+                out.runs.push(RunSpec {
+                    job: bl.job,
+                    pos: vec2(x + style.code_padding, cy + style.code_padding),
+                    map: bl.map,
+                });
+                cy += r.height() + 0.4 * em;
+            }
+            HBlock::Rule => {
+                out.decos.push(Deco::Line {
+                    a: pos2(x, cy + 0.5 * em),
+                    b: pos2(x + w, cy + 0.5 * em),
+                    stroke: Stroke::new(2.0, style.hr),
+                });
+                cy += em;
+            }
+            HBlock::Details {
+                summary,
+                open,
+                body,
+            } => {
+                let mut f = fmt;
+                f.bold = true;
+                let mut bl = Builder::new(text, 0, 0, None, style, w);
+                bl.push(if *open { "▼ " } else { "▶ " }, &f, None, true);
+                spans_into(&mut bl, summary, f, w);
+                let (h, _) = galley_height(fonts, &bl.job);
+                out.runs.push(RunSpec {
+                    job: bl.job,
+                    pos: vec2(x, cy),
+                    map: bl.map,
+                });
+                cy += h + 0.3 * em;
+                if *open {
+                    cy += html_blocks(body, cx, fmt, x + 1.2 * em, cy, w - 1.2 * em, fonts, out);
+                }
+            }
+            HBlock::Table(rows) => {
+                for (ri, row) in rows.iter().enumerate() {
+                    let mut bl = Builder::new(text, 0, 0, None, style, w);
+                    for (ci, cell) in row.iter().enumerate() {
+                        if ci > 0 {
+                            let mut sep = fmt;
+                            sep.color = style.table_border;
+                            bl.push("  │  ", &sep, None, true);
+                        }
+                        let mut f = fmt;
+                        f.bold |= ri == 0;
+                        spans_into(&mut bl, cell, f, w);
+                    }
+                    let (h, _) = galley_height(fonts, &bl.job);
+                    out.runs.push(RunSpec {
+                        job: bl.job,
+                        pos: vec2(x, cy),
+                        map: bl.map,
+                    });
+                    cy += h + 0.2 * em;
+                }
+                cy += 0.2 * em;
+            }
+            HBlock::Media { kind, src } => {
+                let r = Rect::from_min_size(pos2(x, cy), vec2(w.min(420.0), 2.6 * em));
+                out.decos.push(Deco::Rect {
+                    rect: r,
+                    fill: style.code_bg,
+                    stroke: Stroke::new(1.0, style.code_border),
+                    radius: 6.0,
+                });
+                let mut f = fmt;
+                f.color = style.fg_muted;
+                let mut bl = Builder::new(text, 0, 0, None, style, r.width() - 24.0);
+                bl.push(&format!("▶  {kind}  {src}"), &f, None, true);
+                if !src.is_empty() {
+                    bl.map
+                        .hits
+                        .push((0..bl.job.text.len(), HitAction::Link(src.clone())));
+                }
+                out.runs.push(RunSpec {
+                    job: bl.job,
+                    pos: vec2(x + 12.0, cy + 0.8 * em),
+                    map: bl.map,
+                });
+                cy += r.height() + 0.4 * em;
+            }
+        }
+    }
+    cy - y
+}
+
 /// Diagram colors from the theme (MD-102).
 fn diagram_palette(style: &Style) -> inkra_diagram::Palette {
     let c = |c: Color32| [c.r(), c.g(), c.b(), 255];
@@ -907,6 +1158,19 @@ fn diagram(
             (shown, Some(e.to_string()))
         }
     }
+}
+
+/// Height of the galley row containing char `ci`.
+fn gl_row_h(g: &epaint::Galley, ci: usize) -> f32 {
+    let mut k = 0usize;
+    for r in &g.rows {
+        let n = r.row.glyphs.len() + usize::from(r.ends_with_newline);
+        if ci < k + n {
+            return r.row.size.y;
+        }
+        k += n;
+    }
+    0.0
 }
 
 /// The TeX source between `$$` delimiters.
@@ -1021,16 +1285,29 @@ fn place_objects(out: &mut BlockLayout, fonts: &mut FontsView<'_>) {
             }
             let Some((rp, gp)) = found else { continue };
             let w = f32::from_bits(obj.width_bits);
-            let sc = &obj.math.scene;
             let baseline = run.pos.y + rp.y + gp.y;
             let left = run.pos.x + rp.x + gp.x - w;
-            decos.push(Deco::Math {
-                rect: Rect::from_min_size(
-                    pos2(left, baseline - sc.baseline),
-                    vec2(sc.width, sc.height),
-                ),
-                math: obj.math.clone(),
-            });
+            match &obj.kind {
+                crate::run::ObjectKind::Math(m) => {
+                    let sc = &m.scene;
+                    decos.push(Deco::Math {
+                        rect: Rect::from_min_size(
+                            pos2(left, baseline - sc.baseline),
+                            vec2(sc.width, sc.height),
+                        ),
+                        math: m.clone(),
+                    });
+                }
+                crate::run::ObjectKind::Image { src, size } => {
+                    // Bottom-aligned in its row (the row grew to fit it).
+                    let (iw, ih) = (f32::from_bits(size[0]), f32::from_bits(size[1]));
+                    let bottom = (run.pos.y + rp.y + gl_row_h(&g, ci)).max(baseline);
+                    decos.push(Deco::Image {
+                        rect: Rect::from_min_size(pos2(left, bottom - ih - 1.0), vec2(iw, ih)),
+                        src: src.clone(),
+                    });
+                }
+            }
         }
     }
     out.decos.extend(decos);

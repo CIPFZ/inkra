@@ -11,7 +11,7 @@ use epaint::{Color32, Stroke};
 use inkra_markdown::ast::{Inline, InlineKind, LinkSyntax};
 use inkra_text::Text;
 
-use crate::run::{InlineObject, MathScene, SourceMap};
+use crate::run::{InlineObject, MathScene, ObjectKind, SourceMap};
 
 /// Formula size relative to the surrounding text (STIX Two Math has a smaller
 /// x-height than the body faces).
@@ -235,6 +235,27 @@ impl<'a> Builder<'a> {
     /// two invisible word joiners, the second carrying the object's width as
     /// letter spacing and a line height tall enough for it.
     pub fn push_object(&mut self, math: MathScene, fmt: &Fmt, src: Range<usize>) {
+        let (w, h) = (math.scene.width, math.scene.height);
+        self.push_reserved(w, h, ObjectKind::Math(math), fmt, Some(src));
+    }
+
+    /// Reserves `w × h` for an image whose bottom sits on the baseline.
+    pub fn push_image(&mut self, src_name: &str, w: f32, h: f32, fmt: &Fmt) {
+        let kind = ObjectKind::Image {
+            src: src_name.to_owned(),
+            size: [w.to_bits(), h.to_bits()],
+        };
+        self.push_reserved(w, h, kind, fmt, None);
+    }
+
+    fn push_reserved(
+        &mut self,
+        width: f32,
+        height: f32,
+        kind: ObjectKind,
+        fmt: &Fmt,
+        src: Option<Range<usize>>,
+    ) {
         const WJ: &str = "\u{2060}";
         let start = self.job.text.len();
         let f0 = fmt.text_format();
@@ -246,8 +267,8 @@ impl<'a> Builder<'a> {
             format: f0,
         });
         let mut f1 = fmt.text_format();
-        f1.extra_letter_spacing = math.scene.width;
-        f1.line_height = Some(fmt.line_height.max(math.scene.height + 2.0));
+        f1.extra_letter_spacing = width;
+        f1.line_height = Some(fmt.line_height.max(height + 2.0));
         self.job.text.push_str(WJ);
         let end = self.job.text.len();
         self.job.sections.push(LayoutSection {
@@ -255,12 +276,14 @@ impl<'a> Builder<'a> {
             byte_range: ByteIndex(mid)..ByteIndex(end),
             format: f1,
         });
-        let rel = src.start.saturating_sub(self.base)..src.end.saturating_sub(self.base);
-        self.map.atomic(start..end, rel);
+        if let Some(src) = src {
+            let rel = src.start.saturating_sub(self.base)..src.end.saturating_sub(self.base);
+            self.map.atomic(start..end, rel);
+        }
         self.map.objects.push(InlineObject {
             at: mid,
-            width_bits: math.scene.width.to_bits(),
-            math,
+            width_bits: width.to_bits(),
+            kind,
         });
     }
 
@@ -303,10 +326,111 @@ impl<'a> Builder<'a> {
         }
     }
 
-    /// Appends inline nodes.
+    /// Appends inline nodes. Inline HTML formatting tags (MD-040) style the
+    /// nodes between them; the tags show as muted source only when the caret
+    /// is on them.
     pub fn inlines(&mut self, list: &[Inline], fmt: &Fmt) {
+        let mut stack: Vec<(String, Fmt)> = Vec::new();
+        let mut cur = *fmt;
         for i in list {
-            self.inline(i, fmt);
+            if matches!(i.kind, InlineKind::Html) {
+                let span = self.abs_range(&i.span);
+                let src = self.text.slice(span.clone()).into_owned();
+                if src.starts_with("<!--") {
+                    // Comments are faint (MD-040).
+                    let mut f = cur;
+                    f.color = self.style.mark_fg;
+                    self.push_src(span, &f);
+                    continue;
+                }
+                if let Some((name, closing)) = inkra_html::render::inline_tag(&src) {
+                    let active = self.active(&i.span);
+                    let styled = matches!(
+                        name.as_str(),
+                        "b" | "strong"
+                            | "i"
+                            | "em"
+                            | "u"
+                            | "ins"
+                            | "s"
+                            | "del"
+                            | "strike"
+                            | "kbd"
+                            | "code"
+                            | "mark"
+                            | "sup"
+                            | "sub"
+                            | "span"
+                            | "font"
+                            | "small"
+                            | "big"
+                    );
+                    if name == "img" && !closing {
+                        if active {
+                            self.push_marker(span, &cur);
+                        } else {
+                            let s = inkra_html::render::tag_attr(&src, "src").unwrap_or_default();
+                            let px = |k: &str| {
+                                inkra_html::render::tag_attr(&src, k)
+                                    .and_then(|v| v.trim_end_matches("px").parse::<f32>().ok())
+                            };
+                            let (iw, ih) = match (px("width"), px("height")) {
+                                (Some(a), Some(b)) => (a, b),
+                                (Some(a), None) => (a, a * 0.6),
+                                (None, Some(b)) => (b * 1.6, b),
+                                _ => (cur.line_height * 1.6, cur.line_height),
+                            };
+                            let start = self.job.text.len();
+                            self.push_image(&s, iw, ih, &cur);
+                            let end = self.job.text.len();
+                            let rel = span.start.saturating_sub(self.base)
+                                ..span.end.saturating_sub(self.base);
+                            self.map.atomic(start..end, rel);
+                        }
+                        continue;
+                    }
+                    if matches!(name.as_str(), "video" | "audio" | "iframe") {
+                        if active {
+                            self.push_marker(span, &cur);
+                        } else if !closing {
+                            let s = inkra_html::render::tag_attr(&src, "src").unwrap_or_default();
+                            let mut f = cur;
+                            f.bg = self.style.code_bg;
+                            f.color = self.style.fg_muted;
+                            self.push(&format!(" ▶ {name} {s} "), &f, Some(span), true);
+                        } else {
+                            self.push("", &cur, Some(span.start..span.start), true);
+                        }
+                        continue;
+                    }
+                    if name == "br" {
+                        if active {
+                            self.push_marker(span.clone(), &cur);
+                        }
+                        self.push("\n", &cur, Some(span.end..span.end), true);
+                        continue;
+                    }
+                    if styled {
+                        if active {
+                            self.push_marker(span, &cur);
+                        } else {
+                            // Hidden, but the caret can still stop before it.
+                            self.push("", &cur, Some(span.start..span.start), true);
+                        }
+                        if closing {
+                            if let Some(k) = stack.iter().rposition(|(n, _)| *n == name) {
+                                cur = stack[k].1;
+                                stack.truncate(k);
+                            }
+                        } else {
+                            stack.push((name.clone(), cur));
+                            cur = html_fmt(&name, &src, cur, self.style);
+                        }
+                        continue;
+                    }
+                }
+            }
+            self.inline(i, &cur);
         }
     }
 
@@ -478,6 +602,47 @@ impl<'a> Builder<'a> {
             }
         }
     }
+}
+
+/// The format inside an inline HTML tag (MD-040).
+fn html_fmt(name: &str, src: &str, base: Fmt, style: &Style) -> Fmt {
+    let mut f = base;
+    match name {
+        "b" | "strong" => f.bold = true,
+        "i" | "em" => f.italic = true,
+        "u" | "ins" => f.underline = true,
+        "s" | "del" | "strike" => f.strike = true,
+        "kbd" | "code" => {
+            f.mono = true;
+            f.size = (base.size * 0.88).round();
+            f.bg = style.code_bg;
+        }
+        "mark" => f.bg = style.highlight_bg,
+        "sup" | "sub" => {
+            f.size = (base.size * 0.75).round();
+            f.valign = if name == "sup" {
+                epaint::emath::Align::TOP
+            } else {
+                epaint::emath::Align::BOTTOM
+            };
+        }
+        "small" => f.size = (base.size * 0.85).round(),
+        "big" => f.size = (base.size * 1.2).round(),
+        _ => {}
+    }
+    let color = inkra_html::render::tag_attr(src, "color").or_else(|| {
+        inkra_html::render::tag_attr(src, "style").and_then(|s| {
+            s.split(';').find_map(|d| {
+                d.split_once(':')
+                    .filter(|(k, _)| k.trim() == "color")
+                    .map(|(_, v)| v.trim().to_owned())
+            })
+        })
+    });
+    if let Some([r, g, b]) = color.as_deref().and_then(inkra_html::render::parse_color) {
+        f.color = Color32::from_rgb(r, g, b);
+    }
+    f
 }
 
 /// Plain text of inline nodes (image alt text).
