@@ -47,8 +47,9 @@ pub fn dist() -> Result<Vec<PathBuf>, String> {
     build.args(["build", "--release", "-p", "inkra", "-p", "inkra-cli"]);
     run("build", build)?;
     let root = root();
-    let release = root.join("target/release");
-    let out = root.join("target/dist");
+    let target = target_dir();
+    let release = target.join("release");
+    let out = target.join("dist");
     let _ = std::fs::remove_dir_all(&out);
     std::fs::create_dir_all(&out).map_err(io)?;
     if cfg!(windows) {
@@ -58,6 +59,11 @@ pub fn dist() -> Result<Vec<PathBuf>, String> {
     } else {
         linux(&root, &release, &out)
     }
+}
+
+/// The cargo target folder (`CARGO_TARGET_DIR` or `target/`).
+fn target_dir() -> PathBuf {
+    std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root().join("target"), PathBuf::from)
 }
 
 fn arch() -> &'static str {
@@ -155,7 +161,7 @@ fn deb(staging: &Path, out: &Path) -> Result<PathBuf, String> {
     let data = work.join("data");
     let control = work.join("control");
     std::fs::create_dir_all(&control).map_err(io)?;
-    linux_tree(&root(), &root().join("target/release"), &data.join("usr"))?;
+    linux_tree(&root(), &target_dir().join("release"), &data.join("usr"))?;
     let size_kb = dir_size(&data) / 1024;
     let arch = if cfg!(target_arch = "aarch64") {
         "arm64"
@@ -222,7 +228,7 @@ fn set_exec(_: &Path) -> Result<(), String> {
 fn rpm(staging: &Path, out: &Path) -> Result<PathBuf, String> {
     let top = staging.join("rpm");
     let tree = staging.join("rpm-tree");
-    linux_tree(&root(), &root().join("target/release"), &tree.join("usr"))?;
+    linux_tree(&root(), &target_dir().join("release"), &tree.join("usr"))?;
     for d in ["BUILD", "RPMS", "SOURCES", "SPECS", "SRPMS"] {
         std::fs::create_dir_all(top.join(d)).map_err(io)?;
     }
@@ -253,7 +259,7 @@ fn rpm(staging: &Path, out: &Path) -> Result<PathBuf, String> {
 
 fn appimage(staging: &Path, out: &Path) -> Result<PathBuf, String> {
     let dir = staging.join("Inkra.AppDir");
-    linux_tree(&root(), &root().join("target/release"), &dir.join("usr"))?;
+    linux_tree(&root(), &target_dir().join("release"), &dir.join("usr"))?;
     copy(
         &root().join("apps/inkra/linux/io.inkra.Inkra.desktop"),
         &dir.join("io.inkra.Inkra.desktop"),
@@ -272,7 +278,7 @@ fn appimage(staging: &Path, out: &Path) -> Result<PathBuf, String> {
 }
 
 fn linux(root: &Path, release: &Path, out: &Path) -> Result<Vec<PathBuf>, String> {
-    let staging = root.join("target/dist-staging");
+    let staging = target_dir().join("dist-staging");
     let _ = std::fs::remove_dir_all(&staging);
     let name = format!("inkra-{VERSION}-linux-{}", arch());
     linux_tree(root, release, &staging.join(&name))?;
@@ -371,7 +377,7 @@ fn wxs(release: &Path, root: &Path) -> String {
 }
 
 fn windows(root: &Path, release: &Path, out: &Path) -> Result<Vec<PathBuf>, String> {
-    let staging = root.join("target/dist-staging");
+    let staging = target_dir().join("dist-staging");
     let _ = std::fs::remove_dir_all(&staging);
     let name = format!("inkra-{VERSION}-windows-x64");
     let dir = staging.join(&name);
