@@ -269,6 +269,13 @@ pub const PREFS: &[PrefSpec] = &[
         doc: "Editor zoom factor, 0.5 to 3.0.",
     },
     PrefSpec {
+        key: "markdown.mermaidCli",
+        default: r#""""#,
+        kind: PrefKind::String,
+        req: "MD-100",
+        doc: "Path of the Mermaid CLI (`mmdc`) used for diagram types Inkra does not draw itself (empty: off).",
+    },
+    PrefSpec {
         key: "markdown.diagrams",
         default: "true",
         kind: PrefKind::Bool,

@@ -549,6 +549,25 @@ impl ViewLayout {
             if matches!(b.kind, inkra_markdown::BlockKind::MathBlock { .. }) {
                 self.math_numbers.get(&item.src.start).hash(&mut h);
             }
+            // Diagrams rendered by `mmdc` appear when the job and the image load finish.
+            if inkra_diagram::external::enabled()
+                && matches!(b.kind, inkra_markdown::BlockKind::CodeBlock { .. })
+            {
+                inkra_diagram::external::generation().hash(&mut h);
+                let src = cx.doc.text().slice(item.src.clone());
+                if src
+                    .trim_start_matches(['`', '~'])
+                    .trim_start()
+                    .starts_with("mermaid")
+                {
+                    for p in inkra_diagram::external::ready_paths() {
+                        cx.images
+                            .size(&p.to_string_lossy())
+                            .map(|v| (v[0].to_bits(), v[1].to_bits()))
+                            .hash(&mut h);
+                    }
+                }
+            }
             // Images inside HTML blocks change the layout once loaded.
             if matches!(b.kind, inkra_markdown::BlockKind::HtmlBlock { .. }) {
                 let src = cx.doc.text().slice(item.src.clone());

@@ -82,6 +82,12 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         "rasterizing formulas and diagrams (also used by resvg); math/diagram examples only",
     ),
     (
+        "resvg",
+        Scope::Only(&["inkra-ui", "inkra-export"]),
+        "Apache-2.0 OR MIT",
+        "SVG images and mmdc output (SPEC 2.1, ED-090)",
+    ),
+    (
         "spellbook",
         Scope::Only(&["inkra-text"]),
         "MPL-2.0",

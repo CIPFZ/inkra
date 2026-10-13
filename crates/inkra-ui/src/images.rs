@@ -21,8 +21,8 @@ enum Entry {
 pub struct Images {
     base: Option<PathBuf>,
     entries: HashMap<String, Entry>,
-    tx: Sender<(String, Result<egui::ColorImage, String>)>,
-    rx: Receiver<(String, Result<egui::ColorImage, String>)>,
+    tx: Sender<(String, Result<Decoded, String>)>,
+    rx: Receiver<(String, Result<Decoded, String>)>,
     /// Column widths of tables resized by dragging, by table source start
     /// (display only, ED-084).
     pub column_widths: HashMap<usize, Vec<f32>>,
@@ -123,13 +123,81 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
-fn decode(bytes: &[u8]) -> Result<egui::ColorImage, String> {
+/// A decoded image and its size in points (SVGs are rasterized at twice their
+/// size for sharpness).
+type Decoded = (egui::ColorImage, [f32; 2]);
+
+fn is_svg(bytes: &[u8]) -> bool {
+    let head = &bytes[..bytes.len().min(512)];
+    let s = String::from_utf8_lossy(head);
+    let t = s.trim_start_matches('\u{feff}').trim_start();
+    t.starts_with("<svg")
+        || (t.starts_with("<?xml") && s.contains("<svg"))
+        || t.starts_with("<!DOCTYPE svg")
+}
+
+/// System fonts for text in SVGs, loaded once.
+fn svg_fonts() -> std::sync::Arc<resvg::usvg::fontdb::Database> {
+    static DB: std::sync::OnceLock<std::sync::Arc<resvg::usvg::fontdb::Database>> =
+        std::sync::OnceLock::new();
+    DB.get_or_init(|| {
+        let mut db = resvg::usvg::fontdb::Database::new();
+        db.load_system_fonts();
+        // Bundled faces guarantee the generic families resolve everywhere.
+        for (name, data) in inkra_layout::fonts::bundled() {
+            db.load_font_data(data.to_vec());
+            if *name == inkra_layout::fonts::BODY {
+                db.set_sans_serif_family("Inter");
+            } else if *name == inkra_layout::fonts::SERIF {
+                db.set_serif_family("Source Serif 4");
+            } else if *name == inkra_layout::fonts::MONO {
+                db.set_monospace_family("JetBrains Mono");
+            }
+        }
+        std::sync::Arc::new(db)
+    })
+    .clone()
+}
+
+fn decode_svg(bytes: &[u8]) -> Result<Decoded, String> {
+    let opt = resvg::usvg::Options {
+        fontdb: svg_fonts(),
+        ..Default::default()
+    };
+    let tree = resvg::usvg::Tree::from_data(bytes, &opt).map_err(|e| e.to_string())?;
+    let size = tree.size();
+    let (w, h) = (size.width().max(1.0), size.height().max(1.0));
+    let scale = (2.0f32).min(4096.0 / w.max(h));
+    let (pw, ph) = ((w * scale).ceil() as u32, (h * scale).ceil() as u32);
+    let mut pm = resvg::tiny_skia::Pixmap::new(pw, ph).ok_or("SVG too large")?;
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::from_scale(scale, scale),
+        &mut pm.as_mut(),
+    );
+    let px: Vec<egui::Color32> = pm
+        .data()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|c| egui::Color32::from_rgba_premultiplied(c[0], c[1], c[2], c[3]))
+        .collect();
+    Ok((
+        egui::ColorImage::new([pw as usize, ph as usize], px),
+        [w, h],
+    ))
+}
+
+fn decode(bytes: &[u8]) -> Result<Decoded, String> {
+    if is_svg(bytes) {
+        return decode_svg(bytes);
+    }
     let img = image::load_from_memory(bytes).map_err(|e| e.to_string())?;
     let rgba = img.to_rgba8();
     let size = [rgba.width() as usize, rgba.height() as usize];
-    Ok(egui::ColorImage::from_rgba_unmultiplied(
-        size,
-        rgba.as_raw(),
+    Ok((
+        egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw()),
+        [size[0] as f32, size[1] as f32],
     ))
 }
 
@@ -186,8 +254,7 @@ impl Images {
         let mut changed = false;
         while let Ok((key, result)) = self.rx.try_recv() {
             let entry = match result {
-                Ok(img) => {
-                    let size = [img.size[0] as f32, img.size[1] as f32];
+                Ok((img, size)) => {
                     let tex =
                         ctx.load_texture(format!("img:{key}"), img, egui::TextureOptions::LINEAR);
                     Entry::Ready { tex, size }
@@ -203,7 +270,6 @@ impl Images {
         changed
     }
 
-    /// Texture of a loaded image.
     /// Rasterizes a formula for this frame if needed (SPEC 2.4 caching).
     pub fn ensure_math(&mut self, ctx: &egui::Context, m: &inkra_layout::MathScene) {
         let ppp = ctx.pixels_per_point();

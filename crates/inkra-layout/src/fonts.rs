@@ -265,6 +265,11 @@ pub fn cjk_font_data() -> Option<(&'static [u8], u32)> {
     })
 }
 
+/// The bundled font files: `(family name, data)`.
+pub fn bundled() -> &'static [(&'static str, &'static [u8])] {
+    FONTS
+}
+
 /// Gives the diagram engine the label fonts (Inter, then the CJK fallback).
 pub fn init_vector_fonts() {
     static ONCE: std::sync::Once = std::sync::Once::new();

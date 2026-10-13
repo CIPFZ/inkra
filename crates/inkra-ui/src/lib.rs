@@ -137,6 +137,7 @@ pub struct Shell {
     theme_watcher: Option<inkra_workspace::watch::Watcher>,
     last_time: f64,
     theme_names: Vec<String>,
+    mmdc_conf: String,
     theme_names_at: f64,
     #[cfg(target_os = "macos")]
     native_menu: Option<native_menu::NativeMenu>,
@@ -186,6 +187,7 @@ impl Shell {
             theme_watcher: None,
             last_time: 0.0,
             theme_names: Vec::new(),
+            mmdc_conf: String::new(),
             theme_names_at: f64::NEG_INFINITY,
             #[cfg(target_os = "macos")]
             native_menu: None,
@@ -220,6 +222,8 @@ impl Shell {
             .as_ref()
             .map(inkra_workspace::Paths::dictionary_file);
         inkra_text::spell::load(personal, move || c.request_repaint());
+        let c = ctx.clone();
+        inkra_diagram::external::on_ready(move || c.request_repaint());
         // Syntax definitions load in the background (AD-5).
         let c = ctx.clone();
         inkra_highlight::on_ready(move || c.request_repaint());
@@ -1000,8 +1004,28 @@ impl Shell {
         self.focus_request = Some(id);
     }
 
+    /// Points the diagram engine at the configured `mmdc` (MD-100).
+    fn sync_mermaid_cli(&mut self) {
+        let want = self.engine.state.prefs.string("markdown.mermaidCli");
+        if want == self.mmdc_conf {
+            return;
+        }
+        self.mmdc_conf = want.clone();
+        let cache = self
+            .engine
+            .state
+            .paths
+            .as_ref()
+            .map_or_else(std::env::temp_dir, |p| p.data.join("diagrams"));
+        inkra_diagram::external::configure(
+            (!want.trim().is_empty()).then(|| PathBuf::from(want.trim())),
+            cache,
+        );
+    }
+
     /// Frame-level work shared by all windows.
     fn frame_tasks(&mut self, ctx: &egui::Context) {
+        self.sync_mermaid_cli();
         self.sidebar.poll(ctx, &self.engine);
         self.last_time = ctx.input(|i| i.time);
         self.refresh_theme_names(self.last_time);

@@ -359,9 +359,12 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                     if is_diagram && !active {
                         // MD-100: the diagram instead of its source.
                         let src = text.slice(body.clone()).into_owned();
-                        let (shown, err) = diagram(&src, style, w, item.src.start);
+                        let (shown, err, ext) = diagram(&src, style, w, item.src.start);
                         let top = y + 0.3 * em;
                         let mut h = 0.6 * em;
+                        if let Some(p) = ext {
+                            h += external_image(&p, cx, x, top, w, &mut out);
+                        }
                         if let Some(ms) = shown {
                             let sc = ms.scene.clone();
                             let fx = x + ((w - sc.width) / 2.0).max(0.0);
@@ -424,8 +427,11 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                         if is_diagram {
                             // Live preview below the source while editing (MD-100).
                             let src = text.slice(body.clone()).into_owned();
-                            let (shown, err) = diagram(&src, style, w, item.src.start);
+                            let (shown, err, ext) = diagram(&src, style, w, item.src.start);
                             let top = y + content_h + 0.4 * em;
+                            if let Some(p) = ext {
+                                content_h += external_image(&p, cx, x, top, w, &mut out) + 0.6 * em;
+                            }
                             if let Some(ms) = shown {
                                 let sc = ms.scene.clone();
                                 let fx = x + ((w - sc.width) / 2.0).max(0.0);
@@ -1129,6 +1135,55 @@ static LAST_GOOD: std::sync::OnceLock<LastGood> = std::sync::OnceLock::new();
 /// The diagram of `src` and its error. On a parse error the last successful
 /// rendering of the block (keyed by its position) is shown faded (MD-100).
 fn diagram(
+    src: &str,
+    style: &Style,
+    max_w: f32,
+    block: usize,
+) -> (
+    Option<crate::run::MathScene>,
+    Option<String>,
+    Option<String>,
+) {
+    let (shown, err) = diagram_builtin(src, style, max_w, block);
+    // Types the built-in renderer lacks go to `mmdc` when configured.
+    if shown.is_none()
+        && let Some(e) = &err
+        && e.contains("is not supported")
+        && let Some(st) = inkra_diagram::external::request(src, style.dark)
+    {
+        return match st {
+            inkra_diagram::external::Status::Ready(p) => {
+                (None, None, Some(p.to_string_lossy().into_owned()))
+            }
+            inkra_diagram::external::Status::Pending => {
+                (None, Some("Rendering with mmdc…".to_owned()), None)
+            }
+            inkra_diagram::external::Status::Failed(e) => (None, Some(format!("mmdc: {e}")), None),
+        };
+    }
+    (shown, err, None)
+}
+
+/// An image rendered by an external tool, scaled to the column; returns its height.
+fn external_image(
+    path: &str,
+    cx: &LiveCx<'_>,
+    x: f32,
+    top: f32,
+    w: f32,
+    out: &mut BlockLayout,
+) -> f32 {
+    let size = cx.images.size(path).unwrap_or([w.min(480.0), 240.0]);
+    let s = if size[0] > w { w / size[0] } else { 1.0 };
+    let (iw, ih) = (size[0] * s, size[1] * s);
+    out.decos.push(Deco::Image {
+        rect: Rect::from_min_size(pos2(x + (w - iw) / 2.0, top), vec2(iw, ih)),
+        src: path.to_owned(),
+    });
+    ih
+}
+
+fn diagram_builtin(
     src: &str,
     style: &Style,
     max_w: f32,

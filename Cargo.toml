@@ -66,6 +66,7 @@ proptest = "1"
 criterion = { version = "0.8", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png"] }
 nucleo-matcher = "0.3"
+resvg = { version = "0.48", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }
 spellbook = "0.4"
 ttf-parser = { version = "0.25", default-features = false, features = ["std", "opentype-layout"] }
 tiny-skia-path = "0.12"
