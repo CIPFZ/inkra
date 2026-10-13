@@ -23,6 +23,9 @@ pub struct Images {
     entries: HashMap<String, Entry>,
     tx: Sender<(String, Result<egui::ColorImage, String>)>,
     rx: Receiver<(String, Result<egui::ColorImage, String>)>,
+    /// Column widths of tables resized by dragging, by table source start
+    /// (display only, ED-084).
+    pub column_widths: HashMap<usize, Vec<f32>>,
 }
 
 impl Default for Images {
@@ -33,11 +36,16 @@ impl Default for Images {
             entries: HashMap::new(),
             tx,
             rx,
+            column_widths: HashMap::new(),
         }
     }
 }
 
 impl ImageSizes for Images {
+    fn column_widths(&self, table_start: usize) -> Option<Vec<f32>> {
+        self.column_widths.get(&table_start).cloned()
+    }
+
     fn size(&self, src: &str) -> Option<[f32; 2]> {
         match self.entries.get(src) {
             Some(Entry::Ready { size, .. }) => Some(*size),

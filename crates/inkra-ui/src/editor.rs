@@ -65,6 +65,10 @@ pub struct EditorView {
     pub images: Images,
     /// Caret blinks (PR-042).
     pub blink: bool,
+    col_handles: Vec<Rect>,
+    col_drag: Option<(usize, usize)>,
+    pending_top: Option<usize>,
+    viewport_top: usize,
     /// Horizontal scroll of wide tables, by table source start (ED-080).
     hscroll: std::collections::HashMap<usize, f32>,
     wide: Vec<Wide>,
@@ -102,6 +106,10 @@ impl EditorView {
             last_ms: 0.0,
             images: Images::default(),
             blink: true,
+            col_handles: Vec::new(),
+            col_drag: None,
+            pending_top: None,
+            viewport_top: 0,
             hscroll: Default::default(),
             wide: Vec::new(),
             i18n: inkra_i18n::I18n::default(),
@@ -165,6 +173,16 @@ impl EditorView {
     /// The widget id (for focus).
     pub fn id(&self) -> egui::Id {
         self.id
+    }
+
+    /// Document position shown at the top of the viewport (last frame).
+    pub fn viewport_top(&self) -> usize {
+        self.viewport_top
+    }
+
+    /// Scrolls so that the item containing `pos` is at the top (outline jumps).
+    pub fn scroll_to_top(&mut self, pos: usize) {
+        self.pending_top = Some(pos);
     }
 
     /// Requests that the caret be scrolled into view on the next frame.
@@ -338,6 +356,11 @@ impl EditorView {
             let view = &mut self.view;
             ctx.fonts_mut(|fonts| caret_rect = view.caret_rect(caret, &lcx, fonts));
         }
+        if let Some(pos) = self.pending_top.take() {
+            let i = self.view.item_of(pos);
+            self.scroll = self.view.top(i) + pad - 8.0;
+            self.scroll_to_caret = false;
+        }
         let typewriter = engine.state.view.typewriter;
         if self.scroll_to_caret && typewriter {
             // WM-002: the caret line stays in the vertical middle.
@@ -369,6 +392,10 @@ impl EditorView {
             0.0
         };
         self.scroll = self.scroll.clamp(min_scroll, max_scroll.max(min_scroll));
+
+        // A little below the edge so a heading scrolled to the top counts.
+        let top_item = self.view.item_at_y((self.scroll - pad + 12.0).max(0.0));
+        self.viewport_top = self.view.items().get(top_item).map_or(0, |it| it.src.start);
 
         // Lay out and paint visible items.
         let offset = vec2(text_rect.left(), rect.top() + pad - self.scroll);
@@ -581,6 +608,11 @@ impl EditorView {
         painter.extend(shapes);
         wide_painter.extend(wide_runs);
 
+        // Column borders of tables can be dragged (ED-084, display only).
+        if !source {
+            self.table_handles(ui, &visible, offset);
+        }
+
         // Code block tools (ED-002): language and copy button when the caret is inside.
         if !source {
             self.code_tools(ui, engine, &visible, offset, &mut out);
@@ -650,6 +682,66 @@ impl EditorView {
         out
     }
 
+    /// Draggable column borders of visible tables.
+    fn table_handles(&mut self, ui: &mut egui::Ui, visible: &std::ops::Range<usize>, offset: Vec2) {
+        self.col_handles.clear();
+        let mut tables = Vec::new();
+        for i in visible.clone() {
+            let Some(l) = self.view.layout(i) else {
+                continue;
+            };
+            let top = self.view.top(i);
+            for o in &l.overlays {
+                if let Overlay::Table { rect, span, cols } = o {
+                    tables.push((i, rect.translate(vec2(0.0, top)), span.start, cols.clone()));
+                }
+            }
+        }
+        for (item, rect, key, cols) in tables {
+            let shift = self
+                .wide
+                .iter()
+                .find(|w| w.item == item)
+                .map_or(0.0, |w| w.shift);
+            let r = rect.translate(offset - vec2(shift, 0.0));
+            let mut x = r.left();
+            for (c, w) in cols.iter().enumerate() {
+                x += w;
+                let handle = Rect::from_min_max(pos2(x - 3.0, r.top()), pos2(x + 3.0, r.bottom()));
+                if handle.right() > self.last_text_rect.right() + 4.0 {
+                    continue;
+                }
+                let id = self.id.with(("col-handle", key, c));
+                let resp = ui.interact(handle, id, Sense::drag());
+                self.col_handles.push(handle);
+                if resp.hovered() || resp.dragged() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeColumn);
+                }
+                if resp.drag_started() {
+                    self.col_drag = Some((key, c));
+                }
+                if resp.dragged() {
+                    let dx = resp.drag_delta().x;
+                    let ws = self
+                        .images
+                        .column_widths
+                        .entry(key)
+                        .or_insert_with(|| cols.clone());
+                    if let Some(v) = ws.get_mut(c) {
+                        *v = (*v + dx).max(40.0);
+                    }
+                }
+                if resp.drag_stopped() {
+                    self.col_drag = None;
+                }
+                if resp.double_clicked() {
+                    // Back to automatic widths.
+                    self.images.column_widths.remove(&key);
+                }
+            }
+        }
+    }
+
     /// Splits highlight rectangles into those outside wide tables and those inside
     /// (shifted by the table's horizontal scroll; painted clipped).
     fn split_rects(&self, rects: Vec<Rect>) -> (Vec<Rect>, Vec<Rect>) {
@@ -690,7 +782,7 @@ impl EditorView {
                     Overlay::Code {
                         rect, lang, body, ..
                     } => (rect, lang, body),
-                    Overlay::Table { rect, span } => {
+                    Overlay::Table { rect, span, .. } => {
                         let active = caret >= span.start && caret <= span.end;
                         if active {
                             let r = rect.translate(vec2(0.0, top) + offset);
@@ -877,7 +969,7 @@ impl EditorView {
             };
             let top = self.view.top(i);
             for o in &l.overlays {
-                if let Overlay::Table { rect, span } = o {
+                if let Overlay::Table { rect, span, .. } = o {
                     let over = rect.max.x - col_w;
                     if over > 0.5 {
                         let shift = self
@@ -943,6 +1035,9 @@ impl EditorView {
             )
         });
         let Some(screen) = pos else { return };
+        if self.col_handles.iter().any(|r| r.contains(screen)) || self.col_drag.is_some() {
+            return;
+        }
         // Right click: move the caret there unless it is inside the selection.
         if ctx.input(|i| i.pointer.secondary_pressed()) && resp.contains_pointer() {
             let p = self.doc_pos(screen, rect, text_rect);

@@ -44,7 +44,8 @@ fn toggle_sidebar_via_menu() {
     h.get_by_label_contains("Sidebar").click();
     h.run();
     assert!(h.state().engine.state.view.sidebar_visible);
-    h.get_by_label("Sidebar");
+    h.get_by_label("Outline");
+    h.get_by_label("No headings");
 }
 
 #[test]
@@ -430,4 +431,164 @@ fn m3_case6_scrolling_a_large_document_is_cheap() {
     if !cfg!(debug_assertions) {
         assert!(p95 < 16.0, "p95 {p95}");
     }
+}
+
+// ---- M4 acceptance cases (docs/acceptance/m4.md) ----
+
+fn cmd_shift() -> egui::Modifiers {
+    egui::Modifiers {
+        command: true,
+        ctrl: !cfg!(target_os = "macos"),
+        shift: true,
+        ..Default::default()
+    }
+}
+
+fn cmd() -> egui::Modifiers {
+    egui::Modifiers {
+        command: true,
+        ctrl: !cfg!(target_os = "macos"),
+        ..Default::default()
+    }
+}
+
+#[test]
+fn m4_table_dialog_tab_rows_align_sort() {
+    let mut h = live_harness("");
+    h.key_press_modifiers(cmd(), egui::Key::T);
+    h.run();
+    h.get_by_label("OK").click();
+    h.run();
+    let t = text(&h);
+    assert_eq!(
+        t.lines().count(),
+        5,
+        "3x3: header, delimiter, 3 rows: {t:?}"
+    );
+    // Header cell is selected → type over it, Tab to the next cell.
+    let first = t.find("Column 1").unwrap();
+    h.state_mut().engine.state.editor.sel =
+        inkra_doc::Selection::new(first, first + "Column 1".len());
+    type_str(&mut h, "Name");
+    key(&mut h, egui::Key::Tab);
+    type_str(&mut h, "Qty");
+    key(&mut h, egui::Key::Tab);
+    type_str(&mut h, "Price");
+    for v in ["b", "2", "x", "a", "10", "y", "c", "1", "z"] {
+        key(&mut h, egui::Key::Tab);
+        type_str(&mut h, v);
+    }
+    // Tab in the last cell adds a row; Ctrl+Enter too.
+    key(&mut h, egui::Key::Tab);
+    h.key_press_modifiers(cmd(), egui::Key::Enter);
+    h.run();
+    let t = text(&h);
+    assert_eq!(t.lines().count(), 7, "{t}");
+    // Sort by Qty (numeric) and align it right.
+    let at = t.find("| 2").unwrap() + 2;
+    h.state_mut().engine.state.editor.sel = inkra_doc::Selection::caret(at);
+    h.state_mut()
+        .engine
+        .execute("table.sortByColumnAsc", &serde_json::Value::Null)
+        .unwrap();
+    h.state_mut()
+        .engine
+        .execute("table.alignRight", &serde_json::Value::Null)
+        .unwrap();
+    h.run();
+    let t = text(&h);
+    let qty: Vec<&str> = t
+        .lines()
+        .skip(2)
+        .map(|l| l.split('|').nth(2).unwrap().trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+    assert_eq!(qty, ["1", "2", "10"], "{t}");
+    assert!(t.lines().nth(1).unwrap().contains("| --: |"), "{t}");
+    // Every row has its pipes at the same columns (ED-085).
+    let widths: Vec<usize> = t.lines().map(|l| l.chars().count()).collect();
+    assert!(widths.windows(2).all(|w| w[0] == w[1]), "{t}");
+}
+
+#[test]
+fn m4_outline_click_jumps_to_heading() {
+    let mut doc = String::from("# Top\n\n");
+    for i in 0..60 {
+        doc.push_str(&format!("para {i}\n\n"));
+    }
+    doc.push_str("## Far Away\n\n");
+    for i in 0..40 {
+        doc.push_str(&format!("after {i}\n\n"));
+    }
+    let mut h = live_harness(&doc);
+    h.key_press_modifiers(cmd_shift(), egui::Key::Num1);
+    h.run();
+    h.get_by_label("Far Away").click();
+    h.run();
+    let at = doc.find("## Far Away").unwrap();
+    assert_eq!(
+        h.state().engine.state.editor.sel.head,
+        at + "## Far Away".len()
+    );
+    let top = h.state().editor_view().unwrap().viewport_top();
+    assert_eq!(top, at, "heading at the top of the viewport");
+}
+
+#[test]
+fn m4_quick_open_and_file_tree_move() {
+    let d = tempfile::tempdir().unwrap();
+    let r = d.path().canonicalize().unwrap();
+    std::fs::create_dir_all(r.join("notes/deep")).unwrap();
+    for i in 0..300 {
+        std::fs::write(r.join(format!("notes/n{i}.md")), format!("# {i}\n")).unwrap();
+    }
+    std::fs::write(r.join("notes/deep/target-file.md"), "# Target\n").unwrap();
+    let mut h = live_harness("");
+    h.state_mut()
+        .engine
+        .execute("sidebar.setRoot", &serde_json::json!({ "path": r }))
+        .unwrap();
+    let eff = h.state_mut().engine.take_effects();
+    h.state_mut().apply_startup_effects(eff);
+    h.run();
+    // wait for the background index
+    for _ in 0..200 {
+        h.step();
+        if h.state().index_ready() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    h.key_press_modifiers(cmd(), egui::Key::P);
+    h.run();
+    type_str(&mut h, "trgtfl");
+    h.run();
+    assert!(h.state().quick_open_ms() < 50.0);
+    key(&mut h, egui::Key::Enter);
+    h.run();
+    let opened = h.state().engine.state.editor.path.clone();
+    assert_eq!(
+        opened.as_deref(),
+        Some(r.join("notes/deep/target-file.md").as_path()),
+        "blank window reused"
+    );
+    // Move it to the root through the sidebar command; the open document follows.
+    h.state_mut()
+        .engine
+        .execute(
+            "sidebar.move",
+            &serde_json::json!({ "path": r.join("notes/deep/target-file.md"), "dest": r }),
+        )
+        .unwrap();
+    assert!(r.join("target-file.md").exists());
+    assert_eq!(
+        h.state().engine.state.editor.path.as_deref(),
+        Some(r.join("target-file.md").as_path())
+    );
+    // The file tree shows it.
+    h.key_press_modifiers(cmd_shift(), egui::Key::Num3);
+    for _ in 0..40 {
+        h.step();
+    }
+    h.get_by_label("target-file.md");
 }

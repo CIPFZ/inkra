@@ -310,8 +310,10 @@ fn main() -> std::process::ExitCode {
             if let Some(dir) = &folder {
                 let s = &mut shell.engine.state.session;
                 s.touch_folder(dir);
-                s.root = Some(dir.clone());
-                shell.engine.state.view.sidebar_visible = true;
+                s.root = Some(std::fs::canonicalize(dir).unwrap_or_else(|_| dir.clone()));
+                let v = &mut shell.engine.state.view;
+                v.sidebar_visible = true;
+                v.sidebar_view = inkra_engine::state::SidebarView::Files;
             }
             if restore {
                 let n = shell.restore_session(&session);

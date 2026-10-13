@@ -18,6 +18,8 @@ mod modals;
 #[cfg(target_os = "macos")]
 pub mod native_menu;
 pub mod perf;
+pub mod quick_open;
+pub mod sidebar;
 pub mod status_bar;
 
 use std::collections::BTreeMap;
@@ -67,6 +69,11 @@ struct WinUi {
     last_version: u64,
     last_edit: f64,
     was_focused: bool,
+    /// Outer rectangle `[x, y, w, h]` (secondary windows; remembered, M4).
+    rect: Option<[f32; 4]>,
+    maximized: bool,
+    /// Where the window opens (fixed, so the viewport builder stays stable).
+    initial: Option<([f32; 4], bool)>,
 }
 
 impl WinUi {
@@ -79,6 +86,9 @@ impl WinUi {
             last_version: 0,
             last_edit: 0.0,
             was_focused: true,
+            rect: None,
+            maximized: false,
+            initial: None,
         }
     }
 }
@@ -108,6 +118,8 @@ pub struct Shell {
     /// Raw key signals (set by the platform event loop).
     pub raw_keys: std::sync::Arc<RawKeys>,
     dialogs: dialogs::Dialogs,
+    sidebar: sidebar::Sidebar,
+    quick_open: quick_open::QuickOpen,
     table_dialog: Option<(u32, u32)>,
     table_dialog_resize: bool,
     windows: BTreeMap<u64, WinUi>,
@@ -156,6 +168,8 @@ impl Shell {
             perf: perf::Perf::default(),
             raw_keys: Default::default(),
             dialogs: Default::default(),
+            sidebar: Default::default(),
+            quick_open: Default::default(),
             table_dialog: None,
             table_dialog_resize: false,
             windows,
@@ -261,6 +275,19 @@ impl Shell {
             .map(|w| &w.editor)
     }
 
+    /// Whether the quick-open file index finished building (tests).
+    pub fn index_ready(&self) -> bool {
+        self.sidebar
+            .index
+            .as_ref()
+            .is_some_and(inkra_workspace::index::FileIndex::ready)
+    }
+
+    /// Duration of the last quick-open ranking in ms (tests, FS-030 budget).
+    pub fn quick_open_ms(&self) -> f32 {
+        self.quick_open.last_rank_ms
+    }
+
     /// Whether a close confirmation is pending (tests).
     pub fn confirm_pending(&self) -> bool {
         self.confirm.is_some()
@@ -305,6 +332,9 @@ impl Shell {
             self.engine.state.view.sidebar_visible = w.sidebar;
             if let Some(ui) = self.windows.get_mut(&target) {
                 ui.editor.reveal_caret();
+                if target != self.root {
+                    ui.initial = w.rect.map(|r| (r, w.maximized));
+                }
             }
             n += 1;
         }
@@ -341,8 +371,8 @@ impl Shell {
                     .map_or(0.0, |w| w.editor.scroll()),
                 source_mode: e.mode == inkra_engine::editor::ViewMode::Source,
                 sidebar: false,
-                rect: None,
-                maximized: false,
+                rect: self.windows.get(&meta.id).and_then(|w| w.rect),
+                maximized: self.windows.get(&meta.id).is_some_and(|w| w.maximized),
             })
             .collect();
         s
@@ -492,6 +522,14 @@ impl Shell {
                     );
                 }
                 Effect::Reveal(path) => reveal(&path),
+                Effect::ShowQuickOpen => self.quick_open.open(),
+                Effect::FocusGlobalSearch => self.sidebar.focus_search(),
+                Effect::RevealInTree(p) => self.sidebar.reveal_path(&p),
+                Effect::RenameInTree(p) => self.sidebar.start_rename(&p),
+                Effect::RootChanged => {
+                    self.sidebar.sync_root(ctx, &self.engine, true);
+                    self.sidebar.invalidate();
+                }
                 Effect::WindowFlags => {
                     let v = &self.engine.state.view;
                     let vid = if self.engine.state.active() == self.root {
@@ -677,10 +715,13 @@ impl Shell {
                     self.invoke(ctx, "file.open", &json!({ "path": path }))
                 }
                 (dialogs::Purpose::OpenFolder, Some(path)) => {
-                    let s = &mut self.engine.state.session;
-                    s.touch_folder(&path);
-                    s.root = Some(path);
-                    self.engine.state.view.sidebar_visible = true;
+                    self.invoke(ctx, "sidebar.setRoot", &json!({ "path": path }));
+                    let v = &mut self.engine.state.view;
+                    v.sidebar_visible = true;
+                    v.sidebar_view = inkra_engine::state::SidebarView::Files;
+                }
+                (dialogs::Purpose::MoveTo(src), Some(dest)) => {
+                    self.invoke(ctx, "sidebar.move", &json!({ "path": src, "dest": dest }));
                 }
                 (
                     dialogs::Purpose::SaveAs {
@@ -868,8 +909,90 @@ impl Shell {
         self.sync_style(ctx);
     }
 
+    /// Carries out what the sidebar asked for.
+    fn sidebar_actions(&mut self, ctx: &egui::Context, actions: Vec<sidebar::Action>) {
+        for a in actions {
+            match a {
+                sidebar::Action::Invoke(id, p) => self.invoke(ctx, &id, &p),
+                sidebar::Action::JumpTo(pos) => {
+                    // The heading goes to the top of the viewport; the caret to the
+                    // end of its text (inside the heading, past the `#` markers).
+                    let e = &mut self.engine.state.editor;
+                    let t = e.doc.text();
+                    let pos = t.snap(pos.min(t.len()));
+                    let line = t.line_content_range(t.byte_to_line(pos));
+                    e.set_selection(inkra_doc::Selection::caret(line.end));
+                    self.win().editor.scroll_to_top(pos);
+                }
+                sidebar::Action::OpenAt { path, line, query } => {
+                    self.open_search_hit(ctx, &path, line, &query)
+                }
+                sidebar::Action::PickMoveTarget(p) => {
+                    let dir = p.parent().map(Path::to_owned);
+                    self.dialogs
+                        .open(ctx, dialogs::Purpose::MoveTo(p), dir, None);
+                }
+                sidebar::Action::PickRoot => {
+                    self.dialogs
+                        .open(ctx, dialogs::Purpose::OpenFolder, None, None)
+                }
+            }
+        }
+    }
+
+    /// Opens a global search hit: the file, the find bar with the same query, and
+    /// the first match on `line` selected (FS-031).
+    fn open_search_hit(
+        &mut self,
+        ctx: &egui::Context,
+        path: &Path,
+        line: u64,
+        q: &inkra_workspace::search::Query,
+    ) {
+        self.invoke(ctx, "file.open", &json!({ "path": path }));
+        let canon = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_owned());
+        let Some(id) = self
+            .engine
+            .state
+            .editors()
+            .find(|(_, e)| e.path.as_deref() == Some(canon.as_path()))
+            .map(|(m, _)| m.id)
+        else {
+            return;
+        };
+        let back = self.engine.state.active();
+        self.engine.state.activate(id);
+        let e = &mut self.engine.state.editor;
+        e.find.open = true;
+        e.find.query = q.pattern.clone();
+        e.find.options = inkra_engine::editor::find::FindOptions {
+            case_sensitive: q.case_sensitive,
+            whole_word: q.whole_word,
+            regex: q.regex,
+        };
+        e.find.invalidate();
+        let t = e.doc.text();
+        let line_start =
+            t.line_to_byte((line.saturating_sub(1) as usize).min(t.len_lines().saturating_sub(1)));
+        e.find.refresh(&e.doc, line_start);
+        let hit = e.find.matches.iter().position(|m| m.start >= line_start);
+        if let Some(k) = hit {
+            let m = e.find.matches[k].clone();
+            e.find.current = Some(k);
+            e.set_selection(inkra_doc::Selection::new(m.start, m.end));
+        } else {
+            e.set_selection(inkra_doc::Selection::caret(line_start));
+        }
+        if let Some(w) = self.windows.get_mut(&id) {
+            w.editor.reveal_caret();
+        }
+        self.engine.state.activate(back);
+        self.focus_request = Some(id);
+    }
+
     /// Frame-level work shared by all windows.
     fn frame_tasks(&mut self, ctx: &egui::Context) {
+        self.sidebar.poll(ctx, &self.engine);
         self.last_time = ctx.input(|i| i.time);
         self.refresh_theme_names(self.last_time);
         self.theme_tasks(ctx);
@@ -963,8 +1086,29 @@ impl Shell {
             let title = format!("{} - Inkra", self.title_of(&self.engine.state.editor));
             let mut builder = egui::ViewportBuilder::default()
                 .with_title(title)
-                .with_inner_size([1000.0, 720.0])
                 .with_app_id("io.inkra.Inkra");
+            // Window state memory: restored windows reopen where they were; new
+            // ones cascade from the root window.
+            let initial = match self.windows.get(&id).and_then(|w| w.initial) {
+                Some(i) => i,
+                None => {
+                    let k = self.windows.len().saturating_sub(1) as f32;
+                    let base = ctx
+                        .input(|i| i.viewport().outer_rect)
+                        .map_or(egui::pos2(80.0, 80.0), |r| r.min);
+                    let p = base + egui::vec2(28.0, 28.0) * k;
+                    let i = ([p.x, p.y, 1000.0, 720.0], false);
+                    if let Some(w) = self.windows.get_mut(&id) {
+                        w.initial = Some(i);
+                    }
+                    i
+                }
+            };
+            let ([x, y, w, h], max) = initial;
+            builder = builder
+                .with_position([x, y])
+                .with_inner_size([w, h])
+                .with_maximized(max);
             if let Ok(icon) = eframe_icon() {
                 builder = builder.with_icon(icon);
             }
@@ -975,6 +1119,20 @@ impl Shell {
             }
             ctx.show_viewport_immediate(vid, builder, |vui, _class| {
                 self.engine.state.activate(id);
+                let (outer, inner, max) = vui.ctx().input(|i| {
+                    (
+                        i.viewport().outer_rect,
+                        i.viewport().inner_rect,
+                        i.viewport().maximized,
+                    )
+                });
+                if let Some(w) = self.windows.get_mut(&id) {
+                    // Outer position, inner size: what the builder takes.
+                    if let (Some(o), Some(n)) = (outer, inner) {
+                        w.rect = Some([o.min.x, o.min.y, n.width(), n.height()]);
+                    }
+                    w.maximized = max.unwrap_or(false);
+                }
                 self.window_ui(vui, id);
             });
         }
@@ -1084,13 +1242,18 @@ impl Shell {
         }
 
         if self.engine.state.view.sidebar_visible {
+            let style = self.engine.state.style.clone();
+            let mut actions = Vec::new();
             egui::Panel::left("inkra-sidebar")
                 .resizable(true)
                 .default_size(240.0)
                 .size_range(180.0..=(ctx.content_rect().width() * 0.5).max(180.0))
+                .frame(egui::Frame::new().fill(style.sidebar_bg))
                 .show(ui, |ui| {
-                    ui.weak(self.i18n.tr("sidebar-placeholder"));
+                    let top = self.windows.get(&id).map_or(0, |w| w.editor.viewport_top());
+                    actions = self.sidebar.show(ui, &self.engine, &self.i18n, &style, top);
                 });
+            self.sidebar_actions(&ctx, actions);
         }
 
         let style_bg = self.win().editor.style.bg;
@@ -1112,8 +1275,9 @@ impl Shell {
                 });
         }
 
+        // Filled: secondary viewports have no clear color behind the panels.
         egui::CentralPanel::default()
-            .frame(egui::Frame::new())
+            .frame(egui::Frame::new().fill(style_bg))
             .show(ui, |ui| {
                 modals::external_banner(self, ui);
                 if self.engine.state.editor.find.open {
@@ -1138,6 +1302,26 @@ impl Shell {
         if self.engine.state.view.debug_overlay && id == self.root {
             let ms = self.win().editor.last_ms;
             self.perf.overlay(&ctx, ms);
+        }
+        if self.quick_open.is_open()
+            && (id == self.root || ctx.input(|i| i.viewport().focused.unwrap_or(false)))
+        {
+            let style = self.engine.state.style.clone();
+            let recent = self.engine.state.session.recent.clone();
+            if let Some(c) = self.quick_open.show(
+                &ctx,
+                self.sidebar.index.as_ref(),
+                &recent,
+                &self.i18n,
+                &style,
+            ) {
+                let id = if c.new_window {
+                    "sidebar.openInNewWindow"
+                } else {
+                    "file.open"
+                };
+                self.invoke(&ctx, id, &json!({ "path": c.path }));
+            }
         }
         modals::table_dialog(self, &ctx);
         modals::confirm_close(self, &ctx, id);

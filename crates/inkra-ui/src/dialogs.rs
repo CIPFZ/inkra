@@ -13,6 +13,8 @@ pub enum Purpose {
     Open,
     /// Open a folder (FS-002).
     OpenFolder,
+    /// Choose the folder to move a file into (FS-022).
+    MoveTo(PathBuf),
     /// Save as (FS-003); then close the window if `close_after`.
     SaveAs {
         /// Close after saving.
@@ -39,22 +41,7 @@ impl Default for Dialogs {
 }
 
 /// File extensions recognized as Markdown (FS-002).
-pub const MARKDOWN_EXTS: &[&str] = &[
-    "md",
-    "markdown",
-    "mdown",
-    "mmd",
-    "text",
-    "txt",
-    "mdx",
-    "rmarkdown",
-    "rmd",
-    "mkd",
-    "mdwn",
-    "mdtxt",
-    "mdtext",
-    "apib",
-];
+pub use inkra_workspace::tree::MARKDOWN_EXTS;
 
 const IMAGE_EXTS: &[&str] = &[
     "png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "tif", "tiff",
@@ -92,7 +79,7 @@ impl Dialogs {
                     .add_filter("Markdown", MARKDOWN_EXTS)
                     .add_filter("All files", &["*"])
                     .pick_file(),
-                Purpose::OpenFolder => d.pick_folder(),
+                Purpose::OpenFolder | Purpose::MoveTo(_) => d.pick_folder(),
                 Purpose::SaveAs { .. } => {
                     if let Some(n) = name {
                         d = d.set_file_name(n);
