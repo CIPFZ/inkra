@@ -65,6 +65,9 @@ pub struct EditorView {
     pub images: Images,
     /// Caret blinks (PR-042).
     pub blink: bool,
+    completion: Option<crate::completion::Completion>,
+    completion_key: (u64, usize),
+    completion_dismissed: Option<usize>,
     col_handles: Vec<Rect>,
     col_drag: Option<(usize, usize)>,
     /// A reorder grip being dragged: table start, column?, index.
@@ -108,6 +111,9 @@ impl EditorView {
             last_ms: 0.0,
             images: Images::default(),
             blink: true,
+            completion: None,
+            completion_key: (u64::MAX, 0),
+            completion_dismissed: None,
             col_handles: Vec::new(),
             col_drag: None,
             grip_drag: None,
@@ -699,6 +705,26 @@ impl EditorView {
                     ui.label(text);
                 });
             }
+        }
+
+        // Completion popup (ED-103, ED-105).
+        let ckey = (
+            engine.state.editor.doc.version(),
+            engine.state.editor.sel.head,
+        );
+        if ckey != self.completion_key && focused {
+            self.completion_key = ckey;
+            let c = crate::completion::detect(engine);
+            self.completion = c.filter(|c| self.completion_dismissed != Some(c.start));
+        }
+        if !focused {
+            self.completion = None;
+        }
+        if let (Some(c), Some(r)) = (&mut self.completion, self.caret_screen)
+            && let Some(cmd) = crate::completion::show(&ctx, c, r, self.id)
+        {
+            out.commands.push(cmd);
+            self.completion = None;
         }
 
         // Right-click menu (ED-130).
@@ -1354,6 +1380,51 @@ impl EditorView {
         out: &mut EditorOutput,
         viewport_h: f32,
     ) {
+        // An open completion takes Up/Down/Enter/Tab/Escape (ED-103, ED-105).
+        if let Some(c) = &mut self.completion {
+            let mut taken = Vec::new();
+            let mut run = None;
+            let mut dismiss = false;
+            ctx.input(|i| {
+                for (k, ev) in i.events.iter().enumerate() {
+                    if let Event::Key {
+                        key,
+                        pressed: true,
+                        modifiers,
+                        ..
+                    } = ev
+                        && modifiers.is_none()
+                    {
+                        if *key == Key::Escape {
+                            dismiss = true;
+                            taken.push(k);
+                        } else if let Some(r) = crate::completion::handle_key(c, *key) {
+                            taken.push(k);
+                            if r.is_some() {
+                                run = r;
+                            }
+                        }
+                    }
+                }
+            });
+            if !taken.is_empty() {
+                ctx.input_mut(|i| {
+                    let mut k = 0;
+                    i.events.retain(|_| {
+                        let keep = !taken.contains(&k);
+                        k += 1;
+                        keep
+                    });
+                });
+            }
+            if dismiss {
+                self.completion_dismissed = Some(c.start);
+                self.completion = None;
+            } else if let Some(cmd) = run {
+                out.commands.push(cmd);
+                self.completion = None;
+            }
+        }
         let events = ctx.input(|i| i.events.clone());
         for ev in events {
             match ev {

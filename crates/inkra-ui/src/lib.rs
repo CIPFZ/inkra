@@ -7,6 +7,7 @@
 //! invocations; it never edits documents directly.
 
 pub mod clipboard;
+mod completion;
 mod context_menu;
 pub mod dialogs;
 pub mod editor;
