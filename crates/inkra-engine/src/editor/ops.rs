@@ -34,6 +34,10 @@ pub struct EditPrefs {
     pub smart_dashes: bool,
     /// `...` → … (ED-102).
     pub smart_ellipsis: bool,
+    /// Shift+Enter (ED-013): 0 a bare newline, 1 two trailing spaces, 2 `<br>`.
+    pub hard_break: u8,
+    /// Tab in a paragraph (ED-014): 0 four spaces, 1 two full-width spaces, 2 nothing.
+    pub paragraph_tab: u8,
 }
 
 impl Default for EditPrefs {
@@ -50,6 +54,8 @@ impl Default for EditPrefs {
             smart_quotes: None,
             smart_dashes: false,
             smart_ellipsis: false,
+            hard_break: 0,
+            paragraph_tab: 0,
         }
     }
 }
@@ -575,7 +581,11 @@ pub fn tab(doc: &Doc, sel: Selection, outdent: bool, p: &EditPrefs) -> Option<Tr
     let ins = if context::in_code_content(doc, pos) {
         unit
     } else {
-        "    ".to_owned()
+        match p.paragraph_tab {
+            1 => "\u{3000}\u{3000}".to_owned(),
+            2 => return None,
+            _ => "    ".to_owned(),
+        }
     };
     Some(replace(
         r.clone(),
@@ -675,9 +685,22 @@ pub fn block_at(doc: &Doc, pos: usize) -> Selection {
     }
 }
 
-/// `Ctrl+A` (ED-011): inside a code block first selects the block content.
+/// `Ctrl+A` (ED-011): inside a code block first selects the block content; in a
+/// table cell the cell, then the table.
 pub fn select_all(doc: &Doc, sel: Selection) -> Selection {
     let len = doc.text().len();
+    if let Some((t, c)) = super::table::caret_cell(doc, sel.head) {
+        let cell = t.rows.get(c.row).and_then(|r| r.get(c.col)).cloned();
+        for r in cell
+            .into_iter()
+            .filter(|r| !r.is_empty())
+            .chain(std::iter::once(t.span.clone()))
+        {
+            if !(sel.start() <= r.start && sel.end() >= r.end) {
+                return Selection::new(r.start, r.end);
+            }
+        }
+    }
     if let Some(n) = context::path(doc, sel.head)
         .iter()
         .rev()

@@ -152,6 +152,7 @@ pub fn show(
             "image.copy",
             "image.copyAddress",
             "image.reveal",
+            "image.openWindow",
             "image.open",
             "image.reload",
             "image.toLocal",
@@ -170,7 +171,7 @@ pub fn show(
                 let params = if pct == 100 {
                     serde_json::json!({})
                 } else {
-                    serde_json::json!({ "width": width })
+                    serde_json::json!({ "width": width, "natural": image_size.map(|s| s[0]) })
                 };
                 let enabled = pct == 100 || width.is_some();
                 if ui
@@ -206,6 +207,36 @@ pub fn show(
             json!({ "text": code }),
             &mut out,
         );
+        // ED-130: language, wrapping and line numbers of code blocks.
+        ui.menu_button(i18n.tr("cmd-code-setLanguage"), |ui| {
+            egui::ScrollArea::vertical()
+                .max_height(320.0)
+                .show(ui, |ui| {
+                    for l in inkra_highlight::languages() {
+                        if ui.button(l).clicked() {
+                            out.push(("code.setLanguage".into(), json!({ "lang": l })));
+                            ui.close();
+                        }
+                    }
+                });
+        });
+        for id in ["view.toggleCodeWrap", "view.toggleCodeLineNumbers"] {
+            let mut on = engine.is_checked(id) == Some(true);
+            if ui
+                .checkbox(&mut on, i18n.tr(&inkra_engine::command::title_key(id)))
+                .clicked()
+            {
+                out.push((id.to_owned(), Value::Null));
+                ui.close();
+            }
+        }
+        ui.separator();
+    }
+    // ED-130: formulas.
+    if engine.is_enabled("math.copyTex") {
+        for id in ["math.copyTex", "math.edit"] {
+            cmd_button(ui, engine, i18n, id, &mut out);
+        }
         ui.separator();
     }
 
@@ -234,6 +265,7 @@ pub fn show(
             "paragraph.mathBlock",
             "paragraph.hr",
             "paragraph.toc",
+            "format.footnote",
         ] {
             cmd_button(ui, engine, i18n, id, &mut out);
         }
@@ -260,6 +292,17 @@ pub fn show(
             "paragraph.taskList",
         ] {
             cmd_button(ui, engine, i18n, id, &mut out);
+        }
+        // ED-062: the list marker.
+        if engine.is_enabled("paragraph.listStyle") {
+            ui.menu_button(i18n.tr("cmd-paragraph-listStyle"), |ui| {
+                for m in ["-", "*", "+", "1.", "1)"] {
+                    if ui.button(m).clicked() {
+                        out.push(("paragraph.listStyle".into(), json!({ "marker": m })));
+                        ui.close();
+                    }
+                }
+            });
         }
     });
     out

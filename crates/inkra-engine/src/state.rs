@@ -427,6 +427,10 @@ pub enum Effect {
     CopyImage(String),
     /// Open a file or URL with the system's default application.
     OpenExternal(String),
+    /// Ask for a file to replace image source `.0` with.
+    RelinkImage(String),
+    /// Show an image in its own window.
+    ShowImage(String),
     /// Forget a loaded image so it is loaded again.
     ReloadImage(String),
     /// Download a remote image, then run `image.toLocal` with the file.

@@ -147,6 +147,20 @@ pub fn render(src: &str, alt: &str, title: Option<&str>, width: Option<u32>) -> 
     }
 }
 
+/// An `<img>` scaled with `style="zoom:…%"` (ED-090, ED-093).
+pub fn render_zoom(src: &str, alt: &str, title: Option<&str>, pct: u32) -> String {
+    let mut t = format!(
+        "<img src=\"{}\" alt=\"{}\"",
+        attr_escape(src),
+        attr_escape(alt)
+    );
+    if let Some(ti) = title.filter(|t| !t.is_empty()) {
+        t.push_str(&format!(" title=\"{}\"", attr_escape(ti)));
+    }
+    t.push_str(&format!(" style=\"zoom:{pct}%;\">"));
+    t
+}
+
 /// The local file of an image source, if any.
 pub fn local_path(app: &AppState, src: &str) -> Option<PathBuf> {
     if src.contains("://") && !src.starts_with("file://") || src.starts_with("data:") {
@@ -261,6 +275,70 @@ pub fn register(r: &mut CommandRegistry) {
         )
         .enabled(has_image),
     );
+    r.register(FnCommand::new(
+        params(
+            spec("image.relink", Format, "ED-090", "Point every image with source `from` at another file (`path`; asks for it without)."),
+            r#"{"type":"object","required":["from"],"properties":{"from":{"type":"string"},"path":{"type":"string"}}}"#,
+        ),
+        |cx, p| {
+            let from = p.get("from").and_then(Value::as_str).unwrap_or_default().to_owned();
+            let Some(path) = p.get("path").and_then(Value::as_str).map(PathBuf::from) else {
+                cx.effects.push(Effect::RelinkImage(from));
+                return Ok(Outcome::Done);
+            };
+            let rel = cx.app.prefs.bool("image.preferRelative");
+            let new = inkra_workspace::assets::markdown_src(cx.app.editor.path.as_deref(), &path, rel);
+            let e = &mut cx.app.editor;
+            let text = e.doc.text();
+            let mut edits = Vec::new();
+            let ast = e.doc.ast();
+            for i in 0..ast.len() {
+                let Some(r) = ast.get(i) else { continue };
+                r.block.walk(&mut |b| {
+                    for il in &b.inlines {
+                        il.walk(&mut |n| match &n.kind {
+                            inkra_markdown::InlineKind::Image { dest, syntax: inkra_markdown::ast::LinkSyntax::Inline { dest: ds }, .. } if *dest == from && !ds.is_empty() => {
+                                edits.push(inkra_doc::Edit { range: r.abs_span(ds), text: new.clone() });
+                            }
+                            inkra_markdown::InlineKind::Html => {
+                                let span = r.abs_span(&n.span);
+                                let src = text.slice(span.clone()).into_owned();
+                                if src.starts_with("<img") && inkra_html::render::tag_attr(&src, "src").as_deref() == Some(from.as_str()) {
+                                    edits.push(inkra_doc::Edit { range: span, text: src.replacen(&from, &new, 1) });
+                                }
+                            }
+                            _ => {}
+                        });
+                    }
+                });
+            }
+            if edits.is_empty() {
+                return Ok(Outcome::Done);
+            }
+            edits.sort_by_key(|x| x.range.start);
+            let tx = Transaction::many(edits).with_selection_before(e.sel);
+            let after = tx.map_selection(e.sel);
+            e.apply(tx.with_selection_after(after), inkra_doc::UndoPolicy::NewGroup);
+            Ok(Outcome::Done)
+        },
+    ));
+    r.register(
+        FnCommand::new(
+            spec(
+                "image.openWindow",
+                Format,
+                "ED-093",
+                "Show the image at the caret in its own window (zoomable).",
+            ),
+            |cx, _| {
+                let img = current(cx.app)
+                    .ok_or_else(|| fail("image.openWindow", "no image at the caret"))?;
+                cx.effects.push(Effect::ShowImage(img.src));
+                Ok(Outcome::Done)
+            },
+        )
+        .enabled(has_image),
+    );
     r.register(
         FnCommand::new(
             spec(
@@ -282,12 +360,21 @@ pub fn register(r: &mut CommandRegistry) {
         FnCommand::new(
             params(
                 spec("image.resize", Format, "ED-093", "Set the display width of the image at the caret (`width` in px; none restores the natural size)."),
-                r#"{"type":"object","properties":{"width":{"type":"integer","minimum":1}}}"#,
+                r#"{"type":"object","properties":{"width":{"type":"integer","minimum":1},"natural":{"type":"number"}}}"#,
             ),
             |cx, p| {
                 let img = current(cx.app).ok_or_else(|| fail("image.resize", "no image at the caret"))?;
                 let width = p.get("width").and_then(Value::as_u64).map(|w| w as u32);
-                let t = render(&img.src, &img.alt, img.title.as_deref(), width);
+                // ED-093: write `zoom` instead of a width when so set and the
+                // natural width is known.
+                let natural = p.get("natural").and_then(Value::as_f64).filter(|n| *n > 0.0);
+                let t = match (width, natural) {
+                    (Some(w), Some(n)) if cx.app.prefs.string("image.resizeWrites") == "zoom" => {
+                        let pct = (f64::from(w) / n * 100.0).round().max(1.0);
+                        render_zoom(&img.src, &img.alt, img.title.as_deref(), pct as u32)
+                    }
+                    _ => render(&img.src, &img.alt, img.title.as_deref(), width),
+                };
                 replace(cx, &img, &t)
             },
         )
@@ -409,6 +496,25 @@ mod tests {
         );
         e.state.editor.sel = Selection::caret(2);
         assert_eq!(current(&e.state).map(|i| i.width), Some(Some(50)));
+        let mut e = engine("![z](z.png)", 2);
+        e.execute(
+            "app.setPreference",
+            &json!({ "key": "image.resizeWrites", "value": "zoom" }),
+        )
+        .unwrap();
+        e.execute("image.resize", &json!({ "width": 50, "natural": 200.0 }))
+            .unwrap();
+        assert_eq!(
+            e.state.editor.text(),
+            "<img src=\"z.png\" alt=\"z\" style=\"zoom:25%;\">"
+        );
+        let mut e = engine("![a](old.png) and ![b](old.png) <img src=\"old.png\">", 0);
+        e.execute(
+            "image.relink",
+            &json!({ "from": "old.png", "path": "/abs/new.png" }),
+        )
+        .unwrap();
+        assert_eq!(e.state.editor.text().matches("/abs/new.png").count(), 3);
         let mut e = engine("plain", 2);
         assert!(!e.is_enabled("image.resize"));
     }

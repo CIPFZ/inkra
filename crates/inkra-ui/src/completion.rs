@@ -14,6 +14,8 @@ pub enum Kind {
     Heading,
     /// `[^no` → `[^note]`
     Footnote,
+    /// ```` ```py ```` → `python` (ED-105: the code block language).
+    Language,
 }
 
 /// An open completion.
@@ -45,6 +47,35 @@ pub fn detect(engine: &Engine) -> Option<Completion> {
     let t = e.doc.text();
     let ls = t.line_to_byte(t.byte_to_line(caret));
     let before = t.slice(ls..caret).into_owned();
+    // ED-105: the language of a code fence being typed.
+    let trimmed = before.trim_start();
+    for fence in ["```", "~~~"] {
+        if let Some(word) = trimmed.strip_prefix(fence)
+            && !word.starts_with(['`', '~'])
+            && !word.is_empty()
+            && word
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '#' | '-' | '_'))
+        {
+            let langs = inkra_highlight::languages();
+            let hits = inkra_workspace::fuzzy::Fuzzy::text().rank(word, &langs, 8);
+            let items: Vec<(String, String)> = hits
+                .into_iter()
+                .map(|h| (langs[h.index].to_owned(), langs[h.index].to_owned()))
+                .filter(|(l, _)| l != word)
+                .collect();
+            if items.is_empty() {
+                return None;
+            }
+            return Some(Completion {
+                kind: Kind::Language,
+                start: caret - word.len(),
+                end: caret,
+                items,
+                selected: 0,
+            });
+        }
+    }
     if inkra_engine::editor::context::in_code_content(&e.doc, caret)
         || inkra_engine::editor::context::in_inline_code(&e.doc, caret)
     {

@@ -123,6 +123,23 @@ pub fn register(r: &mut CommandRegistry) {
             "table.insertRowBelow",
             "Insert a row below (Ctrl+Enter).",
             |cx, _| {
+                // ED-006: Ctrl+Enter at the very start of a table that opens the
+                // document makes room for a paragraph above it.
+                let e = &cx.app.editor;
+                if let Some(t) = crate::editor::table::table_at(&e.doc, e.sel.head)
+                    && t.span.start == e.doc.ast().start(0)
+                    && t.rows
+                        .first()
+                        .and_then(|r| r.first())
+                        .is_some_and(|c| e.sel.head <= c.start)
+                {
+                    let tx = crate::editor::format_ops::exit_block(
+                        &e.doc,
+                        inkra_doc::Selection::caret(t.span.start),
+                    );
+                    let tx = tx.with_selection_before(e.sel);
+                    return crate::formatting::apply_tx(cx, tx);
+                }
                 rewrite(cx, |cells, a, c| {
                     cells.insert(c.row + 1, vec![String::new(); a.len()]);
                     // A new row starts at its first cell.

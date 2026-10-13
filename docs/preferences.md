@@ -33,6 +33,10 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `appearance.rememberWindowSize` | bool | `true` | TH-008 | Reopen windows at their last size and position. |
 | `sidebar.fontSize` | number | `13` | TH-008 | Sidebar font size in points. |
 | `sidebar.lineHeight` | number | `1.6` | TH-008 | Sidebar row height as a multiple of the font size. |
+| `editor.sourceLineNumbers` | bool | `true` | ED-121 | Show line numbers in source mode. |
+| `editor.sourceWrap` | bool | `true` | ED-121 | Soft-wrap long lines in source mode (otherwise they scroll horizontally). |
+| `editor.hardBreak` | `newline` / `spaces` / `br` | `"newline"` | ED-013 | What Shift+Enter writes: a bare line break, two trailing spaces plus a break, or `<br>`. |
+| `editor.paragraphTab` | `spaces` / `fullwidth` / `ignore` | `"spaces"` | ED-014 | Tab in a paragraph: four spaces, two full-width spaces (first-line indent), or nothing. |
 | `editor.firstLineIndent` | bool | `false` | PR-034 | Indent the first line of each paragraph by two characters. |
 | `editor.copyAs` | `markdown` / `plain` | `"markdown"` | PR-037 | What Copy puts in text/plain: the Markdown source or plain text. |
 | `editor.ctrlWheelZoom` | bool | `true` | PR-039 | Ctrl + mouse wheel zooms the document. |
@@ -49,6 +53,9 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `markdown.preserveBlankLines` | bool | `false` | MD-074 | Show runs of blank lines as extra space (exported as `<br>`). |
 | `image.loadRemote` | bool | `true` | NF-004 | Load images from http(s) URLs (the only network access besides the update check). |
 | `image.insertAction` | `assets` / `folder` / `none` | `"assets"` | ED-092 | Inserted images: copy to `./<name>.assets/`, copy to `image.copyFolder`, or keep the original path. |
+| `image.applyToRemote` | bool | `false` | ED-092 | Apply the insert action to images pasted or dropped as web URLs (they are downloaded first). |
+| `image.rootFolder` | string | `""` | ED-091 | Folder that image paths starting with `/` resolve against (a document's `inkra-root-url` front matter wins). |
+| `image.resizeWrites` | `width` / `zoom` | `"width"` | ED-093 | Dragging an image's resize handle writes `<img width>` or `<img style="zoom:…%">`. |
 | `image.copyFolder` | string | `""` | ED-092 | Target folder pattern for `folder` (supports `${filename}`, `${filepath}`). |
 | `image.applyToLocal` | bool | `false` | ED-092 | Also copy inserted local image files (pasted bitmaps are always saved). |
 | `image.preferRelative` | bool | `true` | ED-092 | Insert image paths relative to the document. |

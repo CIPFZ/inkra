@@ -149,6 +149,7 @@ pub struct Shell {
     theme_names_at: f64,
     jobs: jobs::Jobs,
     welcome_dismissed: Vec<u64>,
+    image_viewer: Option<(String, bool)>,
     ui_font_size: f32,
     prefs: prefs_window::PrefsWindow,
     rename: Option<String>,
@@ -214,6 +215,7 @@ impl Shell {
             mmdc_conf: String::new(),
             jobs: Default::default(),
             welcome_dismissed: Vec::new(),
+            image_viewer: None,
             ui_font_size: 13.0,
             prefs: Default::default(),
             rename: None,
@@ -458,6 +460,28 @@ impl Shell {
 
     /// Runs a command in the active window and applies its effects.
     pub fn invoke(&mut self, ctx: &egui::Context, id: &str, params: &Value) {
+        // ED-039: with a selection, a URL on the clipboard becomes the address.
+        let with_url;
+        let params = if id == "format.link"
+            && params.get("url").is_none()
+            && !self.engine.state.editor.sel.is_empty()
+        {
+            let text = self.clipboard.read(None).text.unwrap_or_default();
+            let t = text.trim();
+            let url_like = !t.contains(char::is_whitespace)
+                && (t.starts_with("http://")
+                    || t.starts_with("https://")
+                    || t.starts_with("mailto:")
+                    || t.starts_with("www."));
+            with_url = if url_like {
+                json!({ "url": t })
+            } else {
+                params.clone()
+            };
+            &with_url
+        } else {
+            params
+        };
         if let Err(e) = self.engine.execute(id, params) {
             log::debug!("{e}");
             if let inkra_engine::CommandError::Failed { msg, .. } = &e {
@@ -701,6 +725,18 @@ impl Shell {
                 Effect::OpenExternal(target) => {
                     dialogs::open_external(&target);
                 }
+                Effect::ShowImage(src) => self.image_viewer = Some((src, true)),
+                Effect::RelinkImage(from) => {
+                    let dir = self
+                        .engine
+                        .state
+                        .editor
+                        .path
+                        .as_ref()
+                        .and_then(|p| p.parent().map(Path::to_owned));
+                    self.dialogs
+                        .open(ctx, dialogs::Purpose::RelinkImage(from), dir, None);
+                }
                 Effect::ReloadImage(src) => {
                     self.win().editor.images.reload(&src);
                     ctx.request_repaint();
@@ -848,6 +884,14 @@ impl Shell {
     /// are inserted, anything else becomes a link.
     fn handle_drops(&mut self, ctx: &egui::Context) {
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
+        // ED-017: insert where the files were dropped (computed by the editor
+        // in the previous pass).
+        if !dropped.is_empty()
+            && let Some(at) = self.win().editor.drop_position()
+        {
+            let e = &mut self.engine.state.editor;
+            e.set_selection(inkra_doc::Selection::caret(at.min(e.doc.text().len())));
+        }
         for f in dropped {
             let path = f.path().to_path_buf();
             if path.as_os_str().is_empty() {
@@ -980,6 +1024,9 @@ impl Shell {
                     let mut p = format.params();
                     p["path"] = json!(path);
                     self.invoke(ctx, format.command(), &p);
+                }
+                (dialogs::Purpose::RelinkImage(from), Some(path)) => {
+                    self.invoke(ctx, "image.relink", &json!({ "from": from, "path": path }));
                 }
                 (dialogs::Purpose::ImportSettings, Some(path)) => {
                     self.invoke(ctx, "app.importSettings", &json!({ "path": path }));
@@ -1239,7 +1286,7 @@ impl Shell {
         let t = e.doc.text();
         let line_start =
             t.line_to_byte((line.saturating_sub(1) as usize).min(t.len_lines().saturating_sub(1)));
-        e.find.refresh(&e.doc, line_start);
+        e.refresh_find(line_start);
         let hit = e.find.matches.iter().position(|m| m.start >= line_start);
         if let Some(k) = hit {
             let m = e.find.matches[k].clone();
@@ -1568,6 +1615,7 @@ impl Shell {
         }
 
         self.prefs_viewport(&ctx);
+        self.image_viewport(&ctx);
 
         // Root window.
         let root = self.root;
@@ -1592,6 +1640,69 @@ impl Shell {
 
     /// The UI of one window (`id` is active).
     /// The Preferences window in its own viewport (SPEC chapter 9).
+    /// ED-093: an image in its own window, fit to it or at actual size.
+    fn image_viewport(&mut self, ctx: &egui::Context) {
+        let Some((src, mut fit)) = self.image_viewer.clone() else {
+            return;
+        };
+        let root = self.root;
+        self.engine.state.activate(root);
+        let tex = self.windows.get_mut(&root).and_then(|w| {
+            let t = w.editor.images.get(ctx, &src);
+            t.map(|t| {
+                (
+                    t,
+                    inkra_layout::live::leaf::ImageSizes::size(&w.editor.images, &src)
+                        .unwrap_or([400.0, 300.0]),
+                )
+            })
+        });
+        let vid = egui::ViewportId::from_hash_of(("inkra-image", &src));
+        let title = format!(
+            "{} - {}",
+            src.rsplit(['/', '\\']).next().unwrap_or(&src),
+            self.i18n.tr("image-viewer-title")
+        );
+        let size = tex.map_or([640.0, 480.0], |(_, s)| {
+            [
+                s[0].clamp(240.0, 1400.0),
+                (s[1] + 32.0).clamp(160.0, 1000.0),
+            ]
+        });
+        let builder = egui::ViewportBuilder::default()
+            .with_title(title)
+            .with_inner_size(size);
+        let i18n = self.i18n.clone();
+        let mut close = false;
+        ctx.show_viewport_immediate(vid, builder, |vui, _| {
+            if vui
+                .ctx()
+                .input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::Escape))
+            {
+                close = true;
+            }
+            egui::Panel::top("image-viewer-bar").show(vui, |ui| {
+                ui.checkbox(&mut fit, i18n.tr("image-viewer-fit"));
+            });
+            egui::CentralPanel::default().show(vui, |ui| match tex {
+                Some((t, s)) => {
+                    let s = egui::vec2(s[0], s[1]);
+                    if fit {
+                        let avail = ui.available_size();
+                        let k = (avail.x / s.x).min(avail.y / s.y).min(1.0);
+                        ui.centered_and_justified(|ui| ui.add(egui::Image::new((t, s * k))));
+                    } else {
+                        egui::ScrollArea::both().show(ui, |ui| ui.add(egui::Image::new((t, s))));
+                    }
+                }
+                None => {
+                    ui.spinner();
+                }
+            });
+        });
+        self.image_viewer = if close { None } else { Some((src, fit)) };
+    }
+
     fn prefs_viewport(&mut self, ctx: &egui::Context) {
         if !self.prefs.open {
             return;

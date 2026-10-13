@@ -75,14 +75,14 @@ pub fn show(
             }
             if (e.find.query.clone(), e.find.options) != before {
                 e.find.invalidate();
-                e.find.refresh(&e.doc, e.sel.start());
+                e.refresh_find(e.sel.start());
                 if let Some(i) = e.find.current {
                     let r = e.find.matches[i].clone();
                     e.sel = Selection::new(r.start, r.end);
                     cmds.push("edit.jumpSelection".to_owned());
                 }
             } else {
-                e.find.refresh(&e.doc, e.sel.start());
+                e.refresh_find(e.sel.start());
             }
             if enter {
                 cmds.push(

@@ -80,6 +80,17 @@ impl Editor {
         self.doc.text().to_string()
     }
 
+    /// Recomputes find matches: the displayed text in the live view, the source
+    /// in source mode (ED-110).
+    pub fn refresh_find(&mut self, caret: usize) {
+        let rendered = self.mode == ViewMode::Live;
+        if self.find.rendered != rendered {
+            self.find.rendered = rendered;
+            self.find.invalidate();
+        }
+        self.find.refresh(&self.doc, caret);
+    }
+
     /// Applies a transaction and updates the selection.
     pub fn apply(&mut self, tx: Transaction, policy: UndoPolicy) {
         let after = self.doc.apply(tx, policy);
@@ -207,7 +218,7 @@ impl Editor {
             self.table_action(a);
             return;
         }
-        let tx = live_ops::newline(&self.doc, self.sel, kind);
+        let tx = live_ops::newline_with(&self.doc, self.sel, kind, self.prefs.hard_break);
         self.doc.break_undo_group();
         if tx.edits.is_empty() {
             return;
@@ -279,9 +290,51 @@ impl Editor {
             self.table_action(a);
             return;
         }
+        // ED-014: a selection over several list items moves them all.
+        let items = self.selected_items();
+        if items.len() > 1 {
+            let sel = self.sel;
+            self.doc.break_undo_group();
+            let mut first = true;
+            let mut markers = items;
+            for k in 0..markers.len() {
+                let at = markers[k].min(self.doc.text().len());
+                if let Some(tx) = ops::tab(&self.doc, Selection::caret(at), outdent, &self.prefs) {
+                    // Later markers move with the text.
+                    for m in markers.iter_mut().skip(k + 1) {
+                        *m = tx.map_selection(Selection::caret(*m)).head;
+                    }
+                    let policy = if first {
+                        UndoPolicy::NewGroup
+                    } else {
+                        UndoPolicy::Merge
+                    };
+                    self.apply(tx.with_selection_before(sel), policy);
+                    first = false;
+                }
+            }
+            return;
+        }
         if let Some(tx) = ops::tab(&self.doc, self.sel, outdent, &self.prefs) {
             self.apply_with_renumber(tx, UndoPolicy::NewGroup);
         }
+    }
+
+    /// Marker starts of the list items the selection touches (top to bottom),
+    /// re-found after each edit by counting items.
+    fn selected_items(&self) -> Vec<usize> {
+        if self.sel.is_empty() {
+            return Vec::new();
+        }
+        let r = self.sel.range();
+        let Some(info) = context::list_item_near(&self.doc, r.start) else {
+            return Vec::new();
+        };
+        info.siblings
+            .iter()
+            .map(|m| m.start)
+            .filter(|s| *s >= line_start_of(&self.doc, r.start) && *s < r.end)
+            .collect()
     }
 
     /// Undo; returns false when there is nothing to undo.
@@ -332,3 +385,8 @@ impl Editor {
 mod format_tests;
 #[cfg(test)]
 mod tests;
+
+fn line_start_of(doc: &inkra_doc::Doc, pos: usize) -> usize {
+    let t = doc.text();
+    t.line_to_byte(t.byte_to_line(pos))
+}

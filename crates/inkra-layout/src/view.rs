@@ -488,12 +488,11 @@ impl ViewLayout {
                 if let Some(l) = self.cache.get(&key) {
                     return (key, l.clone());
                 }
-                (
-                    key,
-                    Arc::new(source::layout_line(
-                        &text, &tokens, self.width, wrap, cx.style,
-                    )),
-                )
+                let mut l = source::layout_line(&text, &tokens, self.width, wrap, cx.style);
+                if !l.runs.iter().all(|r| r.map.squiggles.is_empty()) {
+                    crate::live::leaf::place_objects(&mut l, fonts);
+                }
+                (key, Arc::new(l))
             }
             Mode::Live => {
                 let item = &self.live[i];
@@ -568,9 +567,9 @@ impl ViewLayout {
                     }
                 }
             }
-            // Images inside HTML blocks change the layout once loaded.
-            if matches!(b.kind, inkra_markdown::BlockKind::HtmlBlock { .. }) {
-                let src = cx.doc.text().slice(item.src.clone());
+            // Images in HTML (blocks or inline `<img>`) change the layout once loaded.
+            let src = cx.doc.text().slice(item.src.clone());
+            if src.contains("<img") {
                 let mut rest: &str = &src;
                 while let Some(i) = rest.find("<img") {
                     rest = &rest[i + 4..];

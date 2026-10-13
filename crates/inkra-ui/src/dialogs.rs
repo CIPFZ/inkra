@@ -24,6 +24,8 @@ pub enum Purpose {
     },
     /// A document to import (EX-020).
     Import,
+    /// The new file of a broken image (ED-090).
+    RelinkImage(String),
     /// A settings file to import (PR-002).
     ImportSettings,
     /// Where to export the settings (PR-002).
@@ -97,6 +99,7 @@ impl Dialogs {
                     .add_filter("Documents", inkra_export::pandoc::IMPORT_EXTS)
                     .pick_file(),
                 Purpose::ImportSettings => d.add_filter("JSON", &["json"]).pick_file(),
+                Purpose::RelinkImage(_) => d.add_filter("Images", IMAGE_EXTS).pick_file(),
                 Purpose::ExportSettings => {
                     if let Some(n) = name {
                         d = d.set_file_name(n);

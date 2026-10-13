@@ -27,6 +27,17 @@ pub fn copy_payload(doc: &Doc, sel: Selection) -> Option<(String, String)> {
     Some((src, html))
 }
 
+/// A web address of a picture (by its extension).
+pub fn is_image_url(s: &str) -> bool {
+    let t = s.trim();
+    (t.starts_with("http://") || t.starts_with("https://")) && !t.contains(char::is_whitespace) && {
+        let path = t.split(['?', '#']).next().unwrap_or(t).to_ascii_lowercase();
+        [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"]
+            .iter()
+            .any(|e| path.ends_with(e))
+    }
+}
+
 fn looks_like_url(s: &str) -> bool {
     let t = s.trim();
     !t.contains(char::is_whitespace)
@@ -130,6 +141,12 @@ pub fn paste(doc: &Doc, sel: Selection, c: &ClipboardContent, plain: bool) -> Op
             );
         }
     }
+    // ED-092: a pasted image URL becomes an image.
+    let text = if !plain && !in_code && sel.is_empty() && is_image_url(&text) {
+        format!("![]({})", text.trim())
+    } else {
+        text
+    };
     let text = if doc.newline() == "\n" {
         text.replace("\r\n", "\n")
     } else {

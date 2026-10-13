@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **205**
+Registered commands: **214**
 
 
 ## App
@@ -21,6 +21,12 @@ Registered commands: **205**
 | `app.resetSettings` | Reset Settings | 重置设置 |  |  | — | PR-021 | Reset every setting to its default. |
 | `app.setClipboard` | Copy Text | 复制文本 |  |  | `{"type":"object","required":["text"],"properties":{"text":{"type":"string"}}}` | ED-016 | Put text on the clipboard. |
 | `app.setPreference` | Set Preference | 设置偏好 |  |  | `{"type":"object","required":["key","value"],"properties":{"key":{"type":"string"},"value":{}}}` | PR-001 | Set a preference (validated against the preference table) and save. |
+
+## Format
+
+| Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
+|---|---|---|---|---|---|---|---|
+| `code.setLanguage` | Code Language | 代码语言 |  |  | `{"type":"object","required":["lang"],"properties":{"lang":{"type":"string"}}}` | ED-002 | Set the language of the fenced code block at the caret. |
 
 ## Edit
 
@@ -110,6 +116,7 @@ Registered commands: **205**
 | `format.code` | Code | 代码 | `Ctrl+Shift+`` | `⇧⌘`` | — | ED-033 | Toggle `inline code` (double backticks when the text has one). |
 | `format.comment` | Comment | 注释 |  |  | — | ED-038 | Wrap the selection in an HTML comment. |
 | `format.editLink` | Edit Link… | 编辑链接… |  |  | `{"type":"object","properties":{"text":{"type":"string"},"url":{"type":"string"}}}` | UI-040 | Edit the text and address of the link at the caret, or insert one for the selection (opens a dialog without parameters). |
+| `format.footnote` | Footnote Reference | 脚注引用 |  |  | — | ED-044 | Insert a footnote reference at the caret and its definition at the end. |
 | `format.highlight` | Highlight | 高亮 |  |  | — | ED-035 | Toggle ==highlight== (needs MD-063). |
 | `format.image` | Insert Image… | 插入图像… | `Ctrl+Shift+I` | `⇧⌘I` | `{"type":"object","properties":{"src":{"type":"string"},"alt":{"type":"string"}}}` | ED-040 | Insert an image: `src` inserts directly, otherwise a file picker opens. |
 | `format.imageLocal` | Insert Local Image… | 插入本地图片… |  |  | — | ED-040 | Insert a local image file. |
@@ -146,10 +153,14 @@ Registered commands: **205**
 | `image.copyAddress` | Copy Image Address | 复制图片地址 |  |  | — | ED-093 | Copy the address of the image at the caret. |
 | `image.delete` | Delete Image | 删除图片 |  |  | — | ED-093 | Remove the image at the caret from the document. |
 | `image.open` | Open in Default Viewer | 用默认程序打开 |  |  | — | ED-093 | Open the image with the system's default viewer. |
+| `image.openWindow` | Open in New Window | 在新窗口打开 |  |  | — | ED-093 | Show the image at the caret in its own window (zoomable). |
+| `image.relink` | Fix Image Path… | 修复图片路径… |  |  | `{"type":"object","required":["from"],"properties":{"from":{"type":"string"},"path":{"type":"string"}}}` | ED-090 | Point every image with source `from` at another file (`path`; asks for it without). |
 | `image.reload` | Reload Image | 重新加载 |  |  | — | ED-093 | Load the image at the caret again. |
-| `image.resize` | Image Size | 图片尺寸 |  |  | `{"type":"object","properties":{"width":{"type":"integer","minimum":1}}}` | ED-093 | Set the display width of the image at the caret (`width` in px; none restores the natural size). |
+| `image.resize` | Image Size | 图片尺寸 |  |  | `{"type":"object","properties":{"width":{"type":"integer","minimum":1},"natural":{"type":"number"}}}` | ED-093 | Set the display width of the image at the caret (`width` in px; none restores the natural size). |
 | `image.reveal` | Reveal in Folder | 在文件夹中显示 |  |  | — | ED-093 | Show the image file in the file manager. |
 | `image.toLocal` | Make Local Copy | 转为本地图片 |  |  | `{"type":"object","properties":{"file":{"type":"string"}}}` | ED-093 | Download the remote image at the caret into the assets folder and point to the copy. |
+| `math.copyTex` | Copy TeX | 复制 TeX |  |  | — | ED-130 | Copy the TeX source of the formula at the caret. |
+| `math.edit` | Edit Formula | 编辑公式 |  |  | — | ED-130 | Edit the formula at the caret (puts the caret into its source). |
 
 ## Paragraph
 
@@ -174,6 +185,7 @@ Registered commands: **205**
 | `paragraph.insertAbove` | Insert Paragraph Above | 在上方插入段落 |  |  | — | ED-070 | Insert an empty paragraph before the block. |
 | `paragraph.insertBelow` | Insert Paragraph Below | 在下方插入段落 |  |  | — | ED-070 | Insert an empty paragraph after the block. |
 | `paragraph.linkReference` | Link Reference | 链接引用 |  |  | — | MD-015 | Insert a link reference definition `[id]: url`. |
+| `paragraph.listStyle` | List Marker Style | 列表标记样式 |  |  | `{"type":"object","required":["marker"],"properties":{"marker":{"enum":["-","*","+","1.","1)"]}}}` | ED-062 | Change the marker of the list at the caret: `-`, `*`, `+`, `1.` or `1)`. |
 | `paragraph.mathBlock` | Math Block | 公式块 | `Ctrl+Shift+M` | `⇧⌘M` | — | ED-055 | Insert a `$$` math block. |
 | `paragraph.moveDown` | Move Down | 下移 | `Alt+Down` (outside tables) | `⌥↓` (outside tables) | — | ED-018 | Move the paragraph, list item or block down. |
 | `paragraph.moveUp` | Move Up | 上移 | `Alt+Up` (outside tables) | `⌥↑` (outside tables) | — | ED-018 | Move the paragraph, list item or block up. |
@@ -269,6 +281,8 @@ Registered commands: **205**
 | `view.showWhitespace` | Show Formatting Marks | 显示格式标记 |  |  | — | ED-120 | Show spaces, tabs and line ends in source mode. |
 | `view.sourceMode` | Source Code Mode | 源代码模式 | `Ctrl+/` | `⌘/` | — | ED-120 | Toggle between live rendering and source mode. |
 | `view.switchWindow` | Switch Window | 切换窗口 |  |  | `{"type":"object","required":["window"],"properties":{"window":{"type":"integer"}}}` | FS-040 | Bring a window to the front. |
+| `view.toggleCodeLineNumbers` | Code Line Numbers | 代码行号 |  |  | — | ED-130 | Show line numbers in code blocks. |
+| `view.toggleCodeWrap` | Wrap Code Lines | 代码自动换行 |  |  | — | ED-130 | Wrap long lines in code blocks (otherwise they scroll). |
 | `view.toggleMenuBar` | Menu Bar | 显示菜单栏 |  |  | — | TH-008 | Show or hide the menu bar (Alt shows it temporarily). |
 | `view.toggleSidebar` | Sidebar | 侧边栏 | `Ctrl+Shift+L` | `⇧⌘L` | — | FS-040 | Show or hide the sidebar. |
 | `view.toggleStatusBar` | Status Bar | 显示状态栏 |  |  | — | PR-043 | Show or hide the status bar. |

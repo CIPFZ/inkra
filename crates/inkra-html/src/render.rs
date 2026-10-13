@@ -49,6 +49,8 @@ pub struct Span {
     pub size: Option<f32>,
     /// An inline image: source and requested size.
     pub image: Option<(String, Option<f32>, Option<f32>)>,
+    /// `style="zoom: 50%"` of an image (ED-090), as a factor.
+    pub zoom: Option<f32>,
 }
 
 /// A block of the flattened HTML.
@@ -114,6 +116,27 @@ fn style_prop(h: &Handle, prop: &str) -> Option<String> {
     s.split(';').find_map(|d| {
         let (k, v) = d.split_once(':')?;
         (k.trim().eq_ignore_ascii_case(prop)).then(|| v.trim().to_owned())
+    })
+}
+
+/// A CSS `zoom` value (`50%`, `0.5`) as a factor.
+pub fn zoom_factor(v: &str) -> Option<f32> {
+    let v = v.trim();
+    let f = match v.strip_suffix('%') {
+        Some(p) => p.trim().parse::<f32>().ok()? / 100.0,
+        None => v.parse::<f32>().ok()?,
+    };
+    (f > 0.0 && f < 20.0).then_some(f)
+}
+
+/// The `zoom` of a tag's inline style.
+pub fn tag_zoom(src: &str) -> Option<f32> {
+    let style = tag_attr(src, "style")?;
+    style.split(';').find_map(|d| {
+        let (k, v) = d.split_once(':')?;
+        (k.trim().eq_ignore_ascii_case("zoom"))
+            .then(|| zoom_factor(v))
+            .flatten()
     })
 }
 
@@ -333,6 +356,7 @@ impl Flat {
                         let mut i = s.clone();
                         i.text = String::new();
                         i.image = Some((src, w, hh));
+                        i.zoom = style_prop(h, "zoom").as_deref().and_then(zoom_factor);
                         self.spans.push(i);
                         return;
                     }

@@ -459,10 +459,10 @@ pub fn register(r: &mut CommandRegistry) {
             )),
             |cx, _| {
                 let e = &mut cx.app.editor;
-                e.find.refresh(&e.doc, e.sel.start());
+                e.refresh_find(e.sel.start());
                 if let Some(tx) = e.find.replace_current(&e.doc, e.sel) {
                     e.apply(tx, UndoPolicy::NewGroup);
-                    e.find.refresh(&e.doc, e.sel.head);
+                    e.refresh_find(e.sel.head);
                     if let Some(r) = e.find.step(e.sel.head.saturating_sub(1), true) {
                         e.sel = Selection::new(r.start, r.end);
                     }
@@ -482,7 +482,7 @@ pub fn register(r: &mut CommandRegistry) {
             )),
             |cx, _| {
                 let e = &mut cx.app.editor;
-                e.find.refresh(&e.doc, e.sel.start());
+                e.refresh_find(e.sel.start());
                 if let Some(tx) = e.find.replace_all(&e.doc, e.sel) {
                     let mapped = tx.map_selection(e.sel);
                     e.apply(tx.with_selection_after(mapped), UndoPolicy::NewGroup);
@@ -547,8 +547,74 @@ fn clipboard_from(p: &Value) -> Option<ClipboardContent> {
 
 fn paste_rich(cx: &mut CommandContext<'_>, p: &Value) -> CommandResult {
     match clipboard_from(p) {
+        // ED-016 rule 2: files paste as links; images go through the image
+        // insertion flow (copied per the image preferences, relative paths).
+        Some(c)
+            if !c.files.is_empty()
+                && !crate::editor::context::in_code_content(
+                    &cx.app.editor.doc,
+                    cx.app.editor.sel.start(),
+                ) =>
+        {
+            let rel = cx.app.prefs.bool("image.preferRelative");
+            let mut parts = Vec::new();
+            for f in &c.files {
+                let image = f.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+                    matches!(
+                        e.to_ascii_lowercase().as_str(),
+                        "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "svg" | "tif" | "tiff"
+                    )
+                });
+                let name = f
+                    .file_stem()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                if image {
+                    let placed =
+                        crate::formatting::place_image(cx, f, false).unwrap_or_else(|_| f.clone());
+                    let src = inkra_workspace::assets::markdown_src(
+                        cx.app.editor.path.as_deref(),
+                        &placed,
+                        rel,
+                    );
+                    parts.push(format!("![{name}]({src})"));
+                } else {
+                    let src = inkra_workspace::assets::markdown_src(
+                        cx.app.editor.path.as_deref(),
+                        f,
+                        rel,
+                    );
+                    let label = f
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or(name);
+                    parts.push(format!("[{label}]({src})"));
+                }
+            }
+            let e = &mut cx.app.editor;
+            let text = parts.join(e.doc.newline());
+            let r = e.sel.range();
+            let tx = inkra_doc::Transaction::single(r.clone(), &text)
+                .with_selection_before(e.sel)
+                .with_selection_after(Selection::caret(r.start + text.len()));
+            e.doc.break_undo_group();
+            e.apply(tx, UndoPolicy::NewGroup);
+            done(cx)
+        }
         Some(c) => {
+            let remote = c
+                .text
+                .as_deref()
+                .filter(|t| crate::editor::clipboard::is_image_url(t))
+                .map(|t| t.trim().to_owned());
             cx.app.editor.paste(&c, false);
+            // ED-092: web images can be downloaded and copied like local ones.
+            if let Some(url) = remote
+                && cx.app.prefs.bool("image.applyToRemote")
+                && cx.app.prefs.string("image.insertAction") != "none"
+            {
+                cx.effects.push(Effect::DownloadImage(url));
+            }
             done(cx)
         }
         None => {
@@ -587,7 +653,7 @@ fn open_find(cx: &mut CommandContext<'_>, replace: bool) {
 
 fn find_step(cx: &mut CommandContext<'_>, forward: bool) -> CommandResult {
     let e = &mut cx.app.editor;
-    e.find.refresh(&e.doc, e.sel.start());
+    e.refresh_find(e.sel.start());
     let from = if forward {
         e.sel.end().saturating_sub(1).max(e.sel.start())
     } else {

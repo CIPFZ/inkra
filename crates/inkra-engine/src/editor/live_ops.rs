@@ -167,6 +167,12 @@ fn expand_on_enter(doc: &Doc, s: &str, sel: Selection) -> Option<Transaction> {
 
 /// Enter / Shift+Enter in live mode.
 pub fn newline(doc: &Doc, sel: Selection, kind: Break) -> Transaction {
+    newline_with(doc, sel, kind, 0)
+}
+
+/// [`newline`] with the hard-break form for Shift+Enter (ED-013): 0 a bare
+/// newline, 1 two trailing spaces, 2 `<br>`.
+pub fn newline_with(doc: &Doc, sel: Selection, kind: Break, hard_break: u8) -> Transaction {
     let s = text(doc);
     let nl = doc.newline();
     let pos = sel.start();
@@ -203,7 +209,12 @@ pub fn newline(doc: &Doc, sel: Selection, kind: Break) -> Transaction {
     };
     let r = sel.range();
     if kind == Break::Soft {
-        let ins = format!("{nl}{prefix}");
+        let mark = match hard_break {
+            1 => "  ",
+            2 => "<br>",
+            _ => "",
+        };
+        let ins = format!("{mark}{nl}{prefix}");
         return replace(r.clone(), &ins, sel, Selection::caret(r.start + ins.len()));
     }
     if quote {
@@ -444,7 +455,7 @@ fn merge_with_previous(doc: &Doc, s: &str, sel: Selection, start: usize) -> Opti
                     .with_selection_after(Selection::caret(end)),
             )
         }
-        Some(BlockKind::ThematicBreak) => {
+        Some(BlockKind::ThematicBreak | BlockKind::Toc) => {
             let l = prev.unwrap_or_else(|| unreachable!());
             let span = l.node.span();
             Some(replace(
@@ -502,6 +513,7 @@ pub fn delete_forward(doc: &Doc, sel: Selection, unit: Unit) -> Option<Transacti
                     BlockKind::CodeBlock { .. }
                         | BlockKind::Table { .. }
                         | BlockKind::ThematicBreak
+                        | BlockKind::Toc
                         | BlockKind::MathBlock { .. }
                 ) {
                     return Some(

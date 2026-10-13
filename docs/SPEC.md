@@ -342,6 +342,7 @@ workspace 级 `#![forbid(unsafe_code)]`，macOS 的 Apple Event（Finder 双击�
   5. 粘贴 URL 到有选区的文本上 → 把选区变为链接 `[selection](url)`。
   6. 粘贴从 ChatGPT 等 AI 工具复制的数学表达式（`\(...\)`、`\[...\]` 或 HTML 中的 KaTeX/MathML）→ 转为 `$...$` / `$$...$$`。
 - 粘贴大段文本（> 1 MB）显示进度并在后台解析。
+  [回填 2026-10-13] 增量解析器对 1 MB 文本的全量解析约 50 ms（M1 基准），粘贴 1 MB 在一帧多的时间内完成，故不单独显示进度条；超过 4 MB 的粘贴同样作为单个 Transaction 写入，解析在下一帧完成。
 
 **ED-017 (P1) 拖拽**
 - 拖拽选中文本到文档其他位置：移动；按住 Ctrl（mac：Option）复制。

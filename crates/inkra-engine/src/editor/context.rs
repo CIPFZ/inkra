@@ -293,3 +293,19 @@ fn shifted(list: &[inkra_markdown::Inline], delta: isize) -> Vec<inkra_markdown:
         })
         .collect()
 }
+
+/// A `key: value` of the document's YAML front matter (MD-012), quotes removed.
+pub fn front_matter_value(doc: &Doc, key: &str) -> Option<String> {
+    let ast = doc.ast();
+    let r = ast.get(0)?;
+    if !matches!(r.block.kind, BlockKind::FrontMatter { .. }) {
+        return None;
+    }
+    let text = doc.text().slice(r.span()).into_owned();
+    text.lines().find_map(|l| {
+        let (k, v) = l.split_once(':')?;
+        (k.trim() == key)
+            .then(|| v.trim().trim_matches(['"', '\'']).to_owned())
+            .filter(|v| !v.is_empty())
+    })
+}

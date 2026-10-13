@@ -30,6 +30,20 @@ thread_local! {
     static SPELL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
+thread_local! {
+    /// Natural sizes of the `<img>` images of the block being laid out.
+    static IMG_SIZES: std::cell::RefCell<Vec<(String, [f32; 2])>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Sets the natural sizes of inline `<img>` images for this thread's layout.
+pub fn set_image_sizes(sizes: Vec<(String, [f32; 2])>) {
+    IMG_SIZES.with(|s| *s.borrow_mut() = sizes);
+}
+
+fn image_size(src: &str) -> Option<[f32; 2]> {
+    IMG_SIZES.with(|s| s.borrow().iter().find(|(k, _)| k == src).map(|(_, v)| *v))
+}
+
 /// Enables spell-check underlines for text laid out on this thread.
 pub fn set_spellcheck(on: bool) {
     SPELL.with(|s| s.set(on));
@@ -379,11 +393,27 @@ impl<'a> Builder<'a> {
                                 inkra_html::render::tag_attr(&src, k)
                                     .and_then(|v| v.trim_end_matches("px").parse::<f32>().ok())
                             };
-                            let (iw, ih) = match (px("width"), px("height")) {
-                                (Some(a), Some(b)) => (a, b),
-                                (Some(a), None) => (a, a * 0.6),
-                                (None, Some(b)) => (b * 1.6, b),
+                            // ED-090: width/height attributes, `style="zoom"`, else
+                            // the natural size.
+                            let natural = image_size(&s);
+                            let zoom = inkra_html::render::tag_zoom(&src);
+                            let (iw, ih) = match (px("width"), px("height"), natural) {
+                                (Some(a), Some(b), _) => (a, b),
+                                (Some(a), None, Some(n)) => (a, a * n[1] / n[0].max(1.0)),
+                                (None, Some(b), Some(n)) => (b * n[0] / n[1].max(1.0), b),
+                                (None, None, Some(n)) => {
+                                    let z = zoom.unwrap_or(1.0);
+                                    (n[0] * z, n[1] * z)
+                                }
+                                (Some(a), None, None) => (a, a * 0.6),
+                                (None, Some(b), None) => (b * 1.6, b),
                                 _ => (cur.line_height * 1.6, cur.line_height),
+                            };
+                            let max_w = self.job.wrap.max_width;
+                            let (iw, ih) = if iw > max_w && max_w.is_finite() {
+                                (max_w, ih * max_w / iw)
+                            } else {
+                                (iw, ih)
                             };
                             let start = self.job.text.len();
                             self.push_image(&s, iw, ih, &cur);

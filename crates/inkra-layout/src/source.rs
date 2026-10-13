@@ -160,6 +160,9 @@ pub fn line_key(
     width.to_bits().hash(&mut h);
     wrap.hash(&mut h);
     style.version.hash(&mut h);
+    if style.spellcheck {
+        inkra_text::spell::generation().hash(&mut h);
+    }
     h.finish()
 }
 
@@ -241,6 +244,31 @@ pub fn layout_line(
     }
     let mut map = SourceMap::default();
     map.text(0..text.len(), 0..text.len());
+    // ED-121: spelling in source mode too, outside code, URLs, math and HTML.
+    if style.spellcheck {
+        for r in inkra_text::spell::misspelled(text) {
+            let skip = tokens.iter().any(|(t, c)| {
+                t.start < r.end
+                    && r.start < t.end
+                    && matches!(
+                        c,
+                        TokenClass::Code
+                            | TokenClass::Fence
+                            | TokenClass::CodeBlock
+                            | TokenClass::Url
+                            | TokenClass::Html
+                            | TokenClass::Math
+                            | TokenClass::FrontMatter
+                            | TokenClass::Entity
+                            | TokenClass::Definition
+                            | TokenClass::FootnoteRef
+                    )
+            });
+            if !skip {
+                map.squiggles.push(r);
+            }
+        }
+    }
     BlockLayout {
         height: rh,
         runs: vec![RunSpec {

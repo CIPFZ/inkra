@@ -157,6 +157,26 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
     }
 
     let leaf = item.block(cx.doc);
+    // Inline `<img>` tags size themselves from the loaded images.
+    if let Some((b, _)) = &leaf {
+        let mut sizes = Vec::new();
+        for i in &b.inlines {
+            i.walk(&mut |n| {
+                if matches!(n.kind, InlineKind::Html) {
+                    let span = (n.span.start as isize + leaf.as_ref().map_or(0, |l| l.1)) as usize
+                        ..(n.span.end as isize + leaf.as_ref().map_or(0, |l| l.1)) as usize;
+                    let src = text.slice(span.start.min(text.len())..span.end.min(text.len()));
+                    if src.starts_with("<img")
+                        && let Some(s) = inkra_html::render::tag_attr(&src, "src")
+                        && let Some(sz) = cx.images.size(&s)
+                    {
+                        sizes.push((s, sz));
+                    }
+                }
+            });
+        }
+        super::inline::set_image_sizes(sizes);
+    }
     match (item.kind, leaf) {
         (LeafKind::EmptyLine, _) | (_, None) => {
             let mut b = Builder::new(text, base, 0, Some(cx.caret), style, w);
@@ -315,7 +335,7 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                         out.caret_range = Some(0..item.src.len());
                     } else {
                         let mut bl = Builder::new(text, base, delta, Some(cx.caret), style, w);
-                        if matches!(b.kind, BlockKind::Toc) && !active {
+                        if matches!(b.kind, BlockKind::Toc) {
                             // MD-013: the document's headings, each a link.
                             let depth = style.toc_depth.clamp(1, 6);
                             let heads: Vec<_> = cx
@@ -374,7 +394,12 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                         content_h = h;
                         first_row_h = fr;
                         let end = b.lines.last().map_or(item.src.end, |l| abs(&l.span).end);
-                        out.caret_range = Some(start - base..end - base);
+                        // ED-005: the caret never enters a TOC (edit it in source mode).
+                        out.caret_range = if matches!(b.kind, BlockKind::Toc) {
+                            None
+                        } else {
+                            Some(start - base..end - base)
+                        };
                         out.runs.push(RunSpec {
                             job: bl.job,
                             pos: vec2(x, y),
@@ -995,6 +1020,11 @@ fn html_blocks(
                 let f = span_fmt(sp, base, style);
                 if let Some((src, ww, hh)) = &sp.image {
                     let natural = cx.images.size(src);
+                    let zoomed = sp
+                        .zoom
+                        .zip(natural)
+                        .map(|(z, n)| (Some(n[0] * z), Some(n[1] * z)));
+                    let (ww, hh) = zoomed.as_ref().map_or((ww, hh), |(a, b)| (a, b));
                     let (iw, ih) = match (ww, hh, natural) {
                         (Some(a), Some(b), _) => (*a, *b),
                         (Some(a), None, Some(n)) => (*a, a * n[1] / n[0].max(1.0)),
@@ -1364,7 +1394,7 @@ fn ms_key(req: &inkra_math::Request) -> u64 {
 
 /// Turns the inline objects of every run into decorations at the positions
 /// the text layout reserved for them.
-fn place_objects(out: &mut BlockLayout, fonts: &mut FontsView<'_>) {
+pub(crate) fn place_objects(out: &mut BlockLayout, fonts: &mut FontsView<'_>) {
     let mut decos = Vec::new();
     let mut hits = Vec::new();
     for run in &out.runs {

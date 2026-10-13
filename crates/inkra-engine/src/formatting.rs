@@ -21,6 +21,50 @@ fn params(mut s: CommandSpec, p: &'static str) -> CommandSpec {
     s
 }
 
+/// Flips a boolean preference and applies it (theme reload for rendering keys).
+fn toggle_pref(cx: &mut CommandContext<'_>, key: &str) -> CommandResult {
+    let v = !cx.app.prefs.bool(key);
+    cx.app.set_pref(key, serde_json::json!(v));
+    let _ = cx.app.reload_theme();
+    Ok(Outcome::Done)
+}
+
+/// The display formula (or inline formula) at the caret: the end of its source
+/// and the TeX.
+fn math_source_at(app: &crate::state::AppState) -> Option<(usize, String)> {
+    let e = &app.editor;
+    let path = crate::editor::context::path(&e.doc, e.sel.head);
+    let text = e.doc.text();
+    for n in path.iter().rev() {
+        if matches!(n.block.kind, inkra_markdown::BlockKind::MathBlock { .. }) {
+            let (a, z) = (n.block.lines.first()?, n.block.lines.last()?);
+            let r = n.abs(a.span.start)..n.abs(z.span.end);
+            return Some((r.end, text.slice(r).into_owned()));
+        }
+        let rel = (e.sel.head as isize - n.delta) as usize;
+        let mut found = None;
+        for i in &n.block.inlines {
+            i.walk(&mut |x| {
+                if let inkra_markdown::InlineKind::Math { content } = &x.kind
+                    && x.span.start <= rel
+                    && rel <= x.span.end
+                {
+                    found = Some(n.abs_range(content));
+                }
+            });
+        }
+        if let Some(r) = found {
+            return Some((r.end, text.slice(r).into_owned()));
+        }
+    }
+    None
+}
+
+/// Applies a transaction from another command module.
+pub(crate) fn apply_tx(cx: &mut CommandContext<'_>, tx: Transaction) -> CommandResult {
+    apply(cx, Some(tx))
+}
+
 fn apply(cx: &mut CommandContext<'_>, tx: Option<Transaction>) -> CommandResult {
     match tx {
         Some(t) if !t.edits.is_empty() => {
@@ -596,6 +640,142 @@ pub fn register(r: &mut CommandRegistry) {
             apply(cx, Some(tx))
         },
     ));
+    r.register(
+        FnCommand::new(
+            edits(params(
+                spec(
+                    "code.setLanguage",
+                    Format,
+                    "ED-002",
+                    "Set the language of the fenced code block at the caret.",
+                ),
+                r#"{"type":"object","required":["lang"],"properties":{"lang":{"type":"string"}}}"#,
+            )),
+            |cx, p| {
+                let lang = p
+                    .get("lang")
+                    .and_then(Value::as_str)
+                    .unwrap_or("")
+                    .trim()
+                    .to_owned();
+                let e = &cx.app.editor;
+                let path = crate::editor::context::path(&e.doc, e.sel.head);
+                let Some(n) = path.iter().rev().find(|n| {
+                    matches!(
+                        n.block.kind,
+                        inkra_markdown::BlockKind::CodeBlock { fence: Some(_) }
+                    )
+                }) else {
+                    return Ok(Outcome::Done);
+                };
+                let inkra_markdown::BlockKind::CodeBlock { fence: Some(fe) } = &n.block.kind else {
+                    unreachable!()
+                };
+                let open = n.abs_range(&fe.open);
+                let fence: String = std::iter::repeat_n(fe.ch, fe.len).collect();
+                let line = format!("{}{fence}{lang}", " ".repeat(fe.indent));
+                let tx = Transaction::single(open, &line).with_selection_before(e.sel);
+                let after = tx.map_selection(e.sel);
+                apply(cx, Some(tx.with_selection_after(after)))
+            },
+        )
+        .enabled(|cx| {
+            crate::editor::context::code_block(&cx.app.editor.doc, cx.app.editor.sel.head).is_some()
+        }),
+    );
+    for (id, key, doc) in [
+        (
+            "view.toggleCodeWrap",
+            "markdown.codeWrap",
+            "Wrap long lines in code blocks (otherwise they scroll).",
+        ),
+        (
+            "view.toggleCodeLineNumbers",
+            "markdown.codeLineNumbers",
+            "Show line numbers in code blocks.",
+        ),
+    ] {
+        let run: fn(&mut CommandContext<'_>, &Value) -> CommandResult =
+            if key == "markdown.codeWrap" {
+                |cx, _| toggle_pref(cx, "markdown.codeWrap")
+            } else {
+                |cx, _| toggle_pref(cx, "markdown.codeLineNumbers")
+            };
+        let checked: fn(&CommandContext<'_>) -> Option<bool> = if key == "markdown.codeWrap" {
+            |cx| Some(cx.app.prefs.bool("markdown.codeWrap"))
+        } else {
+            |cx| Some(cx.app.prefs.bool("markdown.codeLineNumbers"))
+        };
+        r.register(FnCommand::new(spec(id, Category::View, "ED-130", doc), run).checked(checked));
+    }
+    r.register(
+        FnCommand::new(
+            spec(
+                "math.copyTex",
+                Format,
+                "ED-130",
+                "Copy the TeX source of the formula at the caret.",
+            ),
+            |cx, _| {
+                let Some(tex) = math_source_at(cx.app) else {
+                    return Ok(Outcome::Done);
+                };
+                cx.effects.push(Effect::SetClipboard {
+                    text: tex.1,
+                    html: None,
+                });
+                Ok(Outcome::Done)
+            },
+        )
+        .enabled(|cx| math_source_at(cx.app).is_some()),
+    );
+    r.register(
+        FnCommand::new(
+            spec(
+                "math.edit",
+                Format,
+                "ED-130",
+                "Edit the formula at the caret (puts the caret into its source).",
+            ),
+            |cx, _| {
+                let Some((at, _)) = math_source_at(cx.app) else {
+                    return Ok(Outcome::Done);
+                };
+                cx.app.editor.set_selection(inkra_doc::Selection::caret(at));
+                cx.effects.push(Effect::ScrollToCaret);
+                Ok(Outcome::Done)
+            },
+        )
+        .enabled(|cx| math_source_at(cx.app).is_some()),
+    );
+    r.register(FnCommand::new(
+        edits(spec(
+            "format.footnote",
+            Format,
+            "ED-044",
+            "Insert a footnote reference at the caret and its definition at the end.",
+        )),
+        |cx, _| {
+            let e = &cx.app.editor;
+            let tx = f::insert_footnote(&e.doc, e.sel);
+            apply(cx, Some(tx))
+        },
+    ));
+    r.register(
+        FnCommand::new(
+            edits(params(
+                spec("paragraph.listStyle", Paragraph, "ED-062", "Change the marker of the list at the caret: `-`, `*`, `+`, `1.` or `1)`."),
+                r#"{"type":"object","required":["marker"],"properties":{"marker":{"enum":["-","*","+","1.","1)"]}}}"#,
+            )),
+            |cx, p| {
+                let m = p.get("marker").and_then(Value::as_str).unwrap_or("-");
+                let e = &cx.app.editor;
+                let tx = f::set_list_marker(&e.doc, e.sel, m);
+                apply(cx, tx)
+            },
+        )
+        .enabled(|cx| crate::editor::context::list_item_near(&cx.app.editor.doc, cx.app.editor.sel.head).is_some()),
+    );
     r.register(FnCommand::new(
         edits(spec(
             "paragraph.footnoteDefinition",
@@ -774,10 +954,17 @@ pub(crate) fn place_image(
 ) -> std::io::Result<std::path::PathBuf> {
     use inkra_workspace::assets::{self, InsertAction};
     let prefs = &cx.app.prefs;
-    let action = InsertAction::from_pref(
-        &prefs.string("image.insertAction"),
-        &prefs.string("image.copyFolder"),
-    );
+    // MD-012: `inkra-copy-images-to` in the front matter overrides the preference.
+    let action = match crate::editor::context::front_matter_value(
+        &cx.app.editor.doc,
+        "inkra-copy-images-to",
+    ) {
+        Some(folder) => InsertAction::CopyToFolder(folder),
+        None => InsertAction::from_pref(
+            &prefs.string("image.insertAction"),
+            &prefs.string("image.copyFolder"),
+        ),
+    };
     if !pasted && !prefs.bool("image.applyToLocal") {
         return Ok(src.to_owned());
     }

@@ -743,7 +743,15 @@ pub fn exit_block(doc: &Doc, sel: Selection) -> Transaction {
             .with_selection_before(sel)
             .with_selection_after(sel);
     };
-    if i == 0 && pos <= ast.start(0) + 1 && !context::in_code_content(doc, pos) {
+    // At the start of the first block (or of its first content line: a code or
+    // math block) a paragraph goes above it.
+    let first_line = ast
+        .get(0)
+        .and_then(|r| r.block.lines.first().map(|l| r.abs(l.span.start)));
+    if i == 0
+        && ((pos <= ast.start(0) + 1 && !context::in_code_content(doc, pos))
+            || Some(pos) == first_line)
+    {
         let t = format!("{nl}{nl}");
         return Transaction::single(0..0, &t)
             .with_selection_before(sel)
@@ -1116,4 +1124,41 @@ fn swap(
     Transaction::single(a.start..b.end, &new)
         .with_selection_before(sel)
         .with_selection_after(Selection::caret(caret.min(a.start + new.len())))
+}
+
+/// Changes the marker of every item of the list at the caret (ED-062):
+/// `-`, `*`, `+` for bullets, `.` or `)` for ordered lists (renumbered from the
+/// list's start).
+pub fn set_list_marker(doc: &Doc, sel: Selection, marker: &str) -> Option<Transaction> {
+    let s = text(doc);
+    let info = context::list_item_near(doc, sel.head)?;
+    let ordered = matches!(marker, "1." | "1)" | "." | ")");
+    let delim = if marker.ends_with(')') { ')' } else { '.' };
+    let start = match info.kind {
+        ListKind::Ordered(_) => s[info.siblings[0].clone()]
+            .trim_end_matches(['.', ')'])
+            .parse::<u64>()
+            .unwrap_or(1),
+        ListKind::Bullet(_) => 1,
+    };
+    let mut edits = Vec::new();
+    for (k, m) in info.siblings.iter().enumerate() {
+        let new = if ordered {
+            format!("{}{delim}", start + k as u64)
+        } else {
+            marker.chars().next().unwrap_or('-').to_string()
+        };
+        if s[m.clone()] != new {
+            edits.push(Edit {
+                range: m.clone(),
+                text: new,
+            });
+        }
+    }
+    if edits.is_empty() {
+        return None;
+    }
+    let tx = Transaction::many(edits).with_selection_before(sel);
+    let after = tx.map_selection(sel);
+    Some(tx.with_selection_after(after))
 }

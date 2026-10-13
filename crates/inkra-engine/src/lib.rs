@@ -161,6 +161,16 @@ pub fn edit_prefs(prefs: &Preferences) -> editor::ops::EditPrefs {
         },
         smart_dashes: smart && prefs.bool("markdown.smartDashes"),
         smart_ellipsis: smart && prefs.bool("markdown.smartEllipsis"),
+        hard_break: match prefs.string("editor.hardBreak").as_str() {
+            "spaces" => 1,
+            "br" => 2,
+            _ => 0,
+        },
+        paragraph_tab: match prefs.string("editor.paragraphTab").as_str() {
+            "fullwidth" => 1,
+            "ignore" => 2,
+            _ => 0,
+        },
     }
 }
 

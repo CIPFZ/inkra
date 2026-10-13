@@ -32,6 +32,7 @@ pub struct Images {
     frame: u64,
     /// Load `http(s)` images (NF-004: can be turned off).
     pub remote: bool,
+    root: Option<PathBuf>,
 }
 
 impl Default for Images {
@@ -46,6 +47,7 @@ impl Default for Images {
             math: HashMap::new(),
             frame: 0,
             remote: true,
+            root: None,
         }
     }
 }
@@ -87,6 +89,10 @@ fn decode_base64(s: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
+thread_local! {
+    static ROOT: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) };
+}
+
 /// Resolves an image source to a local path (ED-091: relative to the document's
 /// directory).
 pub fn resolve(base: Option<&Path>, src: &str) -> Option<PathBuf> {
@@ -97,6 +103,17 @@ pub fn resolve(base: Option<&Path>, src: &str) -> Option<PathBuf> {
     let path = src.strip_prefix("file://").unwrap_or(src);
     let decoded = percent_decode(path);
     let p = Path::new(&decoded);
+    // ED-091: `/img/a.png` is relative to the image root when one is set
+    // (`inkra-root-url` in the front matter or the global preference).
+    if let Some(root) = ROOT.with(|r| r.borrow().clone())
+        && (decoded.starts_with('/') || decoded.starts_with('\\'))
+        && !src.starts_with("file://")
+    {
+        let candidate = root.join(decoded.trim_start_matches(['/', '\\']));
+        if candidate.exists() || !p.exists() {
+            return Some(candidate);
+        }
+    }
     if p.is_absolute() {
         return Some(p.to_owned());
     }
@@ -213,6 +230,14 @@ impl Images {
         }
     }
 
+    /// Sets the folder `/…` image paths resolve against (ED-091).
+    pub fn set_root(&mut self, root: Option<PathBuf>) {
+        if self.root != root {
+            self.root = root;
+            self.entries.clear();
+        }
+    }
+
     /// Requests `src`; returns its texture if ready.
     pub fn get(&mut self, ctx: &egui::Context, src: &str) -> Option<egui::TextureId> {
         match self.entries.get(src) {
@@ -224,11 +249,13 @@ impl Images {
         let tx = self.tx.clone();
         let key = src.to_owned();
         let base = self.base.clone();
+        let root = self.root.clone();
         let remote = self.remote;
         let ctx = ctx.clone();
         let spawned = std::thread::Builder::new()
             .name("inkra-image".into())
             .spawn(move || {
+                ROOT.with(|r| *r.borrow_mut() = root);
                 let result = if let Some(rest) = key.strip_prefix("data:") {
                     match rest.split_once(";base64,") {
                         Some((_, data)) => decode_base64(data)

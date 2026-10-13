@@ -72,6 +72,8 @@ pub struct EditorView {
     completion_dismissed: Option<usize>,
     col_handles: Vec<Rect>,
     col_drag: Option<(usize, usize)>,
+    /// Where files dragged over the editor would land (ED-017).
+    drop_at: Option<usize>,
     /// Selected text being dragged (ED-017): selection, press position, drop target.
     text_drag: Option<(Selection, usize, Option<usize>)>,
     /// The last state of `text_drag` (read when the button is released).
@@ -129,6 +131,7 @@ impl EditorView {
             col_drag: None,
             image_drag: None,
             text_drag: None,
+            drop_at: None,
             text_drag_last: None,
             grip_drag: None,
             pending_top: None,
@@ -214,6 +217,11 @@ impl EditorView {
         self.scroll_to_caret = true;
     }
 
+    /// The document position files dropped this frame land at.
+    pub fn drop_position(&self) -> Option<usize> {
+        self.drop_at
+    }
+
     /// Current scroll offset.
     pub fn scroll(&self) -> f32 {
         self.scroll
@@ -221,7 +229,10 @@ impl EditorView {
 
     fn mode(engine: &Engine) -> Mode {
         match engine.state.editor.mode {
-            ViewMode::Source => Mode::Source { wrap: true },
+            // ED-121: soft wrap can be turned off (long lines then scroll).
+            ViewMode::Source => Mode::Source {
+                wrap: engine.state.prefs.bool("editor.sourceWrap"),
+            },
             ViewMode::Live => Mode::Live,
         }
     }
@@ -269,6 +280,27 @@ impl EditorView {
             ctx.request_repaint();
         }
         self.images.remote = engine.state.prefs.bool("image.loadRemote");
+        // ED-091: the image root of `/…` paths: front matter, else the preference.
+        let doc_dir = engine
+            .state
+            .editor
+            .path
+            .as_ref()
+            .and_then(|p| p.parent().map(|d| d.to_owned()));
+        let root = inkra_engine::editor::context::front_matter_value(
+            &engine.state.editor.doc,
+            "inkra-root-url",
+        )
+        .map(|r| match &doc_dir {
+            Some(d) => d.join(r.trim_start_matches("file://")),
+            None => std::path::PathBuf::from(r),
+        })
+        .or_else(|| {
+            Some(engine.state.prefs.string("image.rootFolder"))
+                .filter(|r| !r.trim().is_empty())
+                .map(std::path::PathBuf::from)
+        });
+        self.images.set_root(root);
         self.images.set_base(
             engine
                 .state
@@ -320,12 +352,13 @@ impl EditorView {
         self.last_mode = Some(mode);
         let source = matches!(mode, Mode::Source { .. });
         let lines = engine.state.editor.doc.text().len_lines().max(1);
-        let gutter = if self.line_numbers && source {
-            let digits = (lines as f32).log10().floor() as usize + 1;
-            digits.max(2) as f32 * self.style.mono_size * 0.62 + 24.0
-        } else {
-            0.0
-        };
+        let gutter =
+            if self.line_numbers && source && engine.state.prefs.bool("editor.sourceLineNumbers") {
+                let digits = (lines as f32).log10().floor() as usize + 1;
+                digits.max(2) as f32 * self.style.mono_size * 0.62 + 24.0
+            } else {
+                0.0
+            };
         let scrollbar_w = 10.0;
         let avail = (rect.width() - gutter - scrollbar_w - 2.0 * self.style.padding_x).max(80.0);
         // WM-004: the text column width (preference or theme) and centering.
@@ -704,14 +737,34 @@ impl EditorView {
         // Code block tools (ED-002): language and copy button when the caret is inside.
         if !source {
             self.code_tools(ui, engine, &visible, offset, &mut out);
+            self.broken_images(ui, &visible, offset, &mut out);
         }
 
         // Caret (blinking, ED-020) and IME pre-edit.
         let now = ctx.input(|i| i.time);
         let window_focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
         self.caret_screen = caret_rect.map(|r| r.translate(offset));
+        // ED-017: files dragged over the editor show where they will land, and
+        // drop there.
+        let hovering_files = ctx.input(|i| !i.raw.hovered_files.is_empty());
+        let pointer = ctx.input(|i| i.pointer.hover_pos().or(i.pointer.latest_pos()));
+        self.drop_at = None;
+        if (hovering_files || ctx.input(|i| !i.raw.dropped_files.is_empty()))
+            && let Some(p) = pointer.filter(|p| rect.contains(*p))
+        {
+            let dp = self.doc_pos(p, rect, text_rect);
+            let at = self.hit(&ctx, engine, dp);
+            self.drop_at = Some(at);
+            if hovering_files {
+                ctx.request_repaint();
+            }
+        }
+        let drop_marker = self
+            .text_drag
+            .and_then(|(_, _, a)| a)
+            .or(self.drop_at.filter(|_| hovering_files));
         // ED-017: where dragged text would be dropped.
-        if let Some((_, _, Some(at))) = self.text_drag {
+        if let Some(at) = drop_marker {
             let lcx = Ctx {
                 doc: &engine.state.editor.doc,
                 style: &self.style,
@@ -939,8 +992,78 @@ impl EditorView {
             && let Some(w) = self.image_drag.take()
         {
             let width = (w / self.zoom.max(0.1)).round().max(1.0) as u32;
-            out.commands
-                .push(("image.resize".into(), json!({ "width": width })));
+            let natural =
+                inkra_layout::live::leaf::ImageSizes::size(&self.images, &img.src).map(|s| s[0]);
+            out.commands.push((
+                "image.resize".into(),
+                json!({ "width": width, "natural": natural }),
+            ));
+        }
+    }
+
+    /// ED-090: an image that failed to load shows its path, the reason, and
+    /// buttons to retry or to point it at another file.
+    fn broken_images(
+        &mut self,
+        ui: &mut egui::Ui,
+        visible: &std::ops::Range<usize>,
+        offset: Vec2,
+        out: &mut EditorOutput,
+    ) {
+        let mut failed = Vec::new();
+        for i in visible.clone() {
+            let Some(l) = self.view.layout(i) else {
+                continue;
+            };
+            let top = self.view.top(i);
+            for d in &l.decos {
+                if let inkra_layout::Deco::Image { rect, src } = d
+                    && let Some(err) = self.images.error(src)
+                {
+                    failed.push((
+                        rect.translate(vec2(0.0, top) + offset),
+                        src.clone(),
+                        err.to_owned(),
+                    ));
+                }
+            }
+        }
+        for (r, src, err) in failed {
+            if r.height() < 28.0 || r.width() < 60.0 {
+                continue;
+            }
+            let painter = ui.painter_at(r);
+            painter.text(
+                pos2(r.left() + 8.0, r.top() + 6.0),
+                egui::Align2::LEFT_TOP,
+                format!("⚠ {src}"),
+                egui::FontId::proportional(12.0),
+                self.style.fg_muted,
+            );
+            if r.height() >= 48.0 {
+                painter.text(
+                    pos2(r.left() + 8.0, r.top() + 22.0),
+                    egui::Align2::LEFT_TOP,
+                    &err,
+                    egui::FontId::proportional(10.0),
+                    self.style.fg_muted.gamma_multiply(0.8),
+                );
+            }
+            let area = egui::Area::new(self.id.with(("broken", &src)))
+                .fixed_pos(pos2(r.left() + 6.0, r.bottom() - 26.0))
+                .order(egui::Order::Foreground);
+            area.show(ui.ctx(), |ui| {
+                ui.horizontal(|ui| {
+                    if ui.small_button(self.i18n.tr("image-retry")).clicked() {
+                        self.images.reload(&src);
+                        ui.ctx().request_repaint();
+                    }
+                    if ui.small_button(self.i18n.tr("image-fix-path")).clicked() {
+                        out.commands
+                            .push(("image.relink".into(), json!({ "from": src })));
+                    }
+                });
+            });
         }
     }
 
@@ -1210,24 +1333,93 @@ impl EditorView {
                 };
                 let r = rect.translate(vec2(0.0, top) + offset);
                 let active = caret >= body.start && caret <= body.end;
+                // MD-007: the tools show while editing the block or hovering it.
+                let hovered = ui
+                    .ctx()
+                    .input(|i| i.pointer.hover_pos())
+                    .is_some_and(|p| r.contains(p));
                 let label = if lang.is_empty() {
                     "text".to_owned()
                 } else {
                     lang.clone()
                 };
                 let pos = pos2(r.right() - 8.0, r.top() + 4.0);
-                if active {
+                if active || hovered {
                     let area = egui::Area::new(self.id.with(("code-tools", body.start)))
-                        .fixed_pos(pos - vec2(150.0, 0.0))
+                        .fixed_pos(pos - vec2(240.0, 0.0))
                         .order(egui::Order::Foreground);
                     area.show(ui.ctx(), |ui| {
                         ui.horizontal(|ui| {
-                            ui.add_space(150.0 - 110.0);
-                            ui.label(
-                                egui::RichText::new(label)
-                                    .small()
-                                    .color(self.style.fg_muted),
-                            );
+                            ui.add_space(240.0 - 200.0);
+                            // ED-002: an editable, filtered language picker.
+                            let fid = self.id.with(("code-lang", body.start));
+                            let mut filter: String =
+                                ui.ctx().data(|d| d.get_temp(fid)).unwrap_or_default();
+                            egui::ComboBox::from_id_salt(fid)
+                                .width(90.0)
+                                .selected_text(egui::RichText::new(&label).small())
+                                .show_ui(ui, |ui| {
+                                    let r = ui.add(
+                                        egui::TextEdit::singleline(&mut filter)
+                                            .desired_width(120.0)
+                                            .hint_text("lang"),
+                                    );
+                                    if !r.has_focus() && filter.is_empty() {
+                                        r.request_focus();
+                                    }
+                                    let langs = inkra_highlight::languages();
+                                    let ranked: Vec<&str> = if filter.trim().is_empty() {
+                                        langs.clone()
+                                    } else {
+                                        inkra_workspace::fuzzy::Fuzzy::text()
+                                            .rank(filter.trim(), &langs, 40)
+                                            .into_iter()
+                                            .map(|h| langs[h.index])
+                                            .collect()
+                                    };
+                                    egui::ScrollArea::vertical()
+                                        .max_height(220.0)
+                                        .show(ui, |ui| {
+                                            let enter = r.lost_focus()
+                                                && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                                            for (k, l) in ranked.iter().enumerate() {
+                                                if ui
+                                                    .selectable_label(*l == lang.as_str(), *l)
+                                                    .clicked()
+                                                    || (enter && k == 0)
+                                                {
+                                                    out.commands.push((
+                                                        "code.setLanguage".into(),
+                                                        json!({ "lang": l }),
+                                                    ));
+                                                    ui.close();
+                                                }
+                                            }
+                                            if !filter.trim().is_empty()
+                                                && ranked.is_empty()
+                                                && enter
+                                            {
+                                                out.commands.push((
+                                                    "code.setLanguage".into(),
+                                                    json!({ "lang": filter.trim() }),
+                                                ));
+                                                ui.close();
+                                            }
+                                        });
+                                });
+                            ui.ctx().data_mut(|d| d.insert_temp(fid, filter));
+                            let wrap = engine.state.prefs.bool("markdown.codeWrap");
+                            if ui
+                                .add(
+                                    egui::Button::new(egui::RichText::new("↩").small())
+                                        .selected(wrap),
+                                )
+                                .on_hover_text(self.i18n.tr("cmd-view-toggleCodeWrap"))
+                                .clicked()
+                            {
+                                out.commands
+                                    .push(("view.toggleCodeWrap".into(), Value::Null));
+                            }
                             let copy = self.i18n.tr("code-copy");
                             if ui
                                 .small_button(copy)
@@ -1523,6 +1715,26 @@ impl EditorView {
             if below_end && e.mode == ViewMode::Live && !shift {
                 out.commands
                     .push(("paragraph.ensureTrailing".into(), Value::Null));
+            }
+            // ED-006: clicking above a leading table, code, math or HTML block
+            // makes room for a paragraph before it.
+            if p.y < 0.0 && e.mode == ViewMode::Live && !shift {
+                let first = e.doc.ast().get(0).map(|r| r.block.kind.clone());
+                if matches!(
+                    first,
+                    Some(
+                        inkra_markdown::BlockKind::Table { .. }
+                            | inkra_markdown::BlockKind::CodeBlock { .. }
+                            | inkra_markdown::BlockKind::MathBlock { .. }
+                            | inkra_markdown::BlockKind::HtmlBlock { .. }
+                    )
+                ) {
+                    e.set_selection(Selection::caret(0));
+                    out.commands
+                        .push(("paragraph.insertAbove".into(), Value::Null));
+                    self.drag_anchor = None;
+                    return;
+                }
             }
             // Ctrl+click on a link opens it (PR-040), or a plain click if so set.
             let plain_click = engine.state.prefs.string("editor.linkClick") == "click";
@@ -1927,10 +2139,19 @@ impl EditorView {
                     }
                 }
                 Key::Escape => {
+                    let in_math = live
+                        && inkra_engine::editor::context::path(&e.doc, e.sel.head)
+                            .iter()
+                            .any(|n| {
+                                matches!(n.block.kind, inkra_markdown::BlockKind::MathBlock { .. })
+                            });
                     if e.find.open {
                         e.find.open = false;
                     } else if !e.sel.is_empty() {
                         e.sel = Selection::caret(e.sel.head);
+                    } else if in_math {
+                        // ED-013: Esc finishes editing a formula.
+                        out.commands.push(("edit.exitBlock".into(), Value::Null));
                     }
                 }
                 _ => return,

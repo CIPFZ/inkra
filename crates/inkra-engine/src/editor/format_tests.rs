@@ -255,3 +255,123 @@ fn link_dialog_edits_and_inserts() {
         .unwrap();
     assert_eq!(e.state.editor.text(), "see [new](https://b) [here](<x y>)");
 }
+
+#[test]
+fn ctrl_enter_before_a_leading_block_and_toc_is_atomic() {
+    let mut e = Editor::from_text("```\ncode\n```\n");
+    e.sel = Selection::caret(4);
+    let t = exit_block(&e.doc, e.sel);
+    tx(&mut e, Some(t));
+    assert_eq!(e.text(), "\n\n```\ncode\n```\n");
+    assert_eq!(e.sel.head, 0);
+    let mut x = crate::Engine::new(crate::Preferences::default());
+    x.state.editor = Editor::from_text("| a | b |\n| - | - |\n| 1 | 2 |\n");
+    x.state.editor.sel = Selection::caret(2);
+    x.execute("table.insertRowBelow", &serde_json::json!({}))
+        .unwrap();
+    assert!(
+        x.state.editor.text().starts_with("\n\n| a |"),
+        "{}",
+        x.state.editor.text()
+    );
+    // Backspace after a TOC removes it whole.
+    let mut e = Editor::from_text("[TOC]\n\npara");
+    e.sel = Selection::caret(7);
+    let t = crate::editor::live_ops::delete_backward(
+        &e.doc,
+        e.sel,
+        crate::editor::Unit::Char,
+        &Default::default(),
+    );
+    tx(&mut e, t);
+    assert_eq!(e.text(), "para");
+}
+
+#[test]
+fn select_all_in_a_table_cell() {
+    let e = Editor::from_text("x\n\n| ab | cd |\n| -- | -- |\n| ef | gh |\n");
+    let at = e.text().find("ef").unwrap() + 1;
+    let s1 = crate::editor::ops::select_all(&e.doc, Selection::caret(at));
+    assert_eq!(&e.text()[s1.range()], "ef");
+    let s2 = crate::editor::ops::select_all(&e.doc, s1);
+    assert!(e.text()[s2.range()].starts_with("| ab"));
+    let s3 = crate::editor::ops::select_all(&e.doc, s2);
+    assert_eq!(s3.range(), 0..e.text().len());
+}
+
+#[test]
+fn hard_breaks_paragraph_tab_and_multi_item_tab() {
+    let mut e = Editor::from_text("line");
+    e.mode = crate::editor::ViewMode::Live;
+    e.sel = Selection::caret(4);
+    e.prefs.hard_break = 2;
+    e.newline_live(crate::editor::Break::Soft);
+    assert_eq!(e.text(), "line<br>\n");
+    let mut e = Editor::from_text("para");
+    e.sel = Selection::caret(0);
+    e.prefs.paragraph_tab = 1;
+    e.tab(false);
+    assert_eq!(e.text(), "\u{3000}\u{3000}para");
+    e.prefs.paragraph_tab = 2;
+    e.tab(false);
+    assert_eq!(e.text(), "\u{3000}\u{3000}para");
+    let mut e = Editor::from_text("- a\n- b\n- c\n- d");
+    e.sel = Selection::new(6, 14);
+    e.tab(false);
+    assert_eq!(e.text(), "- a\n  - b\n  - c\n  - d");
+    e.undo();
+    assert_eq!(e.text(), "- a\n- b\n- c\n- d", "one undo step");
+}
+
+#[test]
+fn pasted_image_files_follow_the_image_preferences() {
+    use serde_json::json;
+    let d = tempfile::tempdir().unwrap();
+    std::fs::write(d.path().join("pic.png"), [137, 80, 78, 71]).unwrap();
+    std::fs::write(d.path().join("notes.txt"), "x").unwrap();
+    let mut e = crate::Engine::new(crate::Preferences::default());
+    e.state.editor = Editor::from_text("");
+    e.state.editor.path = Some(d.path().join("doc.md"));
+    e.execute(
+        "edit.paste",
+        &json!({ "files": [d.path().join("pic.png"), d.path().join("notes.txt")] }),
+    )
+    .unwrap();
+    assert_eq!(
+        e.state.editor.text(),
+        "![pic](pic.png)\n[notes.txt](notes.txt)"
+    );
+}
+
+#[test]
+fn list_marker_styles() {
+    let mut e = Editor::from_text("- a\n- b\n- c");
+    e.sel = Selection::caret(6);
+    let t = set_list_marker(&e.doc, e.sel, "1)");
+    tx(&mut e, t);
+    assert_eq!(e.text(), "1) a\n2) b\n3) c");
+    let t = set_list_marker(&e.doc, Selection::caret(1), "*");
+    tx(&mut e, t);
+    assert_eq!(e.text(), "* a\n* b\n* c");
+}
+
+#[test]
+fn code_language_and_math_source() {
+    use serde_json::json;
+    let mut e = crate::Engine::new(crate::Preferences::default());
+    e.state.editor = Editor::from_text("```py\nx\n```\n\n$$\na+b\n$$\n");
+    e.state.editor.sel = Selection::caret(6);
+    e.execute("code.setLanguage", &json!({ "lang": "rust" }))
+        .unwrap();
+    assert!(e.state.editor.text().starts_with("```rust\nx"));
+    e.take_effects();
+    let at = e.state.editor.text().find("a+b").unwrap();
+    e.state.editor.sel = Selection::caret(at + 1);
+    e.execute("math.copyTex", &json!({})).unwrap();
+    assert!(
+        matches!(e.take_effects().as_slice(), [crate::Effect::SetClipboard { text, .. }] if text == "a+b")
+    );
+    let before = e.state.prefs.bool("markdown.codeWrap");
+    e.execute("view.toggleCodeWrap", &json!({})).unwrap();
+    assert_ne!(e.state.prefs.bool("markdown.codeWrap"), before);
+}
