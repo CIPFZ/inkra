@@ -2,7 +2,7 @@
 
 更新时间：2026-10-13
 当前里程碑：1.0 收尾（M0～M7 已完成，剩余项见 docs/ROADMAP.md）
-CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 测试机均通过；macOS 仅做交叉 `cargo clippy --target aarch64-apple-darwin`，未实机运行；无 GitHub 远程仓库，Actions 未实际运行）
+CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 测试机均通过；macOS 未实机运行（M0～M6 曾做交叉 clippy；M7 引入 `ring` 后交叉检查需要 macOS SDK，在本环境无法进行）；无 GitHub 远程仓库，Actions 未实际运行）
 
 ## 已完成的需求编号
 - M0：AD-3（命令注册表）、CM-001（框架 + 3 个样例命令）、PR-001、PR-003、PR-018（键）、UI-001（菜单骨架，macOS muda 原生菜单）、UI-002、UI-010（默认快捷键表）、UI-050、NF-002（命令边界 catch_unwind）、NF-008、CM-004（`--version` / `--help` / `--measure-startup` / `--config` 等参数解析）
