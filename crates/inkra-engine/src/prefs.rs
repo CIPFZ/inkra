@@ -269,6 +269,13 @@ pub const PREFS: &[PrefSpec] = &[
         doc: "Editor zoom factor, 0.5 to 3.0.",
     },
     PrefSpec {
+        key: "markdown.diagrams",
+        default: "true",
+        kind: PrefKind::Bool,
+        req: "MD-064",
+        doc: "Render ```` ```mermaid ```` blocks as diagrams (off: plain code blocks).",
+    },
+    PrefSpec {
         key: "markdown.mathNumbering",
         default: r#""none""#,
         kind: PrefKind::Enum(&["none", "ams", "all"]),

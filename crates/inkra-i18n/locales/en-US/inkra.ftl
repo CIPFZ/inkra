@@ -320,3 +320,4 @@ count-selection = Selection
 count-document = Document
 cmd-table-moveColumnTo = Move Column
 cmd-table-moveRowTo = Move Row
+code-copy = Copy

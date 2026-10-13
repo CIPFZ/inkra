@@ -974,7 +974,12 @@ impl EditorView {
                                     .small()
                                     .color(self.style.fg_muted),
                             );
-                            if ui.small_button("⧉").on_hover_text("Copy").clicked() {
+                            let copy = self.i18n.tr("code-copy");
+                            if ui
+                                .small_button(copy)
+                                .on_hover_text(self.i18n.tr("ctx-copy-code"))
+                                .clicked()
+                            {
                                 let code = engine
                                     .state
                                     .editor

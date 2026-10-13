@@ -320,3 +320,4 @@ count-selection = 选区
 count-document = 文档
 cmd-table-moveColumnTo = 移动列
 cmd-table-moveRowTo = 移动行
+code-copy = 复制

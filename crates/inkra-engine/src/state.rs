@@ -165,7 +165,11 @@ impl AppState {
                     "all" => 2,
                     _ => 0,
                 };
-                s.version = s.version.wrapping_add(u64::from(s.math_numbering));
+                s.diagrams = self.prefs.bool("markdown.diagrams");
+                s.version = s
+                    .version
+                    .wrapping_add(u64::from(s.math_numbering))
+                    .wrapping_add(u64::from(s.diagrams) << 8);
                 self.style = s;
                 Ok(())
             }
