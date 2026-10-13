@@ -513,3 +513,31 @@ pub(crate) fn import_offer(shell: &mut Shell, ctx: &egui::Context) {
         }
     }
 }
+
+/// "A new version is available" (PR-020) with a link to the release page.
+pub(crate) fn update_banner(shell: &mut Shell, ctx: &egui::Context) {
+    let Some((version, url)) = shell.update_available.clone() else {
+        return;
+    };
+    let i18n = shell.i18n.clone();
+    let mut close = false;
+    egui::Area::new(egui::Id::new("inkra-update"))
+        .anchor(egui::Align2::RIGHT_TOP, egui::vec2(-16.0, 36.0))
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.label(i18n.tr_args("update-available", &[("version", version.clone().into())]));
+                ui.horizontal(|ui| {
+                    if ui.button(i18n.tr("update-open")).clicked() {
+                        crate::dialogs::open_external(&url);
+                        close = true;
+                    }
+                    if ui.button(i18n.tr("update-later")).clicked() {
+                        close = true;
+                    }
+                });
+            });
+        });
+    if close {
+        shell.update_available = None;
+    }
+}

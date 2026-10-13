@@ -13,6 +13,7 @@ pub mod fs;
 pub mod fuzzy;
 pub mod index;
 pub mod logfile;
+pub mod net;
 pub mod paths;
 pub mod recovery;
 pub mod search;

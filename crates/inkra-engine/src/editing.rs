@@ -114,11 +114,17 @@ pub fn register(r: &mut CommandRegistry) {
                 "Copy the selection as Markdown (text/plain) and rendered HTML (text/html).",
             ),
             |cx, _| {
-                if let Some((text, _)) =
+                if let Some((source, _)) =
                     crate::editor::clipboard::copy_payload(&cx.app.editor.doc, cx.app.editor.sel)
                 {
                     // EX-006: the same generator as HTML export.
-                    let html = crate::exporting::clipboard_html(cx.app, &text);
+                    let html = crate::exporting::clipboard_html(cx.app, &source);
+                    // PR-037: text/plain is the source or plain text.
+                    let text = if cx.app.prefs.string("editor.copyAs") == "plain" {
+                        crate::viewing::plain(&cx.app.editor.doc, cx.app.editor.sel)
+                    } else {
+                        source
+                    };
                     cx.effects.push(Effect::SetClipboard {
                         text,
                         html: Some(html),

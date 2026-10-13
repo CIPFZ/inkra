@@ -73,6 +73,8 @@ pub struct EditorView {
     /// A reorder grip being dragged: table start, column?, index.
     grip_drag: Option<(usize, bool, usize)>,
     pending_top: Option<usize>,
+    /// Smooth scrolling to an item (PR-042): start offset, item, start time.
+    scroll_anim: Option<(f32, usize, f64)>,
     viewport_top: usize,
     /// Horizontal scroll of wide tables, by table source start (ED-080).
     hscroll: std::collections::HashMap<usize, f32>,
@@ -118,6 +120,7 @@ impl EditorView {
             col_drag: None,
             grip_drag: None,
             pending_top: None,
+            scroll_anim: None,
             viewport_top: 0,
             hscroll: Default::default(),
             wide: Vec::new(),
@@ -236,6 +239,7 @@ impl EditorView {
         if self.images.poll(&ctx) {
             ctx.request_repaint();
         }
+        self.images.remote = engine.state.prefs.bool("image.loadRemote");
         self.images.set_base(
             engine
                 .state
@@ -263,7 +267,7 @@ impl EditorView {
         });
 
         // Ctrl+wheel zoom (PR-039).
-        if resp.contains_pointer() {
+        if resp.contains_pointer() && engine.state.prefs.bool("editor.ctrlWheelZoom") {
             let z = ctx.input(|i| i.zoom_delta());
             if (z - 1.0).abs() > 1e-3 {
                 out.commands.push((
@@ -346,6 +350,9 @@ impl EditorView {
             0.0
         };
         self.scroll -= wheel;
+        if wheel != 0.0 {
+            self.scroll_anim = None;
+        }
         let pad = self.style.padding_y;
         let viewport_h = rect.height();
         self.view.begin_frame(self.scroll - pad);
@@ -367,8 +374,26 @@ impl EditorView {
         }
         if let Some(pos) = self.pending_top.take() {
             let i = self.view.item_of(pos);
-            self.scroll = self.view.top(i) + pad - 8.0;
+            let target = self.view.top(i) + pad - 8.0;
+            if engine.state.prefs.bool("editor.smoothScroll") && (target - self.scroll).abs() > 1.0
+            {
+                self.scroll_anim = Some((self.scroll, i, ctx.input(|inp| inp.time)));
+            } else {
+                self.scroll = target;
+            }
             self.scroll_to_caret = false;
+        }
+        if let Some((from, i, t0)) = self.scroll_anim {
+            // Ease out over 180 ms toward the (possibly re-measured) item top.
+            let target = self.view.top(i) + pad - 8.0;
+            let t = ((ctx.input(|inp| inp.time) - t0) / 0.18).clamp(0.0, 1.0) as f32;
+            let e = 1.0 - (1.0 - t).powi(3);
+            self.scroll = from + (target - from) * e;
+            if t >= 1.0 {
+                self.scroll_anim = None;
+            } else {
+                ctx.request_repaint();
+            }
         }
         let typewriter = engine.state.view.typewriter;
         if self.scroll_to_caret && typewriter {
@@ -642,7 +667,8 @@ impl EditorView {
             let idle = now - self.last_activity;
             // Blinking stops (caret stays visible) after a while without input so
             // an idle editor costs no CPU (SPEC 2.5).
-            let blinking = self.blink && idle < BLINK_FOR;
+            let blinking =
+                self.blink && idle < BLINK_FOR && engine.state.prefs.bool("editor.cursorBlink");
             let phase = if blinking { (idle / BLINK) as u64 } else { 0 };
             if let Some(pre) = &engine.state.editor.preedit {
                 let font = egui::FontId::new(
@@ -1311,8 +1337,9 @@ impl EditorView {
                 out.commands
                     .push(("paragraph.ensureTrailing".into(), Value::Null));
             }
-            // Ctrl+click on a link opens it (PR-040).
-            if command
+            // Ctrl+click on a link opens it (PR-040), or a plain click if so set.
+            let plain_click = engine.state.prefs.string("editor.linkClick") == "click";
+            if (command || plain_click)
                 && !shift
                 && let Some(url) = ops::link_at(&e.doc, at)
             {

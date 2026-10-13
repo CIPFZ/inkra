@@ -82,6 +82,12 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         "rasterizing formulas and diagrams (also used by resvg); math/diagram examples only",
     ),
     (
+        "ureq",
+        Scope::Only(&["inkra-workspace"]),
+        "MIT OR Apache-2.0",
+        "HTTP(S) for remote images and the update check (NF-004, PR-020); rustls with ring and the platform trust store",
+    ),
+    (
         "krilla",
         Scope::Only(&["inkra-export"]),
         "MIT OR Apache-2.0",

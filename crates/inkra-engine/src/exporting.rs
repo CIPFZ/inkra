@@ -283,6 +283,10 @@ fn pdf_options(app: &AppState) -> PdfExport {
         doc_path: app.editor.path.clone(),
         parse: app.editor.doc.options().clone(),
         date: None,
+        fetch: app
+            .prefs
+            .bool("image.loadRemote")
+            .then_some(inkra_export::pdf::Fetch(inkra_workspace::net::get)),
     }
 }
 

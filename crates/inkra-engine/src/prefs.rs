@@ -269,6 +269,13 @@ pub const PREFS: &[PrefSpec] = &[
         doc: "Show runs of blank lines as extra space (exported as `<br>`).",
     },
     PrefSpec {
+        key: "image.loadRemote",
+        default: r#"true"#,
+        kind: PrefKind::Bool,
+        req: "NF-004",
+        doc: "Load images from http(s) URLs (the only network access besides the update check).",
+    },
+    PrefSpec {
         key: "image.insertAction",
         default: r#""assets""#,
         kind: PrefKind::Enum(&["assets", "folder", "none"]),

@@ -38,6 +38,7 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `markdown.codeLineNumbers` | bool | `false` | MD-071 | Show line numbers in code blocks. |
 | `markdown.codeWrap` | bool | `false` | MD-072 | Wrap long lines in code blocks instead of scrolling them. |
 | `markdown.preserveBlankLines` | bool | `false` | MD-074 | Show runs of blank lines as extra space (exported as `<br>`). |
+| `image.loadRemote` | bool | `true` | NF-004 | Load images from http(s) URLs (the only network access besides the update check). |
 | `image.insertAction` | `assets` / `folder` / `none` | `"assets"` | ED-092 | Inserted images: copy to `./<name>.assets/`, copy to `image.copyFolder`, or keep the original path. |
 | `image.copyFolder` | string | `""` | ED-092 | Target folder pattern for `folder` (supports `${filename}`, `${filepath}`). |
 | `image.applyToLocal` | bool | `false` | ED-092 | Also copy inserted local image files (pasted bitmaps are always saved). |

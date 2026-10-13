@@ -4,7 +4,7 @@
 
 Every user action is a command (SPEC AD-3, CM-001). Menus, shortcuts, toolbars, context menus, the CLI (`inkra-cli run --cmd <id>`) and the control channel all invoke commands by id. This file is the interface contract for automation and AI agents.
 
-Registered commands: **173**
+Registered commands: **180**
 
 
 ## App
@@ -114,7 +114,14 @@ Registered commands: **173**
 
 | Id | Title | 中文 | Shortcut (Win/Linux) | Shortcut (macOS) | Params | Req | Description |
 |---|---|---|---|---|---|---|---|
+| `help.changelog` | Changelog | 更新日志 |  |  | — | UI-052 | Open the change log. |
+| `help.checkUpdates` | Check for Updates | 检查更新 |  |  | — | PR-020 | Check GitHub Releases for a newer version (nothing is downloaded). |
+| `help.customThemes` | Custom Themes | 自定义主题 |  |  | — | TH-005 | Open the guide to writing themes. |
 | `help.installPandoc` | Get Pandoc… | 获取 Pandoc… |  |  | — | EX-004 | Open the Pandoc installation page. |
+| `help.markdownReference` | Markdown Reference | Markdown 参考 |  |  | — | UI-052 | Open the Markdown reference. |
+| `help.quickStart` | Quick Start | 快速入门 |  |  | — | UI-052 | Open the Quick Start guide. |
+| `help.reportIssue` | Report Issue | 报告问题 |  |  | — | UI-052 | Open the issue tracker in the browser. |
+| `help.shortcuts` | Keyboard Shortcuts | 快捷键参考 |  |  | — | UI-020 | Open the list of commands and keyboard shortcuts. |
 
 ## Paragraph
 
@@ -252,12 +259,5 @@ These appear greyed out in menus.
 - `file.properties` — Properties
 - `file.rename` — Rename…
 - `format.imageOps` — Image Operations…
-- `help.changelog` — Changelog
-- `help.checkUpdates` — Check for Updates
-- `help.customThemes` — Custom Themes
-- `help.markdownReference` — Markdown Reference
-- `help.quickStart` — Quick Start
-- `help.reportIssue` — Report Issue
-- `help.shortcuts` — Keyboard Shortcuts
 - `view.showWhitespace` — Show Formatting Marks
 - `view.toggleToolbar` — Toolbar

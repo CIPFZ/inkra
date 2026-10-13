@@ -12,6 +12,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+ureq.workspace = true
 inkra-text.workspace = true
 inkra-doc.workspace = true
 log.workspace = true

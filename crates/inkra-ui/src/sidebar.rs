@@ -342,13 +342,25 @@ impl Sidebar {
             });
         egui::CentralPanel::default()
             .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(6, 6)))
-            .show(ui, |ui| match view {
-                SidebarView::Outline => {
-                    self.outline(ui, engine, i18n, style, viewport_top, &mut out)
+            .show(ui, |ui| {
+                // TH-008: sidebar font size and row height.
+                let size = engine.state.prefs.f64("sidebar.fontSize").clamp(9.0, 24.0) as f32;
+                let lh = engine.state.prefs.f64("sidebar.lineHeight").clamp(1.0, 2.5) as f32;
+                let st = ui.style_mut();
+                for ts in [egui::TextStyle::Body, egui::TextStyle::Button] {
+                    if let Some(f) = st.text_styles.get_mut(&ts) {
+                        f.size = size;
+                    }
                 }
-                SidebarView::Articles => self.article_list(ui, engine, i18n, style, &mut out),
-                SidebarView::Files => self.file_tree(ui, engine, i18n, style, &mut out),
-                SidebarView::Search => self.search_panel(ui, engine, i18n, style, &mut out),
+                st.spacing.interact_size.y = (size * lh).round();
+                match view {
+                    SidebarView::Outline => {
+                        self.outline(ui, engine, i18n, style, viewport_top, &mut out)
+                    }
+                    SidebarView::Articles => self.article_list(ui, engine, i18n, style, &mut out),
+                    SidebarView::Files => self.file_tree(ui, engine, i18n, style, &mut out),
+                    SidebarView::Search => self.search_panel(ui, engine, i18n, style, &mut out),
+                }
             });
         out
     }

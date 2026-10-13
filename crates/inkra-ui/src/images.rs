@@ -30,6 +30,8 @@ pub struct Images {
     /// frame they were last used in.
     math: HashMap<(u64, egui::Color32, u32), (egui::TextureHandle, u64)>,
     frame: u64,
+    /// Load `http(s)` images (NF-004: can be turned off).
+    pub remote: bool,
 }
 
 impl Default for Images {
@@ -43,6 +45,7 @@ impl Default for Images {
             column_widths: HashMap::new(),
             math: HashMap::new(),
             frame: 0,
+            remote: true,
         }
     }
 }
@@ -221,6 +224,7 @@ impl Images {
         let tx = self.tx.clone();
         let key = src.to_owned();
         let base = self.base.clone();
+        let remote = self.remote;
         let ctx = ctx.clone();
         let spawned = std::thread::Builder::new()
             .name("inkra-image".into())
@@ -232,12 +236,18 @@ impl Images {
                             .and_then(|b| decode(&b)),
                         None => Err("unsupported data URI".to_owned()),
                     }
+                } else if key.starts_with("http://") || key.starts_with("https://") {
+                    if remote {
+                        inkra_workspace::net::get(&key).and_then(|b| decode(&b))
+                    } else {
+                        Err("network images are turned off".to_owned())
+                    }
                 } else {
                     match resolve(base.as_deref(), &key) {
                         Some(p) => std::fs::read(&p)
                             .map_err(|e| format!("{}: {e}", p.display()))
                             .and_then(|b| decode(&b)),
-                        None => Err("network images are not loaded".to_owned()),
+                        None => Err("unsupported image source".to_owned()),
                     }
                 };
                 let _ = tx.send((key, result));

@@ -51,6 +51,79 @@ pub fn register_all(r: &mut CommandRegistry) {
             Ok(Outcome::Done)
         },
     ));
+    use crate::help::Topic;
+    r.register(FnCommand::new(
+        spec(
+            "help.quickStart",
+            Category::Help,
+            "UI-052",
+            "Open the Quick Start guide.",
+        ),
+        |cx, _| crate::help::open(cx, Topic::QuickStart),
+    ));
+    r.register(FnCommand::new(
+        spec(
+            "help.markdownReference",
+            Category::Help,
+            "UI-052",
+            "Open the Markdown reference.",
+        ),
+        |cx, _| crate::help::open(cx, Topic::MarkdownReference),
+    ));
+    r.register(FnCommand::new(
+        spec(
+            "help.customThemes",
+            Category::Help,
+            "TH-005",
+            "Open the guide to writing themes.",
+        ),
+        |cx, _| crate::help::open(cx, Topic::Themes),
+    ));
+    r.register(FnCommand::new(
+        spec(
+            "help.shortcuts",
+            Category::Help,
+            "UI-020",
+            "Open the list of commands and keyboard shortcuts.",
+        ),
+        |cx, _| crate::help::open(cx, Topic::Shortcuts),
+    ));
+    r.register(FnCommand::new(
+        spec(
+            "help.changelog",
+            Category::Help,
+            "UI-052",
+            "Open the change log.",
+        ),
+        |cx, _| crate::help::open(cx, Topic::Changelog),
+    ));
+    r.register(FnCommand::new(
+        spec(
+            "help.reportIssue",
+            Category::Help,
+            "UI-052",
+            "Open the issue tracker in the browser.",
+        ),
+        |cx, _| {
+            cx.effects.push(Effect::OpenUrl(format!(
+                "{}/issues/new",
+                env!("CARGO_PKG_REPOSITORY")
+            )));
+            Ok(Outcome::Done)
+        },
+    ));
+    r.register(FnCommand::new(
+        spec(
+            "help.checkUpdates",
+            Category::Help,
+            "PR-020",
+            "Check GitHub Releases for a newer version (nothing is downloaded).",
+        ),
+        |cx, _| {
+            cx.effects.push(Effect::CheckUpdates { manual: true });
+            Ok(Outcome::Done)
+        },
+    ));
     r.register(FnCommand::new(
         spec(
             "app.quit",

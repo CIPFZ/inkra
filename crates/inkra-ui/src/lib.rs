@@ -102,6 +102,9 @@ struct Confirm {
     quit: bool,
 }
 
+/// An update check: whether the user asked, and the newer release if any.
+type UpdateResult = (bool, Result<Option<(String, String)>, String>);
+
 /// The application shell (all windows).
 pub struct Shell {
     /// The engine.
@@ -141,6 +144,8 @@ pub struct Shell {
     mmdc_conf: String,
     theme_names_at: f64,
     jobs: jobs::Jobs,
+    updates: Option<std::sync::mpsc::Receiver<UpdateResult>>,
+    update_available: Option<(String, String)>,
     page_setup: Option<modals::PageSetupForm>,
     import_offer: Option<PathBuf>,
     #[cfg(target_os = "macos")]
@@ -157,6 +162,8 @@ impl Shell {
             ),
             LoadProblem::Unreadable { error } => error,
         });
+        let mut engine = engine;
+        engine.state.language = i18n.language().to_owned();
         let root = engine.state.active();
         let mut windows = BTreeMap::new();
         windows.insert(root, WinUi::new());
@@ -193,6 +200,8 @@ impl Shell {
             theme_names: Vec::new(),
             mmdc_conf: String::new(),
             jobs: Default::default(),
+            updates: None,
+            update_available: None,
             page_setup: None,
             import_offer: None,
             theme_names_at: f64::NEG_INFINITY,
@@ -203,6 +212,11 @@ impl Shell {
 
     /// One-time setup of fonts, style and (on macOS) the native menu.
     pub fn setup(&mut self, ctx: &egui::Context) {
+        // PR-020: only the real application (with configuration paths) checks.
+        if self.engine.state.paths.is_some() && self.engine.state.prefs.bool("general.checkUpdates")
+        {
+            self.check_updates(ctx, false);
+        }
         if self.setup_done {
             return;
         }
@@ -222,12 +236,21 @@ impl Shell {
         self.sync_style(ctx);
         // The spell checker loads in the background too (ED-104).
         let c = ctx.clone();
-        let personal = self
+        // PR-035: a configured personal dictionary, else the default one.
+        let configured = self
             .engine
             .state
-            .paths
-            .as_ref()
-            .map(inkra_workspace::Paths::dictionary_file);
+            .prefs
+            .string("editor.spellcheckDictionary");
+        let personal = if configured.trim().is_empty() {
+            self.engine
+                .state
+                .paths
+                .as_ref()
+                .map(inkra_workspace::Paths::dictionary_file)
+        } else {
+            Some(PathBuf::from(configured.trim()))
+        };
         inkra_text::spell::load(personal, move || c.request_repaint());
         let c = ctx.clone();
         inkra_diagram::external::on_ready(move || c.request_repaint());
@@ -353,7 +376,13 @@ impl Shell {
             self.engine.state.view.sidebar_visible = w.sidebar;
             if let Some(ui) = self.windows.get_mut(&target) {
                 ui.editor.reveal_caret();
-                if target != self.root {
+                if target != self.root
+                    && self
+                        .engine
+                        .state
+                        .prefs
+                        .bool("appearance.rememberWindowSize")
+                {
                     ui.initial = w.rect.map(|r| (r, w.maximized));
                 }
             }
@@ -429,6 +458,7 @@ impl Shell {
             match effect {
                 Effect::Quit => self.begin_quit(),
                 Effect::ShowAbout => self.about_open = true,
+                Effect::CheckUpdates { manual } => self.check_updates(ctx, manual),
                 Effect::SetClipboard { text, html } => self.clipboard.set(&text, html.as_deref()),
                 Effect::RequestPaste { plain } => {
                     // ED-016 rule 1: a bitmap is inserted as an image file.
@@ -1087,6 +1117,46 @@ impl Shell {
     }
 
     /// Frame-level work shared by all windows.
+    /// Starts an update check in the background (PR-020).
+    fn check_updates(&mut self, ctx: &egui::Context, manual: bool) {
+        if self.updates.is_some() {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx = ctx.clone();
+        let repo = env!("CARGO_PKG_REPOSITORY")
+            .trim_start_matches("https://github.com/")
+            .to_owned();
+        let spawned = std::thread::Builder::new()
+            .name("inkra-update".into())
+            .spawn(move || {
+                let r = inkra_workspace::net::newer_release(&repo, env!("CARGO_PKG_VERSION"));
+                let _ = tx.send((manual, r));
+                ctx.request_repaint();
+            });
+        if spawned.is_ok() {
+            self.updates = Some(rx);
+        }
+    }
+
+    fn poll_updates(&mut self, ctx: &egui::Context) {
+        let Some(rx) = &self.updates else { return };
+        let Ok((manual, r)) = rx.try_recv() else {
+            return;
+        };
+        self.updates = None;
+        match r {
+            Ok(Some(found)) => self.update_available = Some(found),
+            Ok(None) if manual => self.toast(ctx, self.i18n.tr("update-none")),
+            Err(e) if manual => self.toast(
+                ctx,
+                self.i18n.tr_args("update-failed", &[("error", e.into())]),
+            ),
+            Err(e) => log::info!("update check: {e}"),
+            Ok(None) => {}
+        }
+    }
+
     /// Reports finished export, print and import jobs.
     fn finish_jobs(&mut self, ctx: &egui::Context) {
         use inkra_engine::exporting::JobResult;
@@ -1126,6 +1196,7 @@ impl Shell {
 
     fn frame_tasks(&mut self, ctx: &egui::Context) {
         self.sync_mermaid_cli();
+        self.poll_updates(ctx);
         self.finish_jobs(ctx);
         self.sidebar.poll(ctx, &self.engine);
         self.last_time = ctx.input(|i| i.time);
@@ -1462,6 +1533,7 @@ impl Shell {
         modals::confirm_close(self, &ctx, id);
         modals::about_dialog(self, &ctx);
         modals::page_setup(self, &ctx);
+        modals::update_banner(self, &ctx);
         modals::import_offer(self, &ctx);
         modals::prefs_problem_dialog(self, &ctx);
         modals::toasts(self, &ctx);

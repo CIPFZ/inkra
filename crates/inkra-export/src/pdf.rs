@@ -91,6 +91,25 @@ pub struct PdfExport {
     pub parse: inkra_markdown::ParseOptions,
     /// `{{date}}` (default: today, UTC).
     pub date: Option<String>,
+    /// Downloads `http(s)` images (`None`: they are left out).
+    pub fetch: Option<Fetch>,
+}
+
+/// A downloader for remote images.
+#[derive(Clone, Copy)]
+pub struct Fetch(pub fn(&str) -> Result<Vec<u8>, String>);
+
+impl std::fmt::Debug for Fetch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Fetch")
+    }
+}
+
+/// Options compare equal whatever downloader they carry.
+impl PartialEq for Fetch {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
 }
 
 /// Today's date (UTC) as `YYYY-MM-DD`.
@@ -136,6 +155,8 @@ pub(crate) struct ExportImages {
     pub cache: RefCell<HashMap<String, Loaded>>,
     /// Images taller than this are scaled down to fit a page (EX-002).
     pub max_h: f32,
+    /// Remote image downloader.
+    pub fetch: Option<Fetch>,
 }
 
 fn base64_decode(s: &str) -> Option<Vec<u8>> {
@@ -235,6 +256,7 @@ impl ExportImages {
             doc,
             cache: RefCell::new(HashMap::new()),
             max_h: f32::INFINITY,
+            fetch: None,
         }
     }
 
@@ -242,7 +264,10 @@ impl ExportImages {
         if let Some(v) = self.cache.borrow().get(src) {
             return v.clone();
         }
-        let bytes = if let Some(rest) = src.strip_prefix("data:") {
+        let bytes = if src.starts_with("http://") || src.starts_with("https://") {
+            self.fetch
+                .and_then(|f| (f.0)(src).map_err(|e| log::info!("image {src}: {e}")).ok())
+        } else if let Some(rest) = src.strip_prefix("data:") {
             rest.split_once(";base64,")
                 .and_then(|(_, d)| base64_decode(d))
         } else {
@@ -808,6 +833,7 @@ pub fn export_pdf(src: &str, o: &PdfExport) -> Result<Vec<u8>, String> {
     let mut fonts = fonts_store.with_pixels_per_point(1.0);
     let mut images = ExportImages::new(o.doc_path.clone());
     images.max_h = content_h * 0.92;
+    images.fetch = o.fetch;
     let prep = prepare(src, o, content_w, &mut fonts, &mut faces, &images);
     let pages = paginate(&prep.items, content_h);
     let page_of = |y: f32| -> (usize, f32) {

@@ -115,6 +115,8 @@ pub struct AppState {
     pub next_window: u64,
     /// The resolved theme.
     pub style: inkra_layout::Style,
+    /// The UI language in use (`zh-CN`, `en-US`), set by the host.
+    pub language: String,
     /// The system uses a dark appearance (for the Auto theme).
     pub system_dark: bool,
 }
@@ -385,6 +387,11 @@ pub enum Effect {
     RunJob(Box<crate::exporting::ExportJob>),
     /// Show the page setup dialog (EX-002).
     ShowPageSetup,
+    /// Look for a newer release (PR-020); `manual` reports "up to date" too.
+    CheckUpdates {
+        /// Asked for by the user.
+        manual: bool,
+    },
     /// Ask for a file to import (EX-020).
     ImportDialog,
 }

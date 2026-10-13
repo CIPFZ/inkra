@@ -324,7 +324,8 @@ pub fn export_image(src: &str, o: &ImageExport, out: &Path) -> Result<Vec<PathBu
     let mut faces = FaceTable::new(&defs);
     let mut store = Fonts::new(TextOptions::default(), defs);
     let mut fonts = store.with_pixels_per_point(1.0);
-    let images = ExportImages::new(o.pdf.doc_path.clone());
+    let mut images = ExportImages::new(o.pdf.doc_path.clone());
+    images.fetch = o.pdf.fetch;
     let scale = o.scale.clamp(0.5, 4.0);
     if !o.paged {
         let prep = prepare(src, &o.pdf, o.width, &mut fonts, &mut faces, &images);

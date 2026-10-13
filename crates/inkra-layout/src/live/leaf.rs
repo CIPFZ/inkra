@@ -482,7 +482,7 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                             nf.mono = true;
                             nf.size = style.mono_size;
                             nf.line_height = (style.mono_size * 1.5).round();
-                            nf.color = style.fg_muted;
+                            nf.color = style.line_numbers_fg;
                             let mut nb = Builder::new(text, base, delta, None, style, gutter);
                             nb.push(&nums, &nf, None, true);
                             let mut job = nb.job;

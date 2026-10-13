@@ -4,7 +4,10 @@ use egui_kittest::kittest::{NodeT, Queryable};
 use super::*;
 
 fn shell(lang: &str) -> Shell {
-    Shell::new(Engine::new(Default::default()), I18n::new(lang), None)
+    let mut prefs = inkra_engine::Preferences::default();
+    // Jumps land in one frame (the harness stops after a few frames).
+    prefs.set("editor.smoothScroll", serde_json::json!(false));
+    Shell::new(Engine::new(prefs), I18n::new(lang), None)
 }
 
 fn harness(lang: &str) -> Harness<'static, Shell> {
@@ -94,10 +97,12 @@ fn unimplemented_items_are_disabled_and_about_opens() {
         "landscape"
     );
 
-    h.get_by_label("Help").click();
+    h.get_by_label("Format").click();
     h.run();
-    let updates = h.get_by_label_contains("Check for Updates");
-    assert!(updates.accesskit_node().is_disabled());
+    h.get_by_label("Image ⏵").hover();
+    h.run();
+    let ops = h.get_by_label_contains("Image Operations");
+    assert!(ops.accesskit_node().is_disabled(), "no image at the caret");
 }
 
 #[test]

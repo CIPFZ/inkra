@@ -13,6 +13,7 @@ pub mod editor;
 pub mod exporting;
 pub mod files;
 pub mod formatting;
+pub mod help;
 pub mod keymap;
 pub mod menu;
 pub mod prefs;
@@ -208,7 +209,7 @@ mod tests {
         let mut e = Engine::new(Preferences::new());
         assert!(e.is_enabled("app.quit"));
         assert!(
-            !e.is_enabled("help.checkUpdates"),
+            !e.is_enabled("app.commandPalette"),
             "unregistered commands are disabled"
         );
         assert_eq!(e.is_checked("view.toggleSidebar"), Some(false));

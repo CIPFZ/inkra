@@ -284,6 +284,8 @@ fn main() -> std::process::ExitCode {
     let options = eframe::NativeOptions {
         viewport,
         persistence_path: Some(paths.data.join("egui.ron")),
+        // TH-008: remembering the window size can be turned off.
+        persist_window: engine.state.prefs.bool("appearance.rememberWindowSize"),
         wgpu_options: wgpu_options(),
         ..Default::default()
     };
