@@ -273,7 +273,12 @@ impl Shell {
         } else {
             Some(PathBuf::from(configured.trim()))
         };
-        inkra_text::spell::load(personal, move || c.request_repaint());
+        // PR-035: the writing language (system locale by default).
+        let lang = match self.engine.state.prefs.string("editor.spellcheckLanguage") {
+            l if l.trim().is_empty() || l == "system" => inkra_i18n::system_language(),
+            l => l,
+        };
+        inkra_text::spell::load_language(personal, &lang, move || c.request_repaint());
         let c = ctx.clone();
         inkra_diagram::external::on_ready(move || c.request_repaint());
         // Syntax definitions load in the background (AD-5).

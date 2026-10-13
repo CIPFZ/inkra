@@ -269,6 +269,13 @@ pub const PREFS: &[PrefSpec] = &[
         doc: "Animate scrolling to a position (outline, search hits).",
     },
     PrefSpec {
+        key: "editor.spellcheckLanguage",
+        default: r#""system""#,
+        kind: PrefKind::String,
+        req: "PR-035",
+        doc: "Spelling language: `system` (the OS locale) or a tag such as `de-DE`; uses an installed Hunspell dictionary, else the bundled en_US. Takes effect after restarting.",
+    },
+    PrefSpec {
         key: "editor.spellcheckDictionary",
         default: r#""""#,
         kind: PrefKind::String,

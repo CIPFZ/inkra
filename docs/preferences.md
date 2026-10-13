@@ -38,6 +38,7 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `editor.linkClick` | `ctrlClick` / `click` | `"ctrlClick"` | PR-040 | Open links with Ctrl+click or a plain click. |
 | `editor.cursorBlink` | bool | `true` | PR-042 | Blink the caret. |
 | `editor.smoothScroll` | bool | `true` | PR-042 | Animate scrolling to a position (outline, search hits). |
+| `editor.spellcheckLanguage` | string | `"system"` | PR-035 | Spelling language: `system` (the OS locale) or a tag such as `de-DE`; uses an installed Hunspell dictionary, else the bundled en_US. Takes effect after restarting. |
 | `editor.spellcheckDictionary` | string | `""` | PR-035 | Personal dictionary file (empty: `dictionary.txt` in the configuration folder). |
 | `view.wordCount` | bool | `true` | PR-043 | Show the word count in the status bar. |
 | `image.maxWidthFollowsEditor` | bool | `true` | TH-008 | Limit image width to the text column (otherwise images may extend into the margins up to the window). |

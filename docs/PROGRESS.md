@@ -52,7 +52,7 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 见 `docs/acceptance/m6.md`：134 页 PDF 0.32 s；书签、可搜索文字、内外链接、表头重复；docx 往返。
 
 ### M7
-见 `docs/acceptance/m7.md` 与 `docs/acceptance/behavior-checklist.md`（185 条，通过率 96.2%）。
+见 `docs/acceptance/m7.md` 与 `docs/acceptance/behavior-checklist.md`（185 条，通过率 97.3%）。
 
 ## 进行中
 - [ ] ROADMAP 中的 ⚠ 项与预算问题（Windows 内存与冷启动）

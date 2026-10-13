@@ -574,3 +574,4 @@ pref-general-dropMarkdown--link = 插入链接
 cmd-format-editLink = 编辑链接…
 link-dialog-text = 文字
 link-dialog-url = 地址
+pref-editor-spellcheckLanguage = 拼写检查语言（system 或如 de-DE）

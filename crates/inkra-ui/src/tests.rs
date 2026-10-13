@@ -7,6 +7,8 @@ fn shell(lang: &str) -> Shell {
     let mut prefs = inkra_engine::Preferences::default();
     // Jumps land in one frame (the harness stops after a few frames).
     prefs.set("editor.smoothScroll", serde_json::json!(false));
+    // A blinking caret keeps asking for frames; the harness wants quiet frames.
+    prefs.set("editor.cursorBlink", serde_json::json!(false));
     Shell::new(Engine::new(prefs), I18n::new(lang), None)
 }
 

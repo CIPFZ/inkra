@@ -95,6 +95,7 @@ fn keys(page: Page) -> &'static [Option<&'static str>] {
             Some("markdown.smartEllipsis"),
             None,
             Some("editor.spellcheck"),
+            Some("editor.spellcheckLanguage"),
             Some("editor.spellcheckDictionary"),
             Some("editor.emojiCompletion"),
             Some("editor.emojiAsShortcode"),
@@ -213,7 +214,11 @@ fn range(key: &str) -> (f64, f64, f64) {
 }
 
 /// Keys whose effect needs a restart.
-const RESTART: &[&str] = &["general.language", "appearance.rememberWindowSize"];
+const RESTART: &[&str] = &[
+    "general.language",
+    "appearance.rememberWindowSize",
+    "editor.spellcheckLanguage",
+];
 
 /// Keys with a multi-line editor.
 const MULTILINE: &[&str] = &["export.html.head", "export.html.foot", "export.html.css"];

@@ -33,9 +33,78 @@ pub fn generation() -> u64 {
     GENERATION.load(Ordering::SeqCst)
 }
 
+/// Folders searched for system Hunspell dictionaries (PR-035).
+const SYSTEM_DIRS: &[&str] = &[
+    "/usr/share/hunspell",
+    "/usr/share/myspell",
+    "/usr/share/myspell/dicts",
+    "/usr/local/share/hunspell",
+    "/Library/Spelling",
+];
+
+/// A system Hunspell dictionary for `language` (`de-DE`, `fr`, `en_GB`…):
+/// `(aff, dic)` file contents. The user's own dictionaries come first
+/// (`~/Library/Spelling`, `~/.local/share/hunspell`).
+pub fn system_dictionary(language: &str) -> Option<(String, String)> {
+    let tag = language.replace('-', "_");
+    let base = tag.split('_').next().unwrap_or("").to_owned();
+    if base.is_empty() {
+        return None;
+    }
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    if let Some(home) = std::env::var_os("HOME") {
+        let h = PathBuf::from(home);
+        dirs.push(h.join(".local/share/hunspell"));
+        dirs.push(h.join("Library/Spelling"));
+    }
+    dirs.extend(SYSTEM_DIRS.iter().map(PathBuf::from));
+    for name in [tag.clone(), base.clone()] {
+        for d in &dirs {
+            let (aff, dic) = (d.join(format!("{name}.aff")), d.join(format!("{name}.dic")));
+            if let (Ok(a), Ok(b)) = (std::fs::read_to_string(&aff), std::fs::read_to_string(&dic)) {
+                return Some((a, b));
+            }
+        }
+    }
+    // Any regional variant of the language (`de_DE` for `de`).
+    for d in &dirs {
+        let Ok(rd) = std::fs::read_dir(d) else {
+            continue;
+        };
+        for e in rd.flatten() {
+            let p = e.path();
+            let stem = p
+                .file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            if p.extension().is_some_and(|x| x == "dic")
+                && stem.split('_').next() == Some(base.as_str())
+                && let (Ok(a), Ok(b)) = (
+                    std::fs::read_to_string(p.with_extension("aff")),
+                    std::fs::read_to_string(&p),
+                )
+            {
+                return Some((a, b));
+            }
+        }
+    }
+    None
+}
+
 /// Starts loading the dictionary in the background; `personal` is the user's
 /// word list (one word per line). `ready` runs once loaded (e.g. repaint).
 pub fn load(personal: Option<PathBuf>, ready: impl FnOnce() + Send + 'static) {
+    load_language(personal, "en-US", ready);
+}
+
+/// Like [`load`] for `language`: a system Hunspell dictionary when one is
+/// installed, otherwise the bundled en_US (PR-035).
+pub fn load_language(
+    personal: Option<PathBuf>,
+    language: &str,
+    ready: impl FnOnce() + Send + 'static,
+) {
+    let language = language.to_owned();
     static STARTED: OnceLock<()> = OnceLock::new();
     if STARTED.set(()).is_err() {
         return;
@@ -44,7 +113,21 @@ pub fn load(personal: Option<PathBuf>, ready: impl FnOnce() + Send + 'static) {
         .name("inkra-spell".into())
         .spawn(move || {
             let t0 = std::time::Instant::now();
-            let dict = match spellbook::Dictionary::new(EN_US_AFF, EN_US_DIC) {
+            let system = (!language.to_ascii_lowercase().starts_with("en_us")
+                && !language.to_ascii_lowercase().starts_with("en-us"))
+            .then(|| system_dictionary(&language))
+            .flatten();
+            let dict = match &system {
+                Some((aff, dic)) => match spellbook::Dictionary::new(aff, dic) {
+                    Ok(d) => {
+                        log::info!("spell dictionary: system {language}");
+                        Ok(d)
+                    }
+                    Err(e) => Err(e),
+                },
+                None => spellbook::Dictionary::new(EN_US_AFF, EN_US_DIC),
+            };
+            let dict = match dict {
                 Ok(d) => Some(d),
                 Err(e) => {
                     log::warn!("spell dictionary: {e}");
@@ -75,6 +158,20 @@ pub fn load(personal: Option<PathBuf>, ready: impl FnOnce() + Send + 'static) {
             ready();
         })
         .ok();
+}
+
+#[cfg(test)]
+mod system_tests {
+    #[test]
+    fn finds_installed_dictionaries_by_language() {
+        // Only meaningful where Hunspell dictionaries are installed.
+        if std::path::Path::new("/usr/share/hunspell/en_US.dic").is_file() {
+            assert!(super::system_dictionary("en").is_some());
+            assert!(super::system_dictionary("en-US").is_some());
+        }
+        assert!(super::system_dictionary("").is_none());
+        assert!(super::system_dictionary("xx-YY").is_none());
+    }
 }
 
 /// Loads synchronously (tests).
