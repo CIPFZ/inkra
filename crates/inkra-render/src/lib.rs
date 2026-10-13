@@ -8,8 +8,40 @@
 use epaint::{Color32, CornerRadius, Pos2, Rect, Shape, Stroke, StrokeKind, Vec2};
 use inkra_layout::{BlockLayout, Deco, Run};
 
-/// Looks up the texture of an image source: `(texture, uv rect)`.
-pub type ImageLookup<'a> = &'a dyn Fn(&str) -> Option<epaint::TextureId>;
+/// Textures owned by the host.
+pub trait Textures {
+    /// The texture of an image source.
+    fn image(&self, src: &str) -> Option<epaint::TextureId>;
+    /// The texture of a rasterized formula.
+    fn math(&self, m: &inkra_layout::MathScene) -> Option<epaint::TextureId>;
+}
+
+/// Rasterizes a vector scene (formula, diagram) at `ppp` pixels per point;
+/// fills without an explicit color use `color`.
+pub fn rasterize(scene: &inkra_math::Scene, color: Color32, ppp: f32) -> epaint::ColorImage {
+    let w = (scene.width * ppp).ceil().max(1.0) as u32;
+    let h = (scene.height * ppp).ceil().max(1.0) as u32;
+    let Some(mut pm) = tiny_skia::Pixmap::new(w, h) else {
+        return epaint::ColorImage::new([1, 1], vec![Color32::TRANSPARENT]);
+    };
+    let ts = tiny_skia::Transform::from_scale(ppp, ppp);
+    for f in &scene.fills {
+        let mut p = tiny_skia::Paint::default();
+        let [r, g, b] = f.color.unwrap_or([color.r(), color.g(), color.b()]);
+        p.set_color_rgba8(r, g, b, if f.color.is_some() { 255 } else { color.a() });
+        p.anti_alias = true;
+        pm.fill_path(&f.path, &p, tiny_skia::FillRule::Winding, ts, None);
+    }
+    // tiny-skia stores premultiplied RGBA, as does epaint's Color32.
+    let px: Vec<Color32> = pm
+        .data()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|c| Color32::from_rgba_premultiplied(c[0], c[1], c[2], c[3]))
+        .collect();
+    epaint::ColorImage::new([w as usize, h as usize], px)
+}
 
 /// Paints the decorations of `layout` whose block top is at `top` (document y).
 /// Images without a texture are drawn as placeholders.
@@ -19,7 +51,7 @@ pub fn paint_decos(
     top: f32,
     offset: Vec2,
     alpha: f32,
-    images: ImageLookup<'_>,
+    textures: &dyn Textures,
 ) {
     let o = Vec2::new(0.0, top) + offset;
     let fade = |c: Color32| {
@@ -60,7 +92,7 @@ pub fn paint_decos(
             }
             Deco::Image { rect, src } => {
                 let r = rect.translate(o);
-                match images(src) {
+                match textures.image(src) {
                     Some(tex) => {
                         let tint = fade(Color32::WHITE);
                         out.push(Shape::image(
@@ -83,6 +115,18 @@ pub fn paint_decos(
                             StrokeKind::Inside,
                         ));
                     }
+                }
+            }
+            Deco::Math { rect, math } => {
+                if let Some(tex) = textures.math(math) {
+                    let r = rect.translate(o);
+                    let tint = fade(Color32::WHITE);
+                    out.push(Shape::image(
+                        tex,
+                        r,
+                        Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0)),
+                        tint,
+                    ));
                 }
             }
             Deco::Circle {

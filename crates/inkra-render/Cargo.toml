@@ -14,3 +14,5 @@ workspace = true
 [dependencies]
 inkra-layout.workspace = true
 epaint.workspace = true
+inkra-math.workspace = true
+tiny-skia.workspace = true
