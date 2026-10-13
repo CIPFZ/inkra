@@ -790,6 +790,27 @@ impl EditorView {
                 .filter(|p| rect.contains(*p))
         {
             let p = self.doc_pos(hp, rect, text_rect);
+            // NF-005: the full address of a hovered link is shown before it is opened.
+            if let Some(HitAction::Link(url) | HitAction::InlineLink(url)) = self.hit_any(p) {
+                let hint = i18n.tr(
+                    if engine.state.prefs.string("editor.linkClick") == "click" {
+                        "link-hint-click"
+                    } else {
+                        "link-hint-ctrl-click"
+                    },
+                );
+                egui::Tooltip::always_open(
+                    ctx.clone(),
+                    ui.layer_id(),
+                    self.id.with("link"),
+                    egui::PopupAnchor::Pointer,
+                )
+                .show(|ui| {
+                    ui.set_max_width(480.0);
+                    ui.label(egui::RichText::new(&url).monospace());
+                    ui.label(egui::RichText::new(hint).small().weak());
+                });
+            }
             if let Some(HitAction::Footnote(label)) = self.hit_action(p)
                 && let Some((_, text)) =
                     inkra_engine::editor::context::footnote_def(&engine.state.editor.doc, &label)
@@ -1408,6 +1429,17 @@ impl EditorView {
         };
         let view = &mut self.view;
         ctx.fonts_mut(|f| view.hit(p, &lcx, f))
+    }
+
+    /// Any hit region (including plain links) at document point `p`.
+    fn hit_any(&mut self, p: Pos2) -> Option<HitAction> {
+        let i = self.view.item_at_y(p.y);
+        let top = self.view.top(i);
+        let l = self.view.layout(i)?;
+        l.hits
+            .iter()
+            .find(|h| h.rect.translate(vec2(0.0, top)).contains(p))
+            .map(|h| h.action.clone())
     }
 
     /// Clickable region (task checkbox) at document point `p`.

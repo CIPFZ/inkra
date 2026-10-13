@@ -1,7 +1,7 @@
 //! Native file dialogs (rfd, UI-040). They run off the UI thread where the platform
 //! allows it (macOS requires the main thread) and report back through a channel.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 /// What a dialog was opened for.
@@ -174,5 +174,53 @@ pub fn open_external(url: &str) -> bool {
             log::warn!("cannot open {u}: {e}");
             false
         }
+    }
+}
+
+/// Whether a file would run as a program when opened (NF-005: links never
+/// start programs).
+pub fn is_program(p: &Path) -> bool {
+    p.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+        matches!(
+            e.to_ascii_lowercase().as_str(),
+            "exe"
+                | "com"
+                | "bat"
+                | "cmd"
+                | "msi"
+                | "ps1"
+                | "vbs"
+                | "vbe"
+                | "js"
+                | "jse"
+                | "wsf"
+                | "wsh"
+                | "scr"
+                | "pif"
+                | "lnk"
+                | "reg"
+                | "cpl"
+                | "sh"
+                | "command"
+                | "app"
+                | "jar"
+                | "appimage"
+                | "run"
+                | "desktop"
+        )
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn programs_and_scripts_are_not_opened() {
+        assert!(is_program(Path::new("C:/x/setup.EXE")));
+        assert!(is_program(Path::new("/tmp/run.sh")));
+        assert!(!is_program(Path::new("/tmp/notes.md")));
+        assert!(!is_program(Path::new("/tmp/report.pdf")));
+        assert!(!open_external("javascript:alert(1)"));
     }
 }

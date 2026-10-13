@@ -576,3 +576,6 @@ link-dialog-text = Text
 link-dialog-url = Address
 pref-editor-spellcheckLanguage = Spelling language (system or e.g. de-DE)
 pref-export-html-math--mathml = MathML
+link-hint-ctrl-click = Ctrl+click to open
+link-hint-click = Click to open
+link-blocked = Programs are not opened from links: { $path }

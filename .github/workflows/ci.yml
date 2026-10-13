@@ -43,3 +43,46 @@ jobs:
       - name: Bundle macOS app
         if: runner.os == 'macOS'
         run: cargo xtask bundle-macos --release
+
+  bench:
+    name: benchmarks (NF-001)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The reference baseline from the default branch.
+      - uses: actions/cache@v4
+        with:
+          path: target/criterion
+          key: criterion-${{ github.sha }}
+          restore-keys: criterion-
+      - name: Compare against the reference (fails on > 20 % regression)
+        run: cargo xtask bench
+      - name: Record the reference on the default branch
+        if: github.event_name == 'push'
+        run: cargo xtask bench --save
+
+  dist:
+    name: packages (${{ matrix.os }})
+    needs: ci
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Linux system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev rpm
+      - name: cargo xtask dist
+        run: cargo xtask dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkra-${{ matrix.os }}
+          path: target/dist/*

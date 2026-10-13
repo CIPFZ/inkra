@@ -576,3 +576,6 @@ link-dialog-text = 文字
 link-dialog-url = 地址
 pref-editor-spellcheckLanguage = 拼写检查语言（system 或如 de-DE）
 pref-export-html-math--mathml = MathML
+link-hint-ctrl-click = Ctrl+单击打开
+link-hint-click = 单击打开
+link-blocked = 不会从链接启动程序：{ $path }

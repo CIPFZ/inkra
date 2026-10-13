@@ -35,5 +35,5 @@ log.workspace = true
 muda.workspace = true
 
 [dev-dependencies]
-egui_kittest.workspace = true
+egui_kittest = { workspace = true, features = ["wgpu"] }
 tempfile.workspace = true

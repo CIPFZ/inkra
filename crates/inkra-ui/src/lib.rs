@@ -892,8 +892,12 @@ impl Shell {
             }
             return;
         }
-        let is_web = url.contains("://") || url.starts_with("mailto:");
+        // NF-005: links never start programs.
+        let local_target = url.strip_prefix("file://").map(|p| p.to_owned());
+        let is_web = (url.contains("://") && local_target.is_none()) || url.starts_with("mailto:");
+        let blocked = dialogs::is_program;
         if !is_web {
+            let url = local_target.as_deref().unwrap_or(url);
             let (file, _anchor) = url.split_once('#').unwrap_or((url, ""));
             let base = self
                 .engine
@@ -910,10 +914,23 @@ impl Shell {
                     self.invoke(ctx, "file.open", &json!({ "path": path }));
                     return;
                 }
+                if blocked(&path) {
+                    self.toast(
+                        ctx,
+                        self.i18n.tr_args(
+                            "link-blocked",
+                            &[("path", path.display().to_string().into())],
+                        ),
+                    );
+                    return;
+                }
                 if path.exists() {
                     dialogs::open_external(&path.to_string_lossy());
                     return;
                 }
+            }
+            if local_target.is_some() {
+                return;
             }
         }
         if !dialogs::open_external(url) {

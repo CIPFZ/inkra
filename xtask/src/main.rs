@@ -20,6 +20,7 @@ Tasks:
   docs [--check]     All of the above generators
   bundle-macos [--release]  Assemble target/<profile>/Inkra.app
   dist               Release packages for this platform in target/dist (NF-006)
+  bench [--save]     Criterion benchmarks; fail on > 20 % regression against the saved reference (NF-001)
   corpus             Fetch the real-world Markdown corpus into target/corpus (TS-002)
 ";
 
@@ -214,6 +215,7 @@ fn main() -> ExitCode {
         Some(t @ ("commands" | "prefs" | "keybindings" | "docs")) => docs(t, check),
         Some("bundle-macos") => bundle_macos(args.iter().any(|a| a == "--release")),
         Some("corpus") => corpus(),
+        Some("bench") => bench(args.iter().any(|a| a == "--save")),
         Some("dist") => dist::dist().map(|files| {
             for f in files {
                 eprintln!("dist: {}", f.display());
@@ -230,5 +232,59 @@ fn main() -> ExitCode {
             eprintln!("xtask: {e}");
             ExitCode::FAILURE
         }
+    }
+}
+
+/// `cargo xtask bench [--save]` (NF-001): runs the criterion benchmarks; with a
+/// saved `reference` baseline, fails when a benchmark's median got more than
+/// 20 % slower. `--save` records the current numbers as the reference.
+fn bench(save: bool) -> Result<(), String> {
+    let target =
+        std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root().join("target"), PathBuf::from);
+    let crit = target.join("criterion");
+    let has_reference = std::fs::read_dir(&crit)
+        .map(|rd| rd.flatten().any(|e| e.path().join("reference").is_dir()))
+        .unwrap_or(false);
+    let mut c = cargo();
+    c.args(["bench", "-p", "inkra-markdown", "--bench", "parse", "--"]);
+    if save {
+        c.args(["--save-baseline", "reference"]);
+    } else if has_reference {
+        c.args(["--baseline", "reference"]);
+    }
+    run("bench", c)?;
+    if save || !has_reference {
+        if !save {
+            eprintln!("bench: no reference baseline yet (run `cargo xtask bench --save`)");
+        }
+        return Ok(());
+    }
+    let mut slower = Vec::new();
+    for e in std::fs::read_dir(&crit)
+        .map_err(|e| e.to_string())?
+        .flatten()
+    {
+        let change = e.path().join("change/estimates.json");
+        let Ok(text) = std::fs::read_to_string(&change) else {
+            continue;
+        };
+        let v: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+        let median = v["median"]["point_estimate"].as_f64().unwrap_or(0.0);
+        let name = e.file_name().to_string_lossy().into_owned();
+        eprintln!(
+            "bench: {name}: {:+.1} % against the reference",
+            median * 100.0
+        );
+        if median > 0.20 {
+            slower.push(format!("{name} ({:+.0} %)", median * 100.0));
+        }
+    }
+    if slower.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "benchmarks regressed by more than 20 %: {}",
+            slower.join(", ")
+        ))
     }
 }
