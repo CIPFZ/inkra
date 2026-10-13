@@ -8,14 +8,61 @@ use crate::refs::unescape;
 use crate::walk;
 
 /// Rendering options.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct HtmlOptions {
+#[derive(Clone, Default)]
+pub struct HtmlOptions<'h> {
     /// Add `id` anchors to headings.
     pub heading_ids: bool,
     /// Render soft breaks as `<br />` (MD-079).
     pub soft_break_as_br: bool,
     /// GFM tag filter: neutralize `<script>`, `<style>`, `<iframe>`… in raw HTML.
     pub tagfilter: bool,
+    /// Export hooks (highlighting, math, diagrams, images, TOC); `None` renders
+    /// the reference CommonMark output.
+    pub hooks: Option<&'h dyn HtmlHooks>,
+}
+
+impl PartialEq for HtmlOptions<'_> {
+    fn eq(&self, o: &Self) -> bool {
+        self.heading_ids == o.heading_ids
+            && self.soft_break_as_br == o.soft_break_as_br
+            && self.tagfilter == o.tagfilter
+    }
+}
+
+impl std::fmt::Debug for HtmlOptions<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HtmlOptions")
+            .field("heading_ids", &self.heading_ids)
+            .field("soft_break_as_br", &self.soft_break_as_br)
+            .field("tagfilter", &self.tagfilter)
+            .field("hooks", &self.hooks.is_some())
+            .finish()
+    }
+}
+
+/// Hooks used by HTML export (EX-001). Each returns the HTML to emit, or
+/// `None` for the default rendering.
+pub trait HtmlHooks {
+    /// A fenced code block's contents (highlighting, diagrams).
+    fn code_block(&self, lang: &str, code: &str) -> Option<String> {
+        let _ = (lang, code);
+        None
+    }
+    /// A formula.
+    fn math(&self, tex: &str, display: bool) -> Option<String> {
+        let _ = (tex, display);
+        None
+    }
+    /// The `src` to write for an image destination.
+    fn image_src(&self, dest: &str) -> Option<String> {
+        let _ = dest;
+        None
+    }
+    /// The table of contents for `[TOC]`: `(level, text, anchor)` of the headings.
+    fn toc(&self, headings: &[(u8, String, String)]) -> Option<String> {
+        let _ = headings;
+        None
+    }
 }
 
 const FILTERED_TAGS: &[&str] = &[
@@ -99,7 +146,8 @@ pub fn escape_url(url: &str, out: &mut String) {
 
 struct Renderer<'a, S: Source + ?Sized> {
     src: &'a S,
-    o: &'a HtmlOptions,
+    o: &'a HtmlOptions<'a>,
+    blocks: &'a [Block],
     out: String,
     slugs: crate::anchor::Slugger,
     footnotes: Vec<String>,
@@ -111,11 +159,12 @@ pub fn render<S: Source + ?Sized>(
     src: &S,
     blocks: &[Block],
     cx: &InlineContext,
-    o: &HtmlOptions,
+    o: &HtmlOptions<'_>,
 ) -> String {
     let mut r = Renderer {
         src,
         o,
+        blocks,
         out: String::new(),
         slugs: Default::default(),
         footnotes: Vec::new(),
@@ -166,7 +215,17 @@ impl<S: Source + ?Sized> Renderer<'_, S> {
             }
             BlockKind::Toc => {
                 self.cr();
-                self.out.push_str("<p>[TOC]</p>");
+                let toc = self.o.hooks.and_then(|h| {
+                    let heads: Vec<(u8, String, String)> = walk::headings(self.src, self.blocks)
+                        .into_iter()
+                        .map(|h| (h.level, h.text, h.anchor))
+                        .collect();
+                    h.toc(&heads)
+                });
+                match toc {
+                    Some(t) => self.out.push_str(&t),
+                    None => self.out.push_str("<p>[TOC]</p>"),
+                }
                 self.cr();
             }
             BlockKind::Heading { level, .. } => {
@@ -197,6 +256,14 @@ impl<S: Source + ?Sized> Renderer<'_, S> {
                         .unwrap_or_default()
                         .to_owned()
                 });
+                let code = self.lines_raw(b);
+                if let Some(h) = self.o.hooks
+                    && let Some(html) = h.code_block(lang.as_deref().unwrap_or(""), &code)
+                {
+                    self.out.push_str(&html);
+                    self.cr();
+                    return;
+                }
                 match lang.filter(|l| !l.is_empty()) {
                     Some(l) => {
                         self.out.push_str("<pre><code class=\"language-");
@@ -205,7 +272,6 @@ impl<S: Source + ?Sized> Renderer<'_, S> {
                     }
                     None => self.out.push_str("<pre><code>"),
                 }
-                let code = self.lines_raw(b);
                 self.text(&code);
                 self.out.push_str("</code></pre>");
                 self.cr();
@@ -310,9 +376,12 @@ impl<S: Source + ?Sized> Renderer<'_, S> {
             BlockKind::TableRow { .. } | BlockKind::TableCell => {}
             BlockKind::MathBlock { .. } => {
                 self.cr();
-                self.out.push_str("<div class=\"math math-display\">");
                 let tex = self.lines_raw(b);
-                self.text(tex.trim_end());
+                self.out.push_str("<div class=\"math math-display\">");
+                match self.o.hooks.and_then(|h| h.math(tex.trim_end(), true)) {
+                    Some(html) => self.out.push_str(&html),
+                    None => self.text(tex.trim_end()),
+                }
                 self.out.push_str("</div>");
                 self.cr();
             }
@@ -434,7 +503,12 @@ impl<S: Source + ?Sized> Renderer<'_, S> {
             }
             InlineKind::Image { dest, title, .. } => {
                 self.out.push_str("<img src=\"");
-                escape_url(dest, &mut self.out);
+                match self.o.hooks.and_then(|h| h.image_src(dest)) {
+                    // Data URLs are written as they are.
+                    Some(s) if s.starts_with("data:") => self.out.push_str(&s),
+                    Some(s) => escape_url(&s, &mut self.out),
+                    None => escape_url(dest, &mut self.out),
+                }
                 self.out.push_str("\" alt=\"");
                 let mut alt = String::new();
                 self.alt_text(&i.children, &mut alt);
@@ -454,8 +528,11 @@ impl<S: Source + ?Sized> Renderer<'_, S> {
             }
             InlineKind::Math { content } => {
                 self.out.push_str("<span class=\"math math-inline\">");
-                let t = self.src.slice(content.clone());
-                self.text(&t);
+                let t = self.src.slice(content.clone()).into_owned();
+                match self.o.hooks.and_then(|h| h.math(&t, false)) {
+                    Some(html) => self.out.push_str(&html),
+                    None => self.text(&t),
+                }
                 self.out.push_str("</span>");
             }
             InlineKind::FootnoteRef { label } => {
@@ -487,7 +564,7 @@ pub fn to_html(src: &str, o: &crate::ParseOptions) -> String {
 }
 
 /// Parses and renders `src` with rendering options.
-pub fn to_html_with(src: &str, o: &crate::ParseOptions, ho: &HtmlOptions) -> String {
+pub fn to_html_with(src: &str, o: &crate::ParseOptions, ho: &HtmlOptions<'_>) -> String {
     let p = crate::parse(src, o);
     render(src, &p.blocks, &p.cx, ho)
 }

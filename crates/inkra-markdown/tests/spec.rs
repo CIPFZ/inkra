@@ -140,8 +140,10 @@ fn run(
         if only.is_some_and(|n| n != e.number) {
             continue;
         }
-        let got = std::panic::catch_unwind(|| to_html_with(&e.markdown, opts, ho))
-            .unwrap_or_else(|_| "PANIC".into());
+        let got = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            to_html_with(&e.markdown, opts, ho)
+        }))
+        .unwrap_or_else(|_| "PANIC".into());
         let ok = normalize(&got) == normalize(&e.html);
         let entry = stats.entry(e.section.clone()).or_default();
         entry.1 += 1;
