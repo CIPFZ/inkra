@@ -452,12 +452,17 @@ impl EditorView {
                 caret_rect = Some(c.translate(vec2(-s, 0.0)));
             }
         }
-        // Request textures for visible images.
+        // Request textures for visible images and formulas.
+        self.images.begin_frame();
         for i in visible.clone() {
             if let Some(l) = self.view.layout(i) {
                 for d in &l.decos {
-                    if let Deco::Image { src, .. } = d {
-                        self.images.get(&ctx, src);
+                    match d {
+                        Deco::Image { src, .. } => {
+                            self.images.get(&ctx, src);
+                        }
+                        Deco::Math { math, .. } => self.images.ensure_math(&ctx, math),
+                        _ => {}
                     }
                 }
             }
@@ -506,8 +511,7 @@ impl EditorView {
             })
             .collect();
         let mut deco_shapes = Vec::new();
-        let images = &self.images;
-        let lookup = |src: &str| images.texture(src);
+        let lookup = &self.images;
         let clip = Rect::from_min_max(
             pos2(text_rect.left() - 1.0, rect.top()),
             pos2(text_rect.right() + 1.0, rect.bottom()),
@@ -524,7 +528,7 @@ impl EditorView {
                         top,
                         offset - vec2(w.shift, 0.0),
                         alphas[k],
-                        &lookup,
+                        lookup,
                     ),
                     None => inkra_render::paint_decos(
                         &mut deco_shapes,
@@ -532,7 +536,7 @@ impl EditorView {
                         top,
                         offset,
                         alphas[k],
-                        &lookup,
+                        lookup,
                     ),
                 }
             }

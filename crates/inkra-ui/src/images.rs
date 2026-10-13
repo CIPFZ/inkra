@@ -26,6 +26,10 @@ pub struct Images {
     /// Column widths of tables resized by dragging, by table source start
     /// (display only, ED-084).
     pub column_widths: HashMap<usize, Vec<f32>>,
+    /// Rasterized formulas by (scene key, color, pixels per point) with the
+    /// frame they were last used in.
+    math: HashMap<(u64, egui::Color32, u32), (egui::TextureHandle, u64)>,
+    frame: u64,
 }
 
 impl Default for Images {
@@ -37,6 +41,8 @@ impl Default for Images {
             tx,
             rx,
             column_widths: HashMap::new(),
+            math: HashMap::new(),
+            frame: 0,
         }
     }
 }
@@ -198,6 +204,34 @@ impl Images {
     }
 
     /// Texture of a loaded image.
+    /// Rasterizes a formula for this frame if needed (SPEC 2.4 caching).
+    pub fn ensure_math(&mut self, ctx: &egui::Context, m: &inkra_layout::MathScene) {
+        let ppp = ctx.pixels_per_point();
+        let key = (m.key, m.color, ppp.to_bits());
+        let frame = self.frame;
+        if let Some(e) = self.math.get_mut(&key) {
+            e.1 = frame;
+            return;
+        }
+        let img = inkra_render::rasterize(&m.scene, m.color, ppp);
+        let tex = ctx.load_texture(
+            format!("math:{:x}", m.key),
+            img,
+            egui::TextureOptions::LINEAR,
+        );
+        self.math.insert(key, (tex, frame));
+    }
+
+    /// Starts a frame: formulas unused for a while release their textures.
+    pub fn begin_frame(&mut self) {
+        self.frame += 1;
+        if self.math.len() > 256 {
+            let f = self.frame;
+            self.math.retain(|_, (_, used)| f - *used < 120);
+        }
+    }
+
+    /// The texture of a loaded image.
     pub fn texture(&self, src: &str) -> Option<egui::TextureId> {
         match self.entries.get(src) {
             Some(Entry::Ready { tex, .. }) => Some(tex.id()),
@@ -216,6 +250,20 @@ impl Images {
     /// Forgets `src` so it is loaded again.
     pub fn reload(&mut self, src: &str) {
         self.entries.remove(src);
+    }
+}
+
+impl inkra_render::Textures for Images {
+    fn image(&self, src: &str) -> Option<egui::TextureId> {
+        self.texture(src)
+    }
+
+    fn math(&self, m: &inkra_layout::MathScene) -> Option<egui::TextureId> {
+        // Any pixels-per-point variant will do while the right one is pending.
+        self.math
+            .iter()
+            .find(|(k, _)| k.0 == m.key && k.1 == m.color)
+            .map(|(_, (t, _))| t.id())
     }
 }
 

@@ -38,6 +38,7 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `editor.typewriterMode` | bool | `false` | PR-038 | Typewriter mode (remembered). |
 | `editor.rememberZoom` | bool | `true` | PR-039 | Remember the editor zoom (Ctrl+wheel, Ctrl+Shift+=/-). |
 | `editor.zoom` | number | `1.0` | PR-039 | Editor zoom factor, 0.5 to 3.0. |
+| `markdown.mathNumbering` | `none` / `ams` / `all` | `"none"` | MD-068 | Number display formulas: off, AMS environments (`equation`, `align`), or every block. |
 | `markdown.inlineMath` | bool | `false` | MD-060 | Inline math `$...$`. |
 | `markdown.subscript` | bool | `false` | MD-061 | Subscript `~x~`. |
 | `markdown.superscript` | bool | `false` | MD-062 | Superscript `^x^`. |

@@ -158,7 +158,14 @@ impl AppState {
         let name = self.wanted_theme();
         let dir = self.paths.as_ref().map(|p| p.themes_dir());
         match crate::theme::load(&name, dir.as_deref()) {
-            Ok(s) => {
+            Ok(mut s) => {
+                // Rendering options that live in preferences, not themes.
+                s.math_numbering = match self.prefs.string("markdown.mathNumbering").as_str() {
+                    "ams" => 1,
+                    "all" => 2,
+                    _ => 0,
+                };
+                s.version = s.version.wrapping_add(u64::from(s.math_numbering));
                 self.style = s;
                 Ok(())
             }

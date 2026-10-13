@@ -269,6 +269,13 @@ pub const PREFS: &[PrefSpec] = &[
         doc: "Editor zoom factor, 0.5 to 3.0.",
     },
     PrefSpec {
+        key: "markdown.mathNumbering",
+        default: r#""none""#,
+        kind: PrefKind::Enum(&["none", "ams", "all"]),
+        req: "MD-068",
+        doc: "Number display formulas: off, AMS environments (`equation`, `align`), or every block.",
+    },
+    PrefSpec {
         key: "markdown.inlineMath",
         default: "false",
         kind: PrefKind::Bool,

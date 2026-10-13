@@ -17,8 +17,16 @@ pub fn register_all(r: &mut CommandRegistry) {
             if !cx.app.set_pref(&key, value) {
                 return Err(crate::command::CommandError::Failed { id: "app.setPreference".into(), msg: format!("invalid value for `{key}`") });
             }
-            if key.starts_with("appearance.") {
+            if key.starts_with("appearance.") || key == "markdown.mathNumbering" {
                 let _ = cx.app.reload_theme();
+            }
+            if key.starts_with("markdown.") {
+                // Parse options apply to every open document right away (MD-080).
+                let o = crate::markdown_options(&cx.app.prefs);
+                cx.app.editor.doc.set_options(o.clone());
+                for w in &mut cx.app.others {
+                    w.editor.doc.set_options(o.clone());
+                }
             }
             Ok(Outcome::Done)
         },
