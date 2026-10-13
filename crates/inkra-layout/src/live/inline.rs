@@ -337,6 +337,11 @@ impl<'a> Builder<'a> {
                 let span = self.abs_range(&i.span);
                 let src = self.text.slice(span.clone()).into_owned();
                 if src.starts_with("<!--") {
+                    if self.style.print {
+                        // Not printed (MD-040).
+                        self.push("", &cur, Some(span.start..span.start), true);
+                        continue;
+                    }
                     // Comments are faint (MD-040).
                     let mut f = cur;
                     f.color = self.style.mark_fg;
@@ -514,11 +519,15 @@ impl<'a> Builder<'a> {
                     self.push_marker(self.abs_range(close), fmt);
                 }
             }
-            InlineKind::Link { text, syntax, .. } => {
+            InlineKind::Link {
+                text, syntax, dest, ..
+            } => {
                 let mut f = *fmt;
                 f.color = style.accent;
                 f.underline = true;
                 let text_r = self.abs_range(text);
+                let hit_start = self.job.text.len();
+                let dest = dest.clone();
                 match syntax {
                     LinkSyntax::Autolink if active => self.push_src(span, &f),
                     LinkSyntax::Autolink | LinkSyntax::Extended => self.inlines(&i.children, &f),
@@ -532,6 +541,14 @@ impl<'a> Builder<'a> {
                             u.color = style.source.url;
                             self.push_src(text_r.end..span.end, &u);
                         }
+                    }
+                }
+                if !active {
+                    let end = self.job.text.len();
+                    if end > hit_start {
+                        self.map
+                            .hits
+                            .push((hit_start..end, crate::block::HitAction::InlineLink(dest)));
                     }
                 }
             }

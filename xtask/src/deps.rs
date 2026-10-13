@@ -54,9 +54,9 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
     ),
     (
         "ttf-parser",
-        Scope::Only(&["inkra-math", "inkra-diagram"]),
+        Scope::Only(&["inkra-math", "inkra-diagram", "inkra-export"]),
         "MIT OR Apache-2.0",
-        "OpenType MATH table and glyph outlines for the math engine (SPEC 2.4)",
+        "OpenType MATH table and glyph outlines for the math engine (SPEC 2.4); glyph ids and outlines for PDF/image export",
     ),
     (
         "tiny-skia-path",
@@ -80,6 +80,12 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         ]),
         "BSD-3-Clause",
         "rasterizing formulas and diagrams (also used by resvg); math/diagram examples only",
+    ),
+    (
+        "krilla",
+        Scope::Only(&["inkra-export"]),
+        "MIT OR Apache-2.0",
+        "PDF export: selectable text, font subsetting, links, outline (SPEC 2.1, EX-002)",
     ),
     (
         "resvg",

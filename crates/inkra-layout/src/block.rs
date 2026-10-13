@@ -76,6 +76,9 @@ pub enum HitAction {
     /// A footnote reference: hovering shows the definition, clicking jumps to it
     /// (MD-010).
     Footnote(String),
+    /// An ordinary Markdown link: opened with Ctrl+click in the editor (PR-040),
+    /// a link annotation in PDF export.
+    InlineLink(String),
 }
 
 /// A clickable region.

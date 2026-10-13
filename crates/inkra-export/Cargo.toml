@@ -17,3 +17,17 @@ inkra-doc.workspace = true
 inkra-html.workspace = true
 inkra-layout.workspace = true
 inkra-render.workspace = true
+inkra-math.workspace = true
+inkra-diagram.workspace = true
+inkra-highlight.workspace = true
+inkra-text.workspace = true
+tiny-skia-path.workspace = true
+log.workspace = true
+krilla.workspace = true
+image.workspace = true
+tiny-skia.workspace = true
+resvg.workspace = true
+ttf-parser.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

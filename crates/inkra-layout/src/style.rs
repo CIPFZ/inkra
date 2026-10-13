@@ -73,6 +73,9 @@ pub struct Style {
     pub toc_depth: u8,
     /// Underline misspelled words (ED-104); a preference.
     pub spellcheck: bool,
+    /// Layout for print/export: HTML comments are hidden (MD-040). Change
+    /// `version` along with it.
+    pub print: bool,
     /// Body font size in points.
     pub size: f32,
     /// Monospace font size in points.
@@ -178,6 +181,7 @@ impl Default for Style {
             diagrams: true,
             toc_depth: 6,
             spellcheck: false,
+            print: false,
             size: 16.0,
             mono_size: 14.0,
             line_height: 1.6,
