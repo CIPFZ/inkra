@@ -575,3 +575,4 @@ cmd-format-editLink = Edit Link…
 link-dialog-text = Text
 link-dialog-url = Address
 pref-editor-spellcheckLanguage = Spelling language (system or e.g. de-DE)
+pref-export-html-math--mathml = MathML

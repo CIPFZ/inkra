@@ -9,6 +9,7 @@
 
 pub mod font;
 pub mod layout;
+pub mod mathml;
 pub mod parse;
 pub mod symbols;
 

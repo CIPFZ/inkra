@@ -165,7 +165,7 @@
 | 130 | EX-001 | HTML（不含样式）片段 | 自动 `exports_structure_math_code_and_toc` | ✅ |
 | 131 | EX-001 | 标题锚点、TOC、脚注聚合、代码高亮、SVG 公式/图表、Alerts | 自动 `exports_structure_math_code_and_toc` | ✅ |
 | 132 | EX-001 | 图片路径：保持/绝对/内嵌 | 自动 `images_embed_and_absolute` | ✅ |
-| 133 | EX-001 | 公式可选 TeX 输出 | 自动 `exports_structure_math_code_and_toc` | ⚠ MathML 选项未提供（已回填） |
+| 133 | EX-001 | 公式输出可选 SVG / MathML / TeX | 自动 `exports_structure_math_code_and_toc`、`common_constructs`（数学语料全部生成配对完整的 MathML） | ✅ |
 | 134 | EX-002 | PDF 分页、书签、可选文字、内外链接、页眉页脚、元数据 | 自动 `exports_a_pdf_with_text_links_and_outline`、`pagination_rules`；M6 报告 | ✅ |
 | 135 | EX-002 | 页面设置对话框 | 自动 `unimplemented_items_are_disabled_and_about_opens` | ✅ |
 | 136 | EX-002 | 打印：PDF 交给系统 | 手工 W | ✅ |
@@ -236,4 +236,4 @@
 
 ## 汇总
 
-共 185 条：✅ 181、⚠ 4、❌ 0，通过率 97.8%。⚠ 项进入 `docs/ROADMAP.md`。
+共 185 条：✅ 182、⚠ 3、❌ 0，通过率 98.4%。⚠ 项进入 `docs/ROADMAP.md`。

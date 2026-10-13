@@ -2,7 +2,6 @@
 
 ## 1.0 之后（来自 M7 行为清单的 ⚠ 项）
 
-- EX-001：HTML 导出的 MathML 公式输出选项（目前为 SVG 或 TeX）。
 - TH-007：在 Windows/macOS 的 150% / 200% 系统缩放下实测（Linux X11 分数缩放已验证）。
 - PR-035：Windows 上无系统 Hunspell 词典时可下载其他语言词典（目前回退到内置 en_US）。
 - UI-001 / NF-006：macOS 系统菜单栏与 dmg 在真机上验证。

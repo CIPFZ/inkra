@@ -593,9 +593,9 @@ pub const PREFS: &[PrefSpec] = &[
     PrefSpec {
         key: "export.html.math",
         default: r#""svg""#,
-        kind: PrefKind::Enum(&["svg", "tex"]),
+        kind: PrefKind::Enum(&["svg", "mathml", "tex"]),
         req: "EX-001",
-        doc: "Formulas in HTML: inline SVG, or TeX in `$$` for MathJax/KaTeX pages.",
+        doc: "Formulas in HTML: inline SVG, MathML, or TeX in `$$` for MathJax/KaTeX pages.",
     },
     PrefSpec {
         key: "export.html.highlight",

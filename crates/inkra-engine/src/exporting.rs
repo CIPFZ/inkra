@@ -300,10 +300,10 @@ fn html_options(app: &AppState, styled: bool) -> HtmlExport {
             "embed" => ImagePaths::Embed,
             _ => ImagePaths::Keep,
         },
-        math: if p.string("export.html.math") == "tex" {
-            MathOutput::Tex
-        } else {
-            MathOutput::Svg
+        math: match p.string("export.html.math").as_str() {
+            "tex" => MathOutput::Tex,
+            "mathml" => MathOutput::MathMl,
+            _ => MathOutput::Svg,
         },
         highlight: p.bool("export.html.highlight"),
         diagrams: app.style.diagrams,

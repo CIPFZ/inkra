@@ -30,6 +30,8 @@ pub enum MathOutput {
     Svg,
     /// The TeX source in `$…$` / `$$…$$` for pages that run MathJax/KaTeX.
     Tex,
+    /// MathML presentation markup.
+    MathMl,
 }
 
 /// HTML export options.
@@ -240,6 +242,7 @@ impl HtmlHooks for Hooks<'_> {
             } else {
                 format!("${}$", escape(tex))
             }),
+            MathOutput::MathMl => Some(inkra_math::mathml::to_mathml(tex, display)),
             MathOutput::Svg => {
                 let r = inkra_math::render(&inkra_math::Request::new(
                     tex,
@@ -605,6 +608,17 @@ mod tests {
             },
         );
         assert!(!plain.contains("<style>"));
+        let mml = export_html(
+            src,
+            &parse,
+            &HtmlExport {
+                math: MathOutput::MathMl,
+                ..Default::default()
+            },
+        );
+        assert!(
+            mml.contains("<math xmlns=\"http://www.w3.org/1998/Math/MathML\" display=\"block\">")
+        );
         let tex = export_html(
             src,
             &parse,

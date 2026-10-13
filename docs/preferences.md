@@ -84,7 +84,7 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `export.pdf.footer` | string | `"{{page}} / {{pages}}"` | EX-002 | Page footer template. |
 | `export.pdf.background` | bool | `false` | EX-002 | Paint the theme's background on PDF pages (otherwise white pages and, for dark themes, the light default theme). |
 | `export.html.images` | `keep` / `absolute` / `embed` | `"keep"` | EX-001 | Image paths in HTML: as written, absolute file URLs, or embedded as base64. |
-| `export.html.math` | `svg` / `tex` | `"svg"` | EX-001 | Formulas in HTML: inline SVG, or TeX in `$$` for MathJax/KaTeX pages. |
+| `export.html.math` | `svg` / `mathml` / `tex` | `"svg"` | EX-001 | Formulas in HTML: inline SVG, MathML, or TeX in `$$` for MathJax/KaTeX pages. |
 | `export.html.highlight` | bool | `true` | EX-001 | Syntax-highlight code blocks in HTML. |
 | `export.html.softBreakAsBr` | bool | `false` | MD-079 | Export soft line breaks as `<br>`. |
 | `export.html.head` | string | `""` | EX-001 | Extra HTML appended to `<head>` of exported HTML. |
