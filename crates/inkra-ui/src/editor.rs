@@ -243,10 +243,7 @@ impl EditorView {
             let ed = &engine.state.editor;
             let t = ed.doc.text();
             n.set_role(egui::accesskit::Role::MultilineTextInput);
-            n.set_label(ed.path.as_ref().and_then(|p| p.file_name()).map_or_else(
-                || "Document".to_owned(),
-                |f| f.to_string_lossy().into_owned(),
-            ));
+            n.set_label("Document");
             let shown = if t.len() <= 256 * 1024 {
                 t.to_string()
             } else {
