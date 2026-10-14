@@ -10,7 +10,7 @@
 | 技术栈 | 100% Rust：Rust 2024 edition、egui 0.36 + eframe 0.36、wgpu |
 | 目标平台 | Windows 10+（x64/arm64）、macOS 12+（universal）、Linux（x86_64/aarch64，X11 与 Wayland） |
 | 许可证 | MIT OR Apache-2.0 |
-| 文档版本 | v1.1，2026-10-12 |
+| 文档版本 | v1.2，2026-10-13 |
 
 ---
 
@@ -150,6 +150,8 @@ Inkra 完全用 Rust 编写：界面由 egui 在 GPU 上自绘，排版、语法
 | 测试 | cargo test、insta（快照）、egui_kittest（UI 快照与交互）、proptest、criterion | | |
 | CI | GitHub Actions：fmt、clippy -D warnings、test、layering 检查、三平台打包 | | |
 
+[回填 2026-10-13] **Windows 渲染后端（D-1、D-4）**：Windows 默认后端保持 DX12（不改为 GL 优先；Windows 构建同时包含 GL 后端，`WGPU_BACKEND` 可覆盖）。为降低 DX12 启动耗时：（1）在偏好键 `general.graphics.lastAdapter`（内部键，不出现在偏好窗口）记录上次成功使用的适配器 `{ name, vendor, device, backend }`，下次启动优先尝试该适配器，匹配失败再完整枚举；（2）评估 wgpu `static-dxc`（Apache-2.0 WITH LLVM-exception）替代 FXC 编译着色器，设备创建收益 < 30 ms 则不启用并记录结论；（3）DX12 只枚举到软件适配器（WARP，`DeviceType::Cpu`）时自动改用 GL，GL 不可用时仍以 DX12/WARP 兜底；所选后端与原因写入日志 `graphics:` 行。
+
 ### 2.2 工作区（Cargo Workspace）与分层
 
 分层规则：上层可以依赖下层，下层**禁止**依赖上层；同层之间禁止互相依赖。`cargo xtask layering` 检查该规则。
@@ -228,16 +230,21 @@ workspace 级 `#![forbid(unsafe_code)]`，macOS 的 Apple Event（Finder 双击�
 
 | 指标 | 目标 | 测量方式 |
 |---|---|---|
-| 冷启动到可输入（空文档） | < 300 ms（Release，SSD） | `--measure-startup` 日志 |
+| 冷启动到可输入（空文档） | < 300 ms（Release，SSD，单 GPU 实体机） | `--measure-startup` 日志 |
 | 打开 1 MB / 10 万字 Markdown 到首帧 | < 500 ms | 同上 |
 | 输入延迟（按键到帧提交）10 万字文档 | p95 < 16 ms | 内置性能叠层（`view.debugOverlay`） |
 | 滚动帧率 | 60 fps（vsync），无掉帧 | 同上 |
 | 空闲 CPU | 0%（无输入不重绘，不轮询） | 系统监视器 |
-| 内存（空文档） | < 120 MB RSS | 同上 |
+| 内存（空文档） | Linux < 120 MB RSS；Windows < 150 MB 私有字节（不计 GPU 驱动占用） | 同上 |
 | 内存（10 万字含 50 张图） | < 400 MB RSS | 同上 |
 | 二进制大小（不含字体） | < 30 MB | release 产物 |
 | 全局搜索 1 万个文件 | < 2 s 首批结果 | 基准测试 |
 | PDF 导出 100 页 | < 5 s | 基准测试 |
+
+[回填 2026-10-13] **冷启动与内存预算的测量环境（D-2、D-3）**：冷启动门槛以"单 GPU 实体机、Release 构建"测量；虚拟 GPU 环境（如云主机直通、多适配器虚拟机）的测量仅作参考，不作为门槛。空文档内存门槛分平台：Linux 以 RSS 计 < 120 MB；Windows 以进程私有字节计 < 150 MB，GPU 驱动（用户态显示驱动、着色器缓存等）的占用不计入；在实体机用 VMMap 拆分后可再修订。
+
+---
+
 ## 3. 编辑器核心：实时渲染视图与文本编辑
 
 本章是整个产品的灵魂。实现者必须先完整实现本章再做其他任何功能。
@@ -1193,9 +1200,11 @@ inkra-cli commands                          # 列出命令
 ### M7 打磨与 1.0（第 15 至 16 周）
 - 专注/打字机模式细节、全部 P1 偏好项、自定义快捷键 UI、配置导入导出、i18n 中英、AccessKit、Wayland/HiDPI 测试、安装包、文件关联、更新检查、文档（快速入门、Markdown 参考、主题指南）、CLI。
 - 验收：产品行为清单（`docs/acceptance/behavior-checklist.md`，由第 3 至 10 章全部 P0/P1 需求生成，约 200 条可观察行为）通过率 ≥ 95%，剩余项列入 ROADMAP；三平台安装包可安装运行；内存与启动预算达标。
+- [回填 2026-10-13] **1.0 收尾与公开 beta（D-5）**：M7 验收后的第一个公开版本号为 `1.0.0-beta.1`，以 GitHub Release（标记 pre-release）发布，附三平台安装包与 `SHA256SUMS.txt`，用于收集真实用户反馈。以下 ROADMAP 项不阻塞 beta：彩色 emoji（MD-039/TH-006）、Windows 11 贴靠布局浮层（TH-008）、原生 Wayland 实测（NF-006）。三平台验证以 GitHub Actions（`ci.yml`、`release.yml`）为正式手段。
 
 ### 1.x 路线（P2 汇总）
 标签页（`FS-050`）、Mermaid 全部图表类型、旧 flow/sequence 语法、图片上传服务、视频/音频卡片、全局替换、命令面板、控制通道与 MCP、宏录制、CSS 主题导入、TextBundle、富文本样式复制、tree-sitter 高亮、代码签名与公证、更多语言。
+[回填 2026-10-13] 1.x 执行顺序（D-6）：控制通道与 MCP（CM-003）排在标签页（FS-050）之前，其余顺序见 `docs/ROADMAP.md`。
 
 ---
 
