@@ -109,6 +109,7 @@ fn kind(k: PrefKind) -> String {
         PrefKind::Number => "number".into(),
         PrefKind::String => "string".into(),
         PrefKind::StringList => "string[]".into(),
+        PrefKind::Object => "object".into(),
         PrefKind::Enum(opts) => opts
             .iter()
             .map(|o| format!("`{o}`"))

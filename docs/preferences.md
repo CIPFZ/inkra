@@ -33,6 +33,7 @@ Stored in `conf.user.json` (PR-001): Windows `%APPDATA%\Inkra\`, macOS `~/Librar
 | `appearance.centerWide` | bool | `true` | WM-004 | Center the text column in wide windows (otherwise it starts at the left). |
 | `appearance.autoHideScrollbar` | bool | `false` | WM-004 | Show the scrollbar only while scrolling or when the pointer is near it. |
 | `appearance.uiFontSize` | number | `13` | TH-007 | Font size of menus, sidebar headers and dialogs in points (system DPI scaling applies on top). |
+| `general.graphics.lastAdapter` | object | `null` | NF-001 | Internal, not in the preferences window: the graphics adapter of the last start (`name`, `vendor`, `device`, `backend`, `type`, `glFallback`), tried first at the next start (SPEC 2.1, D-4). Delete it to probe again. |
 | `general.welcome` | bool | `false` | WM-005 | Show a welcome panel (recent files and shortcuts) in an empty window at startup. |
 | `appearance.rememberWindowSize` | bool | `true` | TH-008 | Reopen windows at their last size and position. |
 | `sidebar.fontSize` | number | `13` | TH-008 | Sidebar font size in points. |

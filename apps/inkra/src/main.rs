@@ -3,6 +3,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod args;
+mod graphics;
 mod logging;
 #[cfg(windows)]
 mod platform_windows;
@@ -26,6 +27,25 @@ struct App {
     measure_startup: bool,
     session_file: std::path::PathBuf,
     save_session: bool,
+    graphics: GraphicsRecord,
+}
+
+impl App {
+    /// Stores the adapter that presented the first frame (D-4).
+    fn record_adapter(&mut self) {
+        let g = &self.graphics;
+        if !g.record {
+            return;
+        }
+        let chosen = g.chosen.lock().ok().and_then(|c| c.clone());
+        let Some(next) = chosen.and_then(|c| graphics::updated(g.prev.as_ref(), &c)) else {
+            return;
+        };
+        let state = &mut self.shell.engine.state;
+        state.prefs.set(graphics::PREF_KEY, next.to_json());
+        state.save_prefs();
+        log::info!("graphics: remembered {}", graphics::describe(&next.adapter));
+    }
 }
 
 impl eframe::App for App {
@@ -38,6 +58,7 @@ impl eframe::App for App {
             // The second frame starts after the first one was presented.
             let ms = self.started.elapsed().as_secs_f64() * 1000.0;
             log::info!("startup: first frame presented after {ms:.1} ms");
+            self.record_adapter();
             if self.measure_startup {
                 println!("startup_ms={ms:.1}");
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
@@ -72,57 +93,72 @@ impl eframe::App for App {
     }
 }
 
-/// wgpu setup: one backend per platform (DX12 on Windows, which falls back to the
-/// WARP software adapter without a GPU; Metal on macOS; Vulkan or GL on Linux)
-/// and our own adapter choice, which saves wgpu a second adapter enumeration
-/// (~100 ms on Windows). `WGPU_BACKEND` still overrides the backend.
-fn wgpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
+/// The adapter chosen by the selector, recorded after the first frame.
+#[derive(Default)]
+struct GraphicsRecord {
+    /// Whether to record at all (not under `WGPU_BACKEND`).
+    record: bool,
+    /// The cache as stored before this start.
+    prev: Option<graphics::Cache>,
+    /// Set by the adapter selector.
+    chosen: Arc<std::sync::Mutex<Option<graphics::AdapterKey>>>,
+}
+
+/// wgpu setup (SPEC 2.1, D-1, D-4): the backends from [`graphics::plan`] (DX12 on
+/// Windows, GL first when DX12 offered only WARP last time; Metal on macOS;
+/// Vulkan or GL on Linux; `WGPU_BACKEND` overrides) and our own adapter choice,
+/// which saves wgpu a second adapter enumeration (~100 ms on Windows).
+fn wgpu_options(
+    plan: &graphics::Plan,
+    cache: Option<graphics::Cache>,
+    chosen: Arc<std::sync::Mutex<Option<graphics::AdapterKey>>>,
+) -> eframe::egui_wgpu::WgpuConfiguration {
     use eframe::egui_wgpu::{WgpuConfiguration, WgpuSetup, WgpuSetupCreateNew};
     use eframe::wgpu;
     let mut setup = WgpuSetupCreateNew::without_display_handle();
-    let default_backends = if cfg!(windows) {
-        wgpu::Backends::DX12
-    } else if cfg!(target_os = "macos") {
-        wgpu::Backends::METAL
-    } else {
-        wgpu::Backends::VULKAN | wgpu::Backends::GL
-    };
-    setup.instance_descriptor.backends = wgpu::Backends::from_env().unwrap_or(default_backends);
-    setup.native_adapter_selector = Some(Arc::new(|adapters, surface| {
-        let rank = |t: wgpu::DeviceType| match t {
-            wgpu::DeviceType::IntegratedGpu => 0,
-            wgpu::DeviceType::DiscreteGpu => 1,
-            wgpu::DeviceType::VirtualGpu => 2,
-            wgpu::DeviceType::Other => 3,
-            wgpu::DeviceType::Cpu => 4,
-        };
-        let chosen = adapters
+    setup.instance_descriptor.backends = plan.backends;
+    // Neither egui nor Inkra issues indirect draws or dispatches, so the
+    // validation shaders wgpu compiles for them at device creation are skipped
+    // (~36 ms of startup with DX12; `WGPU_VALIDATION_INDIRECT_CALL=1` restores).
+    setup.instance_descriptor.flags = wgpu::InstanceFlags::from_build_config()
+        .difference(wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL)
+        .with_env();
+    let (backends, reason) = (plan.backends, plan.reason);
+    setup.native_adapter_selector = Some(Arc::new(move |adapters, surface| {
+        let candidates: Vec<graphics::Candidate> = adapters
             .iter()
-            .filter(|a| surface.is_none_or(|s| a.is_surface_supported(s)))
-            .min_by_key(|a| rank(a.get_info().device_type))
-            .cloned();
-        // Startup diagnostics (SPEC 2.5): which adapters were probed.
-        let names: Vec<String> = adapters
-            .iter()
-            .map(|a| {
-                format!(
-                    "{} ({:?}, {:?})",
-                    a.get_info().name,
-                    a.get_info().device_type,
-                    a.get_info().backend
-                )
+            .map(|a| graphics::Candidate {
+                key: graphics::AdapterKey::of(&a.get_info()),
+                presents: surface.is_none_or(|s| a.is_surface_supported(s)),
             })
             .collect();
+        let picked = graphics::pick(&candidates, cache.as_ref());
+        // Startup diagnostics (SPEC 2.5): what was probed and what was chosen.
+        let names: Vec<String> = candidates
+            .iter()
+            .map(|c| graphics::describe(&c.key))
+            .collect();
         log::info!(
-            "startup: {} adapter(s) after {:.1} ms: {}; using {}",
+            "graphics: backends {backends:?} ({reason}); {} adapter(s) after {:.1} ms: {}; using {}{}",
             adapters.len(),
             process_ms(),
             names.join("; "),
-            chosen
-                .as_ref()
-                .map_or_else(|| "none".to_owned(), |a| a.get_info().name)
+            picked.map_or_else(
+                || "none".to_owned(),
+                |(i, _)| graphics::describe(&candidates[i].key)
+            ),
+            if picked.is_some_and(|(_, hit)| hit) {
+                " (cached adapter)"
+            } else {
+                ""
+            }
         );
-        chosen.ok_or_else(|| "no wgpu adapter can present to this window".to_owned())
+        let (i, _) =
+            picked.ok_or_else(|| "no wgpu adapter can present to this window".to_owned())?;
+        if let Ok(mut c) = chosen.lock() {
+            *c = Some(candidates[i].key.clone());
+        }
+        Ok(adapters[i].clone())
     }));
     WgpuConfiguration {
         wgpu_setup: WgpuSetup::CreateNew(setup),
@@ -325,12 +361,31 @@ fn main() -> std::process::ExitCode {
     if let Some(icon) = icon() {
         viewport = viewport.with_icon(Arc::new(icon));
     }
+    let cache = graphics::Cache::from_json(&engine.state.prefs.get(graphics::PREF_KEY));
+    let plan = graphics::plan(
+        graphics::Os::current(),
+        eframe::wgpu::Backends::from_env(),
+        cache.as_ref(),
+    );
+    let cache = match &plan.store_first {
+        Some(c) => {
+            engine.state.prefs.set(graphics::PREF_KEY, c.to_json());
+            engine.state.save_prefs();
+            Some(c.clone())
+        }
+        None => cache,
+    };
+    let graphics_record = GraphicsRecord {
+        record: plan.record,
+        prev: cache.clone(),
+        chosen: Default::default(),
+    };
     let options = eframe::NativeOptions {
         viewport,
         persistence_path: Some(paths.data.join("egui.ron")),
         // TH-008: remembering the window size can be turned off.
         persist_window: engine.state.prefs.bool("appearance.rememberWindowSize"),
-        wgpu_options: wgpu_options(),
+        wgpu_options: wgpu_options(&plan, cache, graphics_record.chosen.clone()),
         ..Default::default()
     };
     let measure_startup = args.measure_startup;
@@ -404,6 +459,7 @@ fn main() -> std::process::ExitCode {
                 measure_startup,
                 session_file,
                 save_session: !args.no_session,
+                graphics: graphics_record,
             }))
         }),
         &event_loop,

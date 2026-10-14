@@ -470,6 +470,8 @@ impl PrefsWindow {
                     let text = label(i18n, key);
                     let help = s.doc;
                     match s.kind {
+                        // Internal state, never listed on a page.
+                        PrefKind::Object => {}
                         PrefKind::Bool => {
                             ui.label("");
                             let mut v = prefs.bool(key);

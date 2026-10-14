@@ -24,6 +24,8 @@ pub enum PrefKind {
     Enum(&'static [&'static str]),
     /// A list of strings.
     StringList,
+    /// A JSON object, or `null` when unset (internal state such as caches).
+    Object,
 }
 
 /// Static description of one preference key.
@@ -232,6 +234,13 @@ pub const PREFS: &[PrefSpec] = &[
         kind: PrefKind::Number,
         req: "TH-007",
         doc: "Font size of menus, sidebar headers and dialogs in points (system DPI scaling applies on top).",
+    },
+    PrefSpec {
+        key: "general.graphics.lastAdapter",
+        default: "null",
+        kind: PrefKind::Object,
+        req: "NF-001",
+        doc: "Internal, not in the preferences window: the graphics adapter of the last start (`name`, `vendor`, `device`, `backend`, `type`, `glFallback`), tried first at the next start (SPEC 2.1, D-4). Delete it to probe again.",
     },
     PrefSpec {
         key: "general.welcome",
@@ -1018,6 +1027,7 @@ fn fits(kind: PrefKind, v: &Value) -> bool {
         PrefKind::String => v.is_string(),
         PrefKind::Enum(options) => v.as_str().is_some_and(|s| options.contains(&s)),
         PrefKind::StringList => v.as_array().is_some_and(|a| a.iter().all(Value::is_string)),
+        PrefKind::Object => v.is_object() || v.is_null(),
     }
 }
 
