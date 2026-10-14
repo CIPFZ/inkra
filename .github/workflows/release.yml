@@ -10,6 +10,7 @@ on:
     branches: [master]
     paths:
       - .github/workflows/release.yml
+      - .github/scripts/**
       - xtask/src/dist.rs
       - apps/inkra/linux/**
       - apps/inkra/macos/**
