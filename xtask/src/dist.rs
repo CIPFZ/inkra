@@ -311,7 +311,10 @@ fn rpm(release: &Path, staging: &Path, out: &Path) -> Result<PathBuf, String> {
         .map(|e| e.path())
         .find(|p| p.extension().is_some_and(|e| e == "rpm"))
         .ok_or("rpmbuild produced nothing")?;
-    let file = out.join(built.file_name().unwrap_or_default());
+    // The package version carries `~` (sorting), the file name the SemVer one:
+    // GitHub Releases rewrites `~` in asset names.
+    let rpm_arch = if is_arm() { "aarch64" } else { "x86_64" };
+    let file = out.join(format!("inkra-{VERSION}-1.{rpm_arch}.rpm"));
     copy(&built, &file)?;
     Ok(file)
 }
