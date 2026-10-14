@@ -1,8 +1,18 @@
 # Inkra 开发进度
 
-更新时间：2026-10-13
-当前里程碑：1.0 收尾（M0～M7 已完成，剩余项见 docs/ROADMAP.md）
-CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 测试机均通过；macOS 未实机运行（M0～M6 曾做交叉 clippy；M7 引入 `ring` 后交叉检查需要 macOS SDK，在本环境无法进行）；无 GitHub 远程仓库，Actions 未实际运行）
+更新时间：2026-10-14
+当前阶段：1.0 收尾 — 任务组 T1（见根目录 `AGENT.md` 第 6 节）
+CI 状态：本地 `cargo xtask ci` 绿（Linux x86_64、Windows Server 2022 测试机）；GitHub Actions（`CIPFZ/inkra`）`ci.yml` ubuntu / windows / macos 首次运行中；`release.yml` 未创建（T3）
+当前版本：0.1.0（beta 版本号 `1.0.0-beta.1` 在 T5 落地）
+
+## 本阶段任务进度
+- [x] T1 决策落地与文档同步（2026-10-14）：SPEC 2.1/2.5/13 回填 D-1～D-6，ROADMAP 1.x 按 D-6 重排，旧启动 prompt 归档到 `docs/archive/AGENT_INKRA_m0.md`
+- [ ] T2 DX12 启动优化
+- [ ] T3 CI 三平台实跑与 Release 流水线
+- [ ] T4 安全与健壮性收口
+- [ ] T5 Beta 发布
+- [ ] T6 Dogfooding 与反馈闭环
+- [ ] T7 CM-003 控制通道与 MCP
 
 ## 已完成的需求编号
 - M0：AD-3（命令注册表）、CM-001（框架 + 3 个样例命令）、PR-001、PR-003、PR-018（键）、UI-001（菜单骨架，macOS muda 原生菜单）、UI-002、UI-010（默认快捷键表）、UI-050、NF-002（命令边界 catch_unwind）、NF-008、CM-004（`--version` / `--help` / `--measure-startup` / `--config` 等参数解析）
@@ -18,7 +28,7 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 ### M0
 | 验收项 | 结果 |
 |---|---|
-| 三平台 CI 绿 | Linux、Windows 本地 `cargo xtask ci` 绿；macOS 交叉 clippy 通过但未实机；GitHub Actions 工作流已写好（`.github/workflows/ci.yml`），因无远程仓库未运行 |
+| 三平台 CI 绿 | Linux、Windows 本地 `cargo xtask ci` 绿；macOS 交叉 clippy 通过但未实机；三平台以 GitHub Actions（`.github/workflows/ci.yml`）为准，结果见文件头"CI 状态"（D-7） |
 | `inkra --version` | 通过：输出 `Inkra 0.1.0`；Windows 下 GUI 子系统程序通过 AttachConsole 输出到控制台（cmd 提示符先返回，属 Windows 常规行为） |
 | 空窗口启动 < 300 ms | **偏离**：Windows（RTX 3080 直通云主机，Release）DX12 ≈ 400 ms，其中显卡驱动初始化（适配器枚举 + 设备创建）≈ 330 ms；GL 后端 ≈ 260 ms；Linux（Xvfb + llvmpipe GL）≈ 120 ms。见开放问题 1 |
 | 窗口、任务栏图标 | Windows 通过（截图确认标题栏与任务栏均为 Inkra 图标，exe 内嵌 ico 与版本信息）；Linux/macOS 未目视验证 |
@@ -57,9 +67,6 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 ### SPEC 审计补齐（2026-10-13）
 逐章对照 SPEC 第 3～10 章补齐遗漏：主题字段全部生效与系统字体（TH-001/TH-006）、Windows 一体化标题栏（TH-008）、`\[ \]`/`\( \)` 公式与 `\eqref` 跳转、行内公式提示、HTML 样式子集与 `<details>` 折叠、跨文件锚点链接、会话恢复侧边栏/滚动/全屏、关闭最后窗口保持运行、快捷导出、导出错误对话框、Emoji 与符号、AccessKit 块节点、对话框 Enter、重新加载窗口、打字延迟基准与 p95 门槛、1 MB 随机输入测试、XWayland 回退、arm64/universal 打包参数、Flatpak 清单。行为清单扩充到 203 条（✅ 199、⚠ 4，98.0%）。测试策略补齐：TS-004 每个 Markdown 元素与三套主题的 PNG 快照（`crates/inkra-ui/tests/snapshots.rs`，Linux llvmpipe 与 Windows DX12 在同一阈值下一致），TS-006 基准增加打字延迟与 PDF/HTML 导出（121 页 PDF 0.11 s）。
 
-## 进行中
-- [ ] ROADMAP 中的 ⚠ 项与预算问题（Windows 内存与冷启动）
-
 ## 已知问题
 - 增量解析器修复：表格从段落中拆分出来的块不能作为重新同步点（proptest 发现，已加回归测试）。
 - 标题栏文件名点击重命名（FS-008）：一体化标题栏（Windows 默认）点击文件名打开重命名框；系统原生标题栏上无法实现，改由 文件 → 重命名（FS-010）提供。
@@ -68,7 +75,7 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 - Wayland 下窗口图标依赖安装 `.desktop` 与 hicolor 图标：`cargo xtask dist` 的 tar.gz/deb/rpm/AppImage 均已包含；Wayland 未实测。
 
 ## 开放问题（需产品负责人决策）
-1. **启动预算与 Windows 渲染后端**：SPEC 2.1 规定 Windows 默认 DX12；在测试机上 DX12 驱动初始化即占 ~330 ms，冷启动 ~400 ms，超出 300 ms 预算；GL 后端 ~260 ms 达标但稳定性不如 DX12。当前保持 DX12 默认（Windows 构建保留 GL 后端，可用 `WGPU_BACKEND=gl` 覆盖），需决策是否改为"GL 优先、DX12 回退"或放宽该项预算。M7 启动日志分解见 ROADMAP。
+- 无。原开放问题 1（启动预算与 Windows 渲染后端）已于 2026-10-13 决策：D-1 保持 DX12 默认，D-2/D-3 改写预算，D-4 三项 DX12 启动优化纳入 T2（见 `AGENT.md` 第 3 节）。
 
 ## 回填到 SPEC 的决策
 - 2026-10-12：2.2 层内子层（L1a/L1b、L3a/L3b）、i18n 横切、apps 与 xtask 的位置
@@ -82,6 +89,9 @@ CI 状态：绿（`cargo xtask ci`：Linux x86_64 本机、Windows Server 2022 �
 - 2026-10-13：数学字体选用 STIX Two Math（OFL，SPEC 2.1 允许的两者之一）
 - 2026-10-13：PR-011 键 `general.openFileIn` 增加 `current`
 - 2026-10-13：TH-002 字体名映射到随包字体（Inter / Source Serif 4 / JetBrains Mono），用户主题目录格式，选择主题时同步 Auto 明暗槽位
+- 2026-10-13：2.1 Windows 后端保持 DX12 与 DX12 启动优化三项（D-1、D-4）
+- 2026-10-13：2.5 冷启动只在单 GPU 实体机考核、内存预算分平台（D-2、D-3）
+- 2026-10-13：13 章 1.0 收尾以 `1.0.0-beta.1` 公开 beta，彩色 emoji / 贴靠布局 / 原生 Wayland 不阻塞（D-5）；1.x 顺序 CM-003 先于 FS-050（D-6）
 
 ## 性能记录
 - 空窗口冷启动（Release，Windows Server 2022，RTX 3080，DX12）：~400 ms（热）/ ~690 ms（首次）；GL：~260 ms
