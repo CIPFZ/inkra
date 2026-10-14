@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use epaint::text::{FontData, FontDefinitions, FontFamily};
+use epaint::text::{FontData, FontDefinitions, FontFamily, FontTweak};
 
 /// Body text (Inter).
 pub const BODY: &str = "inkra-body";
@@ -527,20 +527,42 @@ pub fn init_vector_fonts() {
     });
 }
 
-/// Font definitions: egui's emoji fallbacks, the bundled Inter / JetBrains Mono
+/// Emoji and UI symbol fallbacks with egui's scale tweaks (the two fonts egui
+/// bundles by default; its Ubuntu and Hack text faces are not shipped: NF-011
+/// allows only OFL text fonts).
+const EMOJI: &[(&str, &[u8], f32)] = &[
+    (
+        "NotoEmoji-Regular",
+        include_bytes!("../../../assets/fonts/NotoEmoji-Regular.ttf"),
+        0.81,
+    ),
+    (
+        "emoji-icon-font",
+        include_bytes!("../../../assets/fonts/emoji-icon-font.ttf"),
+        0.90,
+    ),
+];
+
+/// Font definitions: the emoji fallbacks, the bundled Inter / JetBrains Mono
 /// families (also used for the UI) and a system CJK fallback when available.
 pub fn definitions() -> FontDefinitions {
     init_vector_fonts();
-    let mut defs = FontDefinitions::default();
+    let mut defs = FontDefinitions::empty();
     for (name, bytes) in FONTS {
         defs.font_data
             .insert((*name).to_owned(), Arc::new(FontData::from_static(bytes)));
     }
-    let emoji: Vec<String> = ["NotoEmoji-Regular", "emoji-icon-font"]
-        .iter()
-        .filter(|n| defs.font_data.contains_key(**n))
-        .map(|s| (*s).to_owned())
-        .collect();
+    for (name, bytes, scale) in EMOJI {
+        let tweak = FontTweak {
+            scale: *scale,
+            ..Default::default()
+        };
+        defs.font_data.insert(
+            (*name).to_owned(),
+            Arc::new(FontData::from_static(bytes).tweak(tweak)),
+        );
+    }
+    let emoji: Vec<String> = EMOJI.iter().map(|(n, ..)| (*n).to_owned()).collect();
     let mut cjk = Vec::new();
     if let Some((bytes, index)) = cjk_font_data() {
         let mut d = FontData::from_static(bytes);

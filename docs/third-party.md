@@ -14,11 +14,12 @@ Inkra is MIT OR Apache-2.0. It contains the following works.
 | STIX Two Math | SIL Open Font License 1.1 |
 | gemoji emoji names | MIT |
 | SCOWL en_US Hunspell dictionary | SCOWL license (BSD-like, see `assets/dictionaries/`) |
-| egui default fonts (Ubuntu Light, Hack, Noto Emoji, emoji-icon-font) | Ubuntu Font License, MIT, SIL OFL |
+| Noto Emoji (monochrome) | SIL Open Font License 1.1 |
+| emoji-icon-font (UI symbols) | MIT |
 
 ## Rust crates
 
-539 crates linked into `inkra` and `inkra-cli` on any platform.
+538 crates linked into `inkra` and `inkra-cli` on any platform.
 
 | Crate | Version | License | Source |
 |---|---|---|---|
@@ -129,7 +130,6 @@ Inkra is MIT OR Apache-2.0. It contains the following works.
 | enumflags2_derive | 0.7.12 | MIT OR Apache-2.0 | https://github.com/meithecatte/enumflags2 |
 | enumn | 0.1.14 | MIT OR Apache-2.0 | https://github.com/dtolnay/enumn |
 | epaint | 0.36.2 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/epaint |
-| epaint_default_fonts | 0.36.2 | (MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0 | https://github.com/emilk/egui/tree/main/crates/epaint_default_fonts |
 | equivalent | 1.0.2 | Apache-2.0 OR MIT | https://github.com/indexmap-rs/equivalent |
 | errno | 0.3.14 | MIT OR Apache-2.0 | https://github.com/lambda-fairy/rust-errno |
 | error-code | 3.4.0 | BSL-1.0 | https://github.com/DoumanAsh/error-code |

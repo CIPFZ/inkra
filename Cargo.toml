@@ -38,9 +38,11 @@ inkra-ui = { path = "crates/inkra-ui" }
 inkra-i18n = { path = "crates/inkra-i18n" }
 
 # third party (see xtask/src/deps.rs for the reviewed allowlist)
-egui = "0.36"
+# No `default_fonts`: egui's Ubuntu and Hack faces are not OFL (NF-011);
+# inkra-layout bundles the two emoji fonts it uses.
+egui = { version = "0.36", default-features = false }
 winit = { version = "0.30", default-features = false }
-epaint = "0.36"
+epaint = { version = "0.36", default-features = false }
 eframe = { version = "0.36", default-features = false }
 egui_kittest = "0.36"
 serde = { version = "1", features = ["derive"] }
