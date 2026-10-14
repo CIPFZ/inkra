@@ -5,6 +5,43 @@ All notable changes to Inkra are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0-beta.1] — 2026-10-?? (draft)
+
+The first public build: every milestone M0–M7 and the SPEC audit below, plus
+the 1.0 wrap-up.
+
+### 1.0 wrap-up
+- Releases: GitHub Actions builds every package on every platform (Windows
+  x64 and arm64 MSI and zip, a universal macOS dmg, Linux x86_64 and arm64
+  AppImage, deb, rpm, Flatpak and tar.gz), installs and starts each on a fresh
+  runner, and publishes them with `SHA256SUMS.txt`. Pre-release versions are
+  written `1.0.0~beta.1` inside deb and rpm so that 1.0.0 upgrades them.
+- Update check: against this repository; beta builds also see newer betas,
+  and versions compare in SemVer order.
+- Startup (DX12): the adapter that presented the first frame is remembered
+  and preferred; a machine whose DX12 offers only the WARP software adapter
+  switches to GL at the next start (and back if GL never presents); wgpu's
+  indirect-draw validation shaders are skipped (−36 ms on the test machine).
+- Fixes: inline formulas taller than the line sit on the text baseline;
+  external changes are detected under symlinked folders (macOS `/var`,
+  `/tmp`); Mermaid subgraphs sharing an id and hex colors with non-ASCII
+  characters (diagrams and themes) no longer crash, nested subgraphs no
+  longer push each other apart without bound, and nested `\left…\middle`
+  groups are laid out in linear instead of exponential time — all found by
+  fuzzing;
+  a formula or diagram that fails to lay out shows its source instead of
+  failing every frame; the native macOS menu is built only on the main thread.
+- Security (NF-005): links never open `javascript:`, `vbscript:`, `data:`,
+  program-starting Windows protocols, or programs (also through `file:` URLs);
+  configured programs (Pandoc, mmdc, custom export commands) must be absolute
+  paths or names on PATH; printing on Windows no longer puts the file name into
+  a PowerShell script; Pandoc reads a private temporary file.
+- Licenses (NF-011): egui's Ubuntu and Hack fonts are no longer shipped; the
+  two emoji fonts Inkra uses are bundled with their licenses. `cargo deny`
+  and `cargo audit` run in CI.
+- Quality: cargo-fuzz targets for Markdown (full and incremental parsing),
+  HTML → Markdown, math and diagrams; same-runner A/B benchmarks in CI.
+
 ### SPEC audit follow-ups
 - Themes: installed font families by name (`fonts.body/heading/mono`),
   `fonts.cjk_latin_spacing`, `colors.toolbar_bg`, `headings.auto_number`,

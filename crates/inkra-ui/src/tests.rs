@@ -77,7 +77,7 @@ fn unimplemented_items_are_disabled_and_about_opens() {
     h.get_by_label_contains("About Inkra").click();
     h.run();
     assert!(h.state().about_open());
-    h.get_by_label("Version 0.1.0");
+    h.get_by_label(concat!("Version ", env!("CARGO_PKG_VERSION")));
     h.get_by_label("OK").click();
     h.run();
     assert!(!h.state().about_open());
