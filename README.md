@@ -8,7 +8,7 @@
 - 文档的唯一真相是源码 rope，所有编辑都是可撤销的 Transaction。
 - 每个动作都是一个命令（`docs/commands.md`），菜单、快捷键、CLI 都只是入口。
 
-需求与设计见 [`docs/SPEC.md`](docs/SPEC.md)，进度见 [`docs/PROGRESS.md`](docs/PROGRESS.md)。
+需求与设计见 [`docs/SPEC.md`](docs/SPEC.md)，进度见 [`docs/PROGRESS.md`](docs/PROGRESS.md)，路线图见 [`docs/ROADMAP.md`](docs/ROADMAP.md)。在本仓库工作的 AI 代理请先读根目录的 [`AGENT.md`](AGENT.md)。
 
 ## 构建
 

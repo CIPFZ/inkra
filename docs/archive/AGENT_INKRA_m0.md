@@ -1,5 +1,7 @@
 # Inkra 开发 Agent 启动 Prompt
 
+> 已归档（2026-10-13）：M0 启动 prompt，仅供追溯。当前工作手册见仓库根目录 [`AGENT.md`](../../AGENT.md)。
+
 本文件包含两段 prompt：
 - 第一段「首次启动 Prompt」用于全新 Agent 从 M0 开始工作。
 - 第二段「续作 Prompt」用于后续每个新会话（上下文已丢失时）继续开发。
