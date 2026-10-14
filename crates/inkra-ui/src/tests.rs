@@ -272,14 +272,9 @@ fn closing_the_last_window_can_keep_the_app_running() {
         .with_size(egui::vec2(900.0, 600.0))
         .build_ui_state(|ui, shell: &mut Shell| shell.ui(ui), sh);
     h.run();
-    h.get_by_label("File").click();
-    h.run();
-    h.get_by_label(if cfg!(target_os = "macos") {
-        "Close ⌘W"
-    } else {
-        "Close Ctrl+W"
-    })
-    .click();
+    let ctx = h.ctx.clone();
+    h.state_mut()
+        .invoke(&ctx, "file.close", &serde_json::json!({}));
     h.run_steps(3);
     assert!(!h.state().quit_requested());
     assert_eq!(text(&h), "");

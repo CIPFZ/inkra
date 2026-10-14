@@ -301,7 +301,10 @@ fn rpm(release: &Path, staging: &Path, out: &Path) -> Result<PathBuf, String> {
         .arg(format!("_topdir {}", top.display()))
         .arg(&spec_file);
     run("rpmbuild", c)?;
-    let rpms = top.join("RPMS").join(arch());
+    // rpmbuild names the folder after the RPM architecture (`aarch64`).
+    let rpms = top
+        .join("RPMS")
+        .join(if is_arm() { "aarch64" } else { "x86_64" });
     let built = std::fs::read_dir(&rpms)
         .map_err(io)?
         .flatten()
