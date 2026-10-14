@@ -7,7 +7,7 @@ CI 状态：本地 `cargo xtask ci` 绿（Linux x86_64、Windows Server 2022 测
 
 ## 本阶段任务进度
 - [x] T1 决策落地与文档同步（2026-10-14）：SPEC 2.1/2.5/13 回填 D-1～D-6，ROADMAP 1.x 按 D-6 重排，旧启动 prompt 归档到 `docs/archive/AGENT_INKRA_m0.md`
-- [ ] T2 DX12 启动优化
+- [x] T2 DX12 启动优化（2026-10-14）：适配器缓存 `general.graphics.lastAdapter`、WARP→GL 回退（带 `glFallback` 防循环）、`static-dxc` 评估后不启用、关闭间接调用校验；测试机冷启动 ~390 → ~360 ms。**偏离**：验收"命中缓存比首次快 100 ms"无法达成——wgpu 30 安全 API 每次枚举都探测全部适配器，缓存不能跳过探测（见 SPEC 2.1 [回填 2026-10-14]、开放问题 1）
 - [ ] T3 CI 三平台实跑与 Release 流水线
 - [ ] T4 安全与健壮性收口
 - [ ] T5 Beta 发布
@@ -75,7 +75,8 @@ CI 状态：本地 `cargo xtask ci` 绿（Linux x86_64、Windows Server 2022 测
 - Wayland 下窗口图标依赖安装 `.desktop` 与 hicolor 图标：`cargo xtask dist` 的 tar.gz/deb/rpm/AppImage 均已包含；Wayland 未实测。
 
 ## 开放问题（需产品负责人决策）
-- 无。原开放问题 1（启动预算与 Windows 渲染后端）已于 2026-10-13 决策：D-1 保持 DX12 默认，D-2/D-3 改写预算，D-4 三项 DX12 启动优化纳入 T2（见 `AGENT.md` 第 3 节）。
+1. **T2 验收"命中缓存比首次快 100 ms"无法按原设想达成**：wgpu 30 的安全 API 在 DX12 上每次枚举都对每个适配器调用 `D3D12CreateDevice` 探测（`wgpu-hal` 的 `Adapter::expose` 是 crate 私有），缓存无法跳过探测；唯一途径是 fork/patch `wgpu-hal` 增加"按 LUID 只打开一个适配器"并在其中写 unsafe。推荐：不 fork，接受本次 −30 ms（关闭间接调用校验）的收益，在单 GPU 实体机上复测（那里只有 GPU + WARP 两个适配器，枚举成本约为测试机的 2/3）后再判断是否需要。不决策的后果：T2 按"偏离"关闭，冷启动在虚拟 GPU 测试机上仍为 ~360 ms（D-2 下仅作参考）。
+- 原开放问题（启动预算与 Windows 渲染后端）已于 2026-10-13 决策：D-1 保持 DX12 默认，D-2/D-3 改写预算，D-4 三项 DX12 启动优化纳入 T2（见 `AGENT.md` 第 3 节）。
 
 ## 回填到 SPEC 的决策
 - 2026-10-12：2.2 层内子层（L1a/L1b、L3a/L3b）、i18n 横切、apps 与 xtask 的位置
@@ -91,16 +92,25 @@ CI 状态：本地 `cargo xtask ci` 绿（Linux x86_64、Windows Server 2022 测
 - 2026-10-13：TH-002 字体名映射到随包字体（Inter / Source Serif 4 / JetBrains Mono），用户主题目录格式，选择主题时同步 Auto 明暗槽位
 - 2026-10-13：2.1 Windows 后端保持 DX12 与 DX12 启动优化三项（D-1、D-4）
 - 2026-10-13：2.5 冷启动只在单 GPU 实体机考核、内存预算分平台（D-2、D-3）
+- 2026-10-14：2.1 T2 实施结论（缓存不能跳过探测、`static-dxc` 不启用、关闭间接调用校验）
 - 2026-10-13：13 章 1.0 收尾以 `1.0.0-beta.1` 公开 beta，彩色 emoji / 贴靠布局 / 原生 Wayland 不阻塞（D-5）；1.x 顺序 CM-003 先于 FS-050（D-6）
 
-## 性能记录
-- 空窗口冷启动（Release，Windows Server 2022，RTX 3080，DX12）：~400 ms（热）/ ~690 ms（首次）；GL：~260 ms
-- 空窗口冷启动（Release，Linux，Xvfb + llvmpipe GL）：~120 ms
-- 1 MB Markdown 全量解析：47 ms；单字符增量编辑：平均 8.7 µs / 最坏 48 µs
-- 10 万字源码模式输入延迟（Windows 实机）：p50 1.29 ms / p95 2.36 ms
-- 10 万字实时模式输入（无头 CPU）：p50 2.7 ms / p95 3.0 ms；滚动帧 p95 0.14 ms
-- 快速打开（1 万文件）：排序 1.7～2.1 ms；全局搜索（1 万文件）：首批 1 ms，全部 40 ms
-- 空闲 CPU：0%（Linux 实测 5 s 内 0 tick）
+## 性能记录（实体机 / 虚拟 GPU 分开记）
+| 指标 | 环境 | 值 | 日期 |
+|---|---|---|---|
+| 冷启动 | 单 GPU 实体机 | 未测（D-2 的考核环境） | |
+| 冷启动 | Windows Server 2022 VM，3 适配器（2×RTX 3080 + WARP），DX12，Release | ~360 ms（枚举 ~207、设备与渲染器 ~88、界面与首帧 ~65） | 2026-10-14 |
+| 冷启动 | 同上，T2 之前 | ~390 ms（设备与渲染器 ~124） | 2026-10-14 |
+| 冷启动 | 同上，`WGPU_BACKEND=gl` | ~252 ms | 2026-10-14 |
+| 冷启动 | Linux，Xvfb + llvmpipe GL | ~120 ms | 2026-10-12 |
+| 着色器编译 DXC vs FXC | 同 VM（4 个着色器） | 120.9 vs 123.9 ms 设备与渲染器耗时，差 ~3 ms | 2026-10-14 |
+| 1 MB Markdown 全量解析 / 单字符增量 | Linux | 47 ms / 平均 8.7 µs、最坏 48 µs | 2026-10-12 |
+| 10 万字源码模式输入延迟 | Windows VM | p50 1.29 ms / p95 2.36 ms | 2026-10-12 |
+| 10 万字实时模式输入 / 滚动帧 | 无头 CPU | p50 2.7 / p95 3.0 ms；滚动 p95 0.14 ms | 2026-10-13 |
+| 快速打开 / 全局搜索（1 万文件） | Linux | 1.7～2.1 ms / 首批 1 ms、全部 40 ms | 2026-10-12 |
+| 空闲 CPU | Linux | 0%（5 s 内 0 tick） | 2026-10-12 |
+| 内存（空文档） | Windows VM | 工作集 211 MB / 专用 376 MB（含 GPU 驱动；D-3 按私有字节且不计驱动，待 VMMap 拆分） | 2026-10-13 |
+| 内存（空文档） | Linux | 匿名内存 57 MB | 2026-10-13 |
 
 ## 测试环境备注
 - Windows 测试机经代理上网，crates.io 索引不可达：依赖通过 `cargo vendor` 上传（`D:\work\vendor`，`~/.cargo/config.toml` 源替换）。C 盘空间不足，工作目录在 `D:\work`。

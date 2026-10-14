@@ -151,6 +151,7 @@ Inkra 完全用 Rust 编写：界面由 egui 在 GPU 上自绘，排版、语法
 | CI | GitHub Actions：fmt、clippy -D warnings、test、layering 检查、三平台打包 | | |
 
 [回填 2026-10-13] **Windows 渲染后端（D-1、D-4）**：Windows 默认后端保持 DX12（不改为 GL 优先；Windows 构建同时包含 GL 后端，`WGPU_BACKEND` 可覆盖）。为降低 DX12 启动耗时：（1）在偏好键 `general.graphics.lastAdapter`（内部键，不出现在偏好窗口）记录上次成功使用的适配器 `{ name, vendor, device, backend }`，下次启动优先尝试该适配器，匹配失败再完整枚举；（2）评估 wgpu `static-dxc`（Apache-2.0 WITH LLVM-exception）替代 FXC 编译着色器，设备创建收益 < 30 ms 则不启用并记录结论；（3）DX12 只枚举到软件适配器（WARP，`DeviceType::Cpu`）时自动改用 GL，GL 不可用时仍以 DX12/WARP 兜底；所选后端与原因写入日志 `graphics:` 行。
+[回填 2026-10-14] 实施结论：（1）wgpu 30 的安全 API 无法只打开单个 DX12 适配器（每次枚举都会对每个适配器创建设备探测，`wgpu-hal` 的 `Adapter::expose` 不公开），因此适配器缓存不能跳过探测，只用于稳定选择与记录 WARP 情形；`glFallback` 字段记录 GL 回退状态（`pending` 表示上次以 GL 优先启动但未呈现首帧，下次不再尝试）。（2）`static-dxc` 不启用：测试机上 DXC 与 FXC 的着色器编译耗时差约 3 ms（远低于 30 ms 门槛），且需构建时从第三方仓库下载预编译静态库、增加约 14 MB 体积（参照 `dxcompiler.dll`；当前 exe 含字体已 33 MB）、不支持 Windows arm64。（3）额外措施：egui 与 Inkra 均不使用间接绘制/调度，关闭 wgpu 的 `VALIDATION_INDIRECT_CALL`（`WGPU_VALIDATION_INDIRECT_CALL=1` 可恢复），省去设备创建时编译的两个校验着色器，测试机设备创建 124 → 88 ms。
 
 ### 2.2 工作区（Cargo Workspace）与分层
 
