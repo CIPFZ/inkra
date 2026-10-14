@@ -274,7 +274,12 @@ fn closing_the_last_window_can_keep_the_app_running() {
     h.run();
     h.get_by_label("File").click();
     h.run();
-    h.get_by_label("Close Ctrl+W").click();
+    h.get_by_label(if cfg!(target_os = "macos") {
+        "Close ⌘W"
+    } else {
+        "Close Ctrl+W"
+    })
+    .click();
     h.run_steps(3);
     assert!(!h.state().quit_requested());
     assert_eq!(text(&h), "");

@@ -300,8 +300,10 @@ impl Shell {
         self.os = keys::os_of(ctx.os());
         // Ctrl+= / Ctrl+- are heading shortcuts; editor zoom is ours (FS-040).
         ctx.options_mut(|o| o.zoom_with_keyboard = false);
+        // AppKit menus can only be built on the main thread; headless harnesses
+        // (tests, `ui_shot`) run elsewhere and keep the egui menu bar.
         #[cfg(target_os = "macos")]
-        {
+        if std::thread::current().name() == Some("main") {
             self.native_menu = Some(native_menu::NativeMenu::install(
                 &mut self.engine,
                 &self.i18n,
