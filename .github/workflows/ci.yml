@@ -54,6 +54,26 @@ jobs:
         shell: bash
         run: bash .github/scripts/failure-summary.sh "$RUNNER_TEMP/job.log"
 
+  supply-chain:
+    name: cargo deny and cargo audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny,cargo-audit
+      # Licenses (AGENT.md section 4 rule 4), advisories, sources: deny.toml.
+      - name: cargo deny check
+        shell: bash
+        run: cargo deny check 2>&1 | tee -a "$RUNNER_TEMP/job.log"
+      - name: cargo audit
+        shell: bash
+        run: cargo audit --ignore RUSTSEC-2026-0192 2>&1 | tee -a "$RUNNER_TEMP/job.log"
+      - name: Publish the failure log
+        if: failure()
+        shell: bash
+        run: bash .github/scripts/failure-summary.sh "$RUNNER_TEMP/job.log"
+
   bench:
     name: benchmarks (NF-001)
     runs-on: ubuntu-latest
