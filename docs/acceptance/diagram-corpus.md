@@ -1,7 +1,7 @@
 # 图表语料（M5 验收）
 
 M5 验收要求 Mermaid 官方文档风格的 flowchart 示例 30 个全部渲染
-（`cargo test -p inkra-diagram corpus`；对照图：`cargo run -p inkra-diagram --example render -- out.png`）。
+（`cargo test -p inkra-diagram corpus`；对照图：`cargo run -p inkra-diagram --example diagram_render -- out.png`）。
 另附 sequence 与 pie 示例。
 
 ## Flowchart

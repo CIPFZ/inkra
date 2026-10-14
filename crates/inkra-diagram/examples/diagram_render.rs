@@ -1,5 +1,5 @@
 //! Renders the diagrams of a Markdown file (```mermaid fences) to a PNG sheet:
-//! `cargo run -p inkra-diagram --example render -- out.png docs/acceptance/diagram-corpus.md`
+//! `cargo run -p inkra-diagram --example diagram_render -- out.png docs/acceptance/diagram-corpus.md`
 
 use inkra_diagram::{Palette, render_uncached};
 use tiny_skia::{Color, FillRule, Paint, Pixmap, Transform};

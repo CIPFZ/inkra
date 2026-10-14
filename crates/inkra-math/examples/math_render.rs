@@ -1,5 +1,5 @@
 //! Renders formulas to a PNG sheet for visual inspection:
-//! `cargo run -p inkra-math --example render -- out.png [file-with-one-formula-per-line]`
+//! `cargo run -p inkra-math --example math_render -- out.png [file-with-one-formula-per-line]`
 
 use inkra_math::{Request, render_uncached};
 use tiny_skia::{Color, FillRule, Paint, Pixmap, Transform};

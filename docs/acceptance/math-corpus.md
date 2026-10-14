@@ -1,7 +1,7 @@
 # 数学公式语料（M5 验收）
 
 M5 验收要求下列 200 个常见公式全部渲染、无报错（`cargo test -p inkra-math corpus`），
-并与 MathJax 渲染结果肉眼一致（`cargo run -p inkra-math --example render -- out.png
+并与 MathJax 渲染结果肉眼一致（`cargo run -p inkra-math --example math_render -- out.png
 docs/acceptance/math-corpus.md` 生成对照图）。每行一个公式，以 `- ` 开头。
 
 ## 代数与初等函数
