@@ -307,8 +307,14 @@ impl<'a> Builder<'a> {
     /// two invisible word joiners, the second carrying the object's width as
     /// letter spacing and a line height tall enough for it.
     pub fn push_object(&mut self, math: MathScene, fmt: &Fmt, src: Range<usize>) {
-        let (w, h) = (math.scene.width, math.scene.height);
-        self.push_reserved(w, h, ObjectKind::Math(math), fmt, Some(src));
+        let (w, above) = (math.scene.width, math.scene.baseline);
+        // The formula's baseline sits on the text baseline, which epaint keeps
+        // the text's descent above the bottom of a taller row. That descent is
+        // at most `line_height - 0.85 em` (the bundled and CJK faces ascend at
+        // least 0.85 em), so the row holds the formula's ascent plus it; the
+        // depth uses the line spacing below.
+        let below = (fmt.line_height - 0.85 * fmt.size).max(0.0);
+        self.push_reserved(w, above + below, ObjectKind::Math(math), fmt, Some(src));
     }
 
     /// Reserves `w × h` for an image whose bottom sits on the baseline.

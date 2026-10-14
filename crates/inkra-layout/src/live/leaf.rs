@@ -1543,20 +1543,30 @@ pub(crate) fn place_objects(out: &mut BlockLayout, fonts: &mut FontsView<'_>) {
             let mut k = 0usize;
             let mut found = None;
             'rows: for r in &g.rows {
+                let mut prev_y = None;
                 for gl in &r.row.glyphs {
                     if k == ci {
-                        found = Some((r.pos, gl.pos));
+                        found = Some((r.pos, gl.pos, prev_y));
                         break 'rows;
                     }
+                    prev_y = Some(gl.pos.y);
                     k += 1;
                 }
                 if r.ends_with_newline {
                     k += 1;
                 }
             }
-            let Some((rp, gp)) = found else { continue };
+            let Some((rp, gp, prev_y)) = found else {
+                continue;
+            };
             let w = f32::from_bits(obj.width_bits);
-            let baseline = run.pos.y + rp.y + gp.y;
+            // The tall reserving glyph has its own baseline near the row top; the
+            // text's baseline is the one of the plain joiner before it.
+            let text_y = match &obj.kind {
+                crate::run::ObjectKind::Math(_) => prev_y.unwrap_or(gp.y),
+                crate::run::ObjectKind::Image { .. } => gp.y,
+            };
+            let baseline = run.pos.y + rp.y + text_y;
             let left = run.pos.x + rp.x + gp.x - w;
             match &obj.kind {
                 crate::run::ObjectKind::Math(m) => {
