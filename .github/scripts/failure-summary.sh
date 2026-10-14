@@ -25,5 +25,6 @@ escape() { sed 's/%/%25/g; s/\r/%0D/g' | awk 'BEGIN{ORS="%0A"} {print}'; }
   clean "$log" | grep -A2 "panicked at" | awk 'BEGIN{RS="--\n"} {gsub(/%/, "%25"); gsub(/\n/, "%0A"); print}'
   clean "$log" | grep -E "^(error(\[|:)|xtask: )|FAILED|failed \(" | sed 's/%/%25/g'
 } | head -n 9 | while IFS= read -r line; do echo "::error title=log::${line}"; done
-echo "::error title=log tail::$(clean "$log" | tail -n 40 | escape)"
+# Annotation messages are cut after about 4 KB: the last lines, shortened.
+echo "::error title=log tail::$(clean "$log" | tail -n 25 | cut -c1-150 | escape)"
 exit 0

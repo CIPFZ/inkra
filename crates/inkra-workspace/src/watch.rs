@@ -25,9 +25,32 @@ fn stamp(p: &Path) -> Stamp {
         .map(|m| (m.modified().ok(), m.len()))
 }
 
+/// `p` with symlinks resolved; for a missing file, its folder resolved.
+fn canonical(p: &Path) -> PathBuf {
+    std::fs::canonicalize(p)
+        .or_else(|_| match (p.parent(), p.file_name()) {
+            (Some(dir), Some(name)) => std::fs::canonicalize(dir).map(|d| d.join(name)),
+            _ => Ok(p.to_owned()),
+        })
+        .unwrap_or_else(|_| p.to_owned())
+}
+
 #[derive(Default)]
 struct Shared {
     files: HashMap<PathBuf, Stamp>,
+    /// Canonical path → watched path: macOS reports events under resolved
+    /// paths (`/private/var/…` for `/var/…`).
+    aliases: HashMap<PathBuf, PathBuf>,
+}
+
+impl Shared {
+    /// The watched path an event path stands for.
+    fn watched(&self, event: &Path) -> Option<PathBuf> {
+        if self.files.contains_key(event) {
+            return Some(event.to_owned());
+        }
+        self.aliases.get(&canonical(event)).cloned()
+    }
 }
 
 /// File watcher.
@@ -52,11 +75,14 @@ impl Watcher {
                 let mut changed = Vec::new();
                 if let Ok(mut s) = sh.lock() {
                     for e in events {
-                        if let Some(prev) = s.files.get_mut(&e.path) {
-                            let now = stamp(&e.path);
+                        let Some(path) = s.watched(&e.path) else {
+                            continue;
+                        };
+                        if let Some(prev) = s.files.get_mut(&path) {
+                            let now = stamp(&path);
                             if *prev != now {
                                 *prev = now;
-                                changed.push(e.path);
+                                changed.push(path);
                             }
                         }
                     }
@@ -89,6 +115,10 @@ impl Watcher {
             for f in &files {
                 s.files.entry(f.to_path_buf()).or_insert_with(|| stamp(f));
             }
+            s.aliases = files
+                .iter()
+                .map(|f| (canonical(f), f.to_path_buf()))
+                .collect();
         }
         let want: HashSet<PathBuf> = files
             .iter()
@@ -156,5 +186,24 @@ mod tests {
             }
         }
         assert!(seen.iter().any(|p| p.ends_with("a.md")), "{seen:?}");
+    }
+
+    #[test]
+    fn event_paths_map_back_through_symlinks() {
+        let dir = tempfile::tempdir().unwrap();
+        let f = dir.path().join("a.md");
+        std::fs::write(&f, "1").unwrap();
+        let mut s = Shared::default();
+        s.files.insert(f.clone(), stamp(&f));
+        s.aliases.insert(canonical(&f), f.clone());
+        assert_eq!(s.watched(&f), Some(f.clone()));
+        assert_eq!(s.watched(&canonical(&f)), Some(f.clone()));
+        assert_eq!(s.watched(&dir.path().join("b.md")), None);
+        #[cfg(unix)]
+        {
+            let link = dir.path().join("link");
+            std::os::unix::fs::symlink(dir.path(), &link).unwrap();
+            assert_eq!(s.watched(&link.join("a.md")), Some(f));
+        }
     }
 }
