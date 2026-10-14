@@ -82,17 +82,43 @@ pub fn format(name: &str) -> Option<PandocFormat> {
         .find(|f| f.writer.eq_ignore_ascii_case(name) || f.ext.eq_ignore_ascii_case(name))
 }
 
-/// The Pandoc executable: the configured path, else `pandoc` on PATH.
+/// A user-configured program (NF-005): an absolute path, or a bare name that is
+/// looked up on `PATH`. Relative paths with folders (`bin/pandoc`) are refused:
+/// they would resolve against the working directory, which can be a document
+/// folder.
+pub fn configured_program(configured: &str) -> Option<PathBuf> {
+    let c = configured.trim();
+    if c.is_empty() {
+        return None;
+    }
+    let p = PathBuf::from(c);
+    if p.is_absolute() {
+        return Some(p);
+    }
+    if p.components().count() == 1 && !c.contains(['/', '\\']) && !c.starts_with('.') {
+        return Some(p);
+    }
+    log::warn!("ignoring the relative program path {c:?}: use an absolute path or a name on PATH");
+    None
+}
+
+/// The Pandoc executable: the configured path (see [`configured_program`]),
+/// else `pandoc` on PATH or in a default install location.
 pub fn find(configured: &str) -> Option<PathBuf> {
     let c = configured.trim();
-    if !c.is_empty() {
-        let p = PathBuf::from(c);
-        return p.is_file().then_some(p);
-    }
-    let exe = if cfg!(windows) {
-        "pandoc.exe"
+    let name = if c.is_empty() {
+        "pandoc".to_owned()
     } else {
-        "pandoc"
+        let p = configured_program(c)?;
+        if p.is_absolute() {
+            return p.is_file().then_some(p);
+        }
+        c.to_owned()
+    };
+    let exe = if cfg!(windows) && !name.to_ascii_lowercase().ends_with(".exe") {
+        format!("{name}.exe")
+    } else {
+        name
     };
     let mut dirs: Vec<PathBuf> = std::env::var_os("PATH")
         .map(|p| std::env::split_paths(&p).collect())
@@ -106,7 +132,50 @@ pub fn find(configured: &str) -> Option<PathBuf> {
     } else {
         dirs.extend(["/usr/local/bin", "/opt/homebrew/bin", "/usr/bin"].map(PathBuf::from));
     }
-    dirs.into_iter().map(|d| d.join(exe)).find(|p| p.is_file())
+    dirs.into_iter()
+        .filter(|d| d.is_absolute())
+        .map(|d| d.join(&exe))
+        .find(|p| p.is_file())
+}
+
+/// Writes `bytes` to a new file in the temp folder. `create_new` refuses an
+/// existing path, including a planted symlink; the name is retried until free.
+fn private_temp_file(bytes: &[u8]) -> std::io::Result<PathBuf> {
+    use std::io::Write;
+    static N: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.subsec_nanos());
+    for _ in 0..100 {
+        let n = N.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let p = std::env::temp_dir().join(format!(
+            "inkra-pandoc-{}-{nanos:08x}-{n}.md",
+            std::process::id()
+        ));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&p)
+        {
+            Ok(mut f) => {
+                f.write_all(bytes)?;
+                return Ok(p);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    Err(std::io::Error::other("no free temporary file name"))
+}
+
+/// A path argument that a program cannot mistake for an option: relative
+/// paths starting with `-` get a `./` prefix (NF-005).
+fn path_arg(p: &Path) -> PathBuf {
+    if p.is_relative() && p.to_string_lossy().starts_with('-') {
+        Path::new(".").join(p)
+    } else {
+        p.to_owned()
+    }
 }
 
 /// Rewrites the document for Pandoc: image paths become absolute and Mermaid
@@ -190,12 +259,13 @@ pub fn export(
     resource_dir: Option<&Path>,
     extra: &str,
 ) -> Result<(), String> {
-    let tmp = std::env::temp_dir().join(format!("inkra-pandoc-{}.md", std::process::id()));
-    std::fs::write(&tmp, markdown).map_err(|e| e.to_string())?;
+    // A fresh private file (not a predictable name in the shared temp folder,
+    // where another user could plant a symlink).
+    let tmp = private_temp_file(markdown.as_bytes()).map_err(|e| e.to_string())?;
     let mut cmd = Command::new(pandoc);
     cmd.arg(&tmp)
         .args(["-f", "markdown+tex_math_dollars+pipe_tables+task_lists+strikeout+yaml_metadata_block+footnotes", "-t", writer, "--standalone", "-o"])
-        .arg(out);
+        .arg(path_arg(out));
     if let Some(d) = resource_dir {
         cmd.arg(format!("--resource-path={}", d.display()));
     }
@@ -224,7 +294,9 @@ pub fn run_template(template: &str, input: &Path, output: &Path) -> Result<(), S
     };
     let mut it = words.iter().map(|w| subst(w));
     let prog = it.next().ok_or("empty command")?;
-    let o = Command::new(&prog)
+    let exe = configured_program(&prog)
+        .ok_or_else(|| format!("{prog}: use an absolute path or a program on PATH"))?;
+    let o = Command::new(&exe)
         .args(it)
         .output()
         .map_err(|e| format!("{prog}: {e}"))?;
@@ -287,7 +359,7 @@ pub fn import(input: &Path, pandoc: Option<&Path>, assets_dir: &Path) -> Result<
         ),
         Some(p) => {
             let o = Command::new(p)
-                .arg(input)
+                .arg(path_arg(input))
                 .args(["-t", "gfm+tex_math_dollars+footnotes", "--wrap=none"])
                 .arg(format!("--extract-media={}", assets_dir.display()))
                 .output()
@@ -304,6 +376,38 @@ pub fn import(input: &Path, pandoc: Option<&Path>, assets_dir: &Path) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn configured_programs_are_absolute_or_on_path() {
+        assert_eq!(configured_program("  "), None);
+        assert_eq!(configured_program("pandoc"), Some(PathBuf::from("pandoc")));
+        for rel in [
+            "bin/pandoc",
+            "./pandoc",
+            "..\\tools\\pandoc.exe",
+            "sub\\pandoc",
+        ] {
+            assert_eq!(configured_program(rel), None, "{rel}");
+        }
+        let abs = std::env::temp_dir().join("pandoc");
+        assert_eq!(configured_program(&abs.to_string_lossy()), Some(abs));
+        assert_eq!(find("bin/pandoc"), None);
+        assert_eq!(
+            path_arg(Path::new("--lua-filter=x.lua")),
+            Path::new("./--lua-filter=x.lua")
+        );
+        assert_eq!(path_arg(Path::new("notes.md")), Path::new("notes.md"));
+    }
+
+    #[test]
+    fn temp_files_are_new_each_time() {
+        let a = private_temp_file(b"a").unwrap();
+        let b = private_temp_file(b"b").unwrap();
+        assert_ne!(a, b);
+        assert_eq!(std::fs::read(&a).unwrap(), b"a");
+        let _ = std::fs::remove_file(a);
+        let _ = std::fs::remove_file(b);
+    }
 
     #[test]
     fn normalize_resolves_images_and_renders_diagrams() {

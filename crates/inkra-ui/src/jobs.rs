@@ -69,12 +69,12 @@ impl Jobs {
 /// Hands a PDF to the system's print function (EX-002: print via PDF).
 pub fn print_pdf(path: &std::path::Path) -> std::io::Result<()> {
     if cfg!(windows) {
+        // The path goes through the environment, never into the script text:
+        // PowerShell also treats typographic quotes (’) as string delimiters.
         std::process::Command::new("powershell")
             .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command"])
-            .arg(format!(
-                "Start-Process -FilePath '{}' -Verb Print",
-                path.display().to_string().replace('\'', "''")
-            ))
+            .arg("Start-Process -FilePath $env:INKRA_PRINT_FILE -Verb Print")
+            .env("INKRA_PRINT_FILE", path)
             .spawn()
             .map(|_| ())
     } else if cfg!(target_os = "macos") {

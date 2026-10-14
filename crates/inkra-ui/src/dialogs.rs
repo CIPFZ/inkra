@@ -174,11 +174,61 @@ impl Dialogs {
     }
 }
 
-/// Opens `url` with the system handler (browser, mail client). `javascript:`
-/// links are refused (NF-005).
+/// URL schemes that never reach the system handler (NF-005): script and inline
+/// data URLs, and Windows protocol handlers known to start programs.
+const BLOCKED_SCHEMES: &[&str] = &[
+    "javascript",
+    "vbscript",
+    "data",
+    "ms-msdt",
+    "search-ms",
+    "search",
+    "ms-officecmd",
+    "ms-appinstaller",
+    "shell",
+];
+
+/// The scheme of `url` in lower case, if it has one. A single letter before
+/// `:` is a Windows drive (`C:\x`), not a scheme.
+fn scheme(url: &str) -> Option<String> {
+    let (s, _) = url.split_once(':')?;
+    let valid = s.len() > 1
+        && s.starts_with(|c: char| c.is_ascii_alphabetic())
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
+    valid.then(|| s.to_ascii_lowercase())
+}
+
+/// Whether `url` may be handed to the system handler (NF-005): not empty, not
+/// a blocked scheme, not a program (`file:` URL or plain path), and not
+/// something the opener would read as an option (`-x`, Windows `/switch`).
+pub fn may_open(url: &str) -> bool {
+    let u = url.trim();
+    if u.is_empty() || u.starts_with('-') || (cfg!(windows) && u.starts_with('/')) {
+        return false;
+    }
+    // Control characters (a newline in a link) are never part of a target.
+    if u.chars().any(char::is_control) {
+        return false;
+    }
+    match scheme(u).as_deref() {
+        Some(s) if BLOCKED_SCHEMES.contains(&s) => false,
+        Some("file") => {
+            let path = u[5..].trim_start_matches('/');
+            let path = crate::images::percent_decode(path);
+            !is_program(Path::new(&path))
+        }
+        Some(_) => true,
+        None => !is_program(Path::new(u)),
+    }
+}
+
+/// Opens `url` with the system handler (browser, mail client, default app).
+/// Every target goes through [`may_open`] first (NF-005).
 pub fn open_external(url: &str) -> bool {
     let u = url.trim();
-    if u.to_ascii_lowercase().starts_with("javascript:") || u.is_empty() {
+    if !may_open(u) {
+        log::warn!("refused to open {u:?} (NF-005)");
         return false;
     }
     let result = if cfg!(windows) {
@@ -242,5 +292,48 @@ mod tests {
         assert!(!is_program(Path::new("/tmp/notes.md")));
         assert!(!is_program(Path::new("/tmp/report.pdf")));
         assert!(!open_external("javascript:alert(1)"));
+    }
+
+    #[test]
+    fn dangerous_link_targets_are_refused() {
+        // Script and data URLs, in any case and with surrounding space.
+        for u in [
+            "javascript:alert(1)",
+            " JavaScript:alert(1)",
+            "vbscript:msgbox(1)",
+            "VBScript:x",
+            "data:text/html,<script>alert(1)</script>",
+            "DATA:image/svg+xml;base64,PHN2Zz4=",
+            "ms-msdt:/id PCWDiagnostic",
+            "search-ms:query=x",
+        ] {
+            assert!(!may_open(u), "{u}");
+        }
+        // file: URLs and plain paths to programs.
+        for u in [
+            "file:///C:/Windows/System32/calc.exe",
+            "file:///tmp/run.sh",
+            "FILE:///tmp/Setup.MSI",
+            "file:///C:/x/evil%2Eexe",
+            "/usr/local/bin/tool.AppImage",
+            "C:\\Users\\x\\a.bat",
+        ] {
+            assert!(!may_open(u), "{u}");
+        }
+        // Option-like and malformed targets.
+        for u in ["", "  ", "--help", "-e", "https://x\nexample.com"] {
+            assert!(!may_open(u), "{u:?}");
+        }
+        // Ordinary targets still open.
+        for u in [
+            "https://example.com/a?b=c#d",
+            "http://example.com",
+            "mailto:me@example.com",
+            "file:///tmp/report.pdf",
+            "zotero://select/items/1",
+            "C:\\Users\\x\\notes.pdf",
+        ] {
+            assert!(may_open(u), "{u}");
+        }
     }
 }

@@ -1459,10 +1459,7 @@ impl Shell {
             .paths
             .as_ref()
             .map_or_else(std::env::temp_dir, |p| p.data.join("diagrams"));
-        inkra_diagram::external::configure(
-            (!want.trim().is_empty()).then(|| PathBuf::from(want.trim())),
-            cache,
-        );
+        inkra_diagram::external::configure(inkra_export::pandoc::configured_program(&want), cache);
     }
 
     /// Frame-level work shared by all windows.
