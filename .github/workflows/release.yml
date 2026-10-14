@@ -49,12 +49,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev \
-            rpm file desktop-file-utils flatpak flatpak-builder
+            rpm file desktop-file-utils flatpak
           sudo curl -fsSL -o /usr/local/bin/appimagetool \
             "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${{ matrix.arch }}.AppImage"
           sudo chmod +x /usr/local/bin/appimagetool
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y --noninteractive flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08
+          flatpak install --user -y --noninteractive flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08 org.flatpak.Builder
+          # Ubuntu's flatpak-builder 1.2 runs appstream-compose, which the 25.08
+          # SDK no longer has; Flathub's builder uses appstreamcli.
+          printf '#!/bin/sh\nexec flatpak run org.flatpak.Builder "$@"\n' | sudo tee /usr/local/bin/flatpak-builder >/dev/null
+          sudo chmod +x /usr/local/bin/flatpak-builder
       - name: cargo xtask dist
         shell: bash
         env:
