@@ -1496,9 +1496,11 @@ impl Layout {
                 // In aligned environments the left column of each pair starts with
                 // an empty group so a leading relation keeps its spacing.
                 let b = if kind == ArrayKind::Aligned && ci % 2 == 1 {
-                    let mut l = vec![Node::Group(Vec::new())];
-                    l.extend(cell.iter().cloned());
-                    self.list(&l, cell_ctx)
+                    // Not by cloning the cell: its nodes keep their addresses,
+                    // which the `\left…\right` memo is keyed on.
+                    let mut atoms = self.atoms(&[Node::Group(Vec::new())], cell_ctx);
+                    atoms.extend(self.atoms(cell, cell_ctx));
+                    self.pack(atoms, cell_ctx)
                 } else {
                     self.list(cell, cell_ctx)
                 };
