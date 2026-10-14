@@ -607,7 +607,9 @@ fn resolve_cluster_edges(g: &mut Graph) {
     if removed.is_empty() {
         return;
     }
+    // Two subgraphs with the same id share one placeholder.
     removed.sort_unstable();
+    removed.dedup();
     let map: Vec<Option<usize>> = (0..g.nodes.len())
         .map(|i| {
             if removed.binary_search(&i).is_ok() {
@@ -1284,5 +1286,18 @@ mod tests {
         );
         assert!(parse("flowchart XY\nA-->B").is_err());
         assert!(parse("graph TD\nA -->").is_err());
+    }
+
+    #[test]
+    fn subgraphs_sharing_an_id_share_the_placeholder() {
+        // Found by the `diagram` fuzz target: the placeholder was removed twice.
+        let g = parse(
+            "flowchart TB\n  one --> c\n  subgraph one\n    a\n  end\n  subgraph one\n    b\n  end\n",
+        )
+        .unwrap();
+        assert!(g.nodes.iter().all(|n| n.id != "one"));
+        for e in &g.edges {
+            assert!(e.from < g.nodes.len() && e.to < g.nodes.len());
+        }
     }
 }
