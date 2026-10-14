@@ -266,8 +266,10 @@ impl Shell {
         ctx.set_fonts(inkra_layout::fonts::definitions());
         self.font_gen = inkra_layout::fonts::generation();
         self.dialogs.set_language(&self.i18n);
-        // TH-006: without a CJK font, Chinese and Japanese text shows boxes.
-        if inkra_layout::fonts::cjk_missing() {
+        // TH-006: without a CJK font, Chinese and Japanese text shows boxes. Like
+        // the update check, only the real application tells (headless renders
+        // and snapshots must not depend on the machine's fonts).
+        if self.engine.state.paths.is_some() && inkra_layout::fonts::cjk_missing() {
             self.toast(ctx, self.i18n.tr("notice-no-cjk-font"));
         }
         log::info!(

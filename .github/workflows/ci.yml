@@ -30,19 +30,29 @@ jobs:
           sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev \
             libxrandr-dev libxi-dev libgl1-mesa-dev mesa-vulkan-drivers xvfb
       - name: cargo xtask ci
-        run: cargo xtask ci
+        shell: bash
+        run: cargo xtask ci 2>&1 | tee -a "$RUNNER_TEMP/job.log"
       - name: Release build and smoke test
         shell: bash
         run: |
-          cargo build --release -p inkra -p inkra-cli --locked
-          ./target/release/inkra --version
-          ./target/release/inkra-cli --version
+          {
+            cargo build --release -p inkra -p inkra-cli --locked
+            ./target/release/inkra --version
+            ./target/release/inkra-cli --version
+          } 2>&1 | tee -a "$RUNNER_TEMP/job.log"
       - name: Startup measurement (Linux, Xvfb + lavapipe)
         if: runner.os == 'Linux'
-        run: xvfb-run -a ./target/release/inkra --measure-startup --config "$RUNNER_TEMP/inkra"
+        shell: bash
+        run: xvfb-run -a ./target/release/inkra --measure-startup --config "$RUNNER_TEMP/inkra" 2>&1 | tee -a "$RUNNER_TEMP/job.log"
       - name: Bundle macOS app
         if: runner.os == 'macOS'
-        run: cargo xtask bundle-macos --release
+        shell: bash
+        run: cargo xtask bundle-macos --release 2>&1 | tee -a "$RUNNER_TEMP/job.log"
+      # Job logs need a GitHub sign-in; the summary and annotations do not.
+      - name: Publish the failure log
+        if: failure()
+        shell: bash
+        run: bash .github/scripts/failure-summary.sh "$RUNNER_TEMP/job.log"
 
   bench:
     name: benchmarks (NF-001)
@@ -58,10 +68,15 @@ jobs:
           key: criterion-${{ github.sha }}
           restore-keys: criterion-
       - name: Compare against the reference (fails on > 20 % regression)
-        run: cargo xtask bench
+        shell: bash
+        run: cargo xtask bench 2>&1 | tee -a "$RUNNER_TEMP/job.log"
       - name: Record the reference on the default branch
         if: github.event_name == 'push'
         run: cargo xtask bench --save
+      - name: Publish the failure log
+        if: failure()
+        shell: bash
+        run: bash .github/scripts/failure-summary.sh "$RUNNER_TEMP/job.log"
 
   dist:
     name: packages (${{ matrix.os }})
@@ -81,7 +96,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev rpm
       - name: cargo xtask dist
-        run: cargo xtask dist
+        shell: bash
+        run: cargo xtask dist 2>&1 | tee -a "$RUNNER_TEMP/job.log"
+      - name: Publish the failure log
+        if: failure()
+        shell: bash
+        run: bash .github/scripts/failure-summary.sh "$RUNNER_TEMP/job.log"
       - uses: actions/upload-artifact@v4
         with:
           name: inkra-${{ matrix.os }}
