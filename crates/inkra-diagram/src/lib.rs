@@ -207,7 +207,12 @@ pub fn render(src: &str, pal: &Palette) -> Arc<Result<Scene, Error>> {
     {
         return r.clone();
     }
-    let r = Arc::new(render_uncached(src, pal));
+    // NF-002: a layout bug becomes an error under the source block instead of
+    // taking the frame down; the result is cached like any other.
+    let r = Arc::new(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render_uncached(src, pal)))
+            .unwrap_or_else(|_| Err(Error::new(0, "internal error while drawing the diagram"))),
+    );
     if let Ok(mut c) = cache.lock() {
         if c.len() > 512 {
             c.clear();

@@ -187,6 +187,29 @@ pub fn render_uncached(req: &Request) -> Rendered {
     }
 }
 
+/// The whole source as an error node (shown as red TeX).
+fn fallback(req: &Request) -> Rendered {
+    let error = "internal error while typesetting".to_owned();
+    let scene = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let mut lay = Layout::new();
+        let b = lay.list(
+            &[parse::Node::Error(req.tex.clone())],
+            Ctx::new(req.size(), req.display),
+        );
+        scene_of(&b)
+    }))
+    .unwrap_or_default();
+    Rendered {
+        scene: Arc::new(scene),
+        tag: None,
+        tag_text: None,
+        labels: Vec::new(),
+        numbered_env: false,
+        notag: false,
+        errors: vec![error],
+    }
+}
+
 const CACHE_MAX: usize = 4096;
 
 static CACHE: OnceLock<Mutex<HashMap<Request, Arc<Rendered>>>> = OnceLock::new();
@@ -199,7 +222,12 @@ pub fn render(req: &Request) -> Arc<Rendered> {
     {
         return r.clone();
     }
-    let r = Arc::new(render_uncached(req));
+    // NF-002: a typesetting bug shows the source in red instead of taking the
+    // frame down; the result is cached like any other.
+    let r = Arc::new(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render_uncached(req)))
+            .unwrap_or_else(|_| fallback(req)),
+    );
     if let Ok(mut c) = cache.lock() {
         if c.len() >= CACHE_MAX {
             c.clear();
