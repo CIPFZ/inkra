@@ -223,7 +223,7 @@ fn deb(release: &Path, staging: &Path, out: &Path) -> Result<PathBuf, String> {
     let size_kb = dir_size(&data) / 1024;
     let arch = if is_arm() { "arm64" } else { "amd64" };
     let text = format!(
-        "Package: inkra\nVersion: {}\nArchitecture: {arch}\nMaintainer: Inkra <inkra@users.noreply.github.com>\nInstalled-Size: {size_kb}\nDepends: libc6 (>= 2.35)\nRecommends: xdg-desktop-portal\nSuggests: pandoc\nSection: editors\nPriority: optional\nHomepage: {}\nDescription: Native WYSIWYM Markdown editor\n Inkra renders Markdown as you type: math, diagrams, tables, footnotes,\n export to HTML, PDF and images.\n",
+        "Package: inkra\nVersion: {}\nArchitecture: {arch}\nMaintainer: Inkra <inkra@users.noreply.github.com>\nInstalled-Size: {size_kb}\nDepends: libc6 (>= 2.35), libxkbcommon0, libxkbcommon-x11-0, libx11-6\nRecommends: libvulkan1 | libgl1, libwayland-client0, libxcursor1, libxi6, libxrandr2, xdg-desktop-portal\nSuggests: pandoc\nSection: editors\nPriority: optional\nHomepage: {}\nDescription: Native WYSIWYM Markdown editor\n Inkra renders Markdown as you type: math, diagrams, tables, footnotes,\n export to HTML, PDF and images.\n",
         package_version(),
         env!("CARGO_PKG_REPOSITORY")
     );
@@ -288,7 +288,7 @@ fn rpm(release: &Path, staging: &Path, out: &Path) -> Result<PathBuf, String> {
         std::fs::create_dir_all(top.join(d)).map_err(io)?;
     }
     let spec = format!(
-        "Name: inkra\nVersion: {}\nRelease: 1\nSummary: Native WYSIWYM Markdown editor\nLicense: MIT OR Apache-2.0\nURL: {}\nAutoReqProv: no\n\n%description\nInkra renders Markdown as you type: math, diagrams, tables, footnotes,\nexport to HTML, PDF and images.\n\n%install\nmkdir -p %{{buildroot}}\ncp -a {}/. %{{buildroot}}/\n\n%files\n/usr/bin/inkra\n/usr/bin/inkra-cli\n/usr/share/applications/io.inkra.Inkra.desktop\n/usr/share/metainfo/io.inkra.Inkra.metainfo.xml\n/usr/share/mime/packages/io.inkra.Inkra.xml\n/usr/share/icons/hicolor/*/apps/*\n/usr/share/doc/inkra\n\n%post\nupdate-desktop-database -q >/dev/null 2>&1 || true\nupdate-mime-database /usr/share/mime >/dev/null 2>&1 || true\n",
+        "Name: inkra\nVersion: {}\nRelease: 1\nSummary: Native WYSIWYM Markdown editor\nLicense: MIT OR Apache-2.0\nURL: {}\nAutoReqProv: no\nRequires: libxkbcommon, libxkbcommon-x11, libX11\n\n%description\nInkra renders Markdown as you type: math, diagrams, tables, footnotes,\nexport to HTML, PDF and images.\n\n%install\nmkdir -p %{{buildroot}}\ncp -a {}/. %{{buildroot}}/\n\n%files\n/usr/bin/inkra\n/usr/bin/inkra-cli\n/usr/share/applications/io.inkra.Inkra.desktop\n/usr/share/metainfo/io.inkra.Inkra.metainfo.xml\n/usr/share/mime/packages/io.inkra.Inkra.xml\n/usr/share/icons/hicolor/*/apps/*\n/usr/share/doc/inkra\n\n%post\nupdate-desktop-database -q >/dev/null 2>&1 || true\nupdate-mime-database /usr/share/mime >/dev/null 2>&1 || true\n",
         package_version(),
         env!("CARGO_PKG_REPOSITORY"),
         tree.display()
