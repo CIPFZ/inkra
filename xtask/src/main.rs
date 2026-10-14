@@ -341,53 +341,57 @@ fn third_party() -> Result<String, String> {
         .iter()
         .filter_map(|p| Some((p["id"].as_str()?.to_owned(), p)))
         .collect();
-    let nodes = meta["resolve"]["nodes"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-    let deps_of: std::collections::HashMap<String, Vec<String>> = nodes
-        .iter()
-        .filter_map(|n| {
-            let id = n["id"].as_str()?.to_owned();
-            let deps = n["deps"]
-                .as_array()?
-                .iter()
-                .filter(|d| {
-                    d["dep_kinds"].as_array().is_some_and(|k| {
-                        k.iter()
-                            .any(|k| k["kind"].is_null() || k["kind"] == "build")
-                    })
-                })
-                .filter_map(|d| d["pkg"].as_str().map(str::to_owned))
-                .collect();
-            Some((id, deps))
-        })
-        .collect();
     let members: Vec<String> = meta["workspace_members"]
         .as_array()
         .into_iter()
         .flatten()
         .filter_map(|m| m.as_str().map(str::to_owned))
         .collect();
-    let roots: Vec<String> = members
-        .iter()
-        .filter(|id| {
-            by_id
-                .get(*id)
-                .is_some_and(|p| matches!(p["name"].as_str(), Some("inkra" | "inkra-cli")))
-        })
-        .cloned()
-        .collect();
-    let mut seen = std::collections::BTreeSet::new();
-    let mut stack = roots;
-    while let Some(id) = stack.pop() {
-        if !seen.insert(id.clone()) {
-            continue;
-        }
-        if let Some(d) = deps_of.get(&id) {
-            stack.extend(d.iter().cloned());
-        }
+    // What is linked: `cargo tree` resolves features per target like a build
+    // does (`cargo metadata` unifies them with dev-dependencies, listing e.g.
+    // glow backends the apps never link).
+    let tree = cargo()
+        .args([
+            "tree",
+            "-p",
+            "inkra",
+            "-p",
+            "inkra-cli",
+            "-e",
+            "normal,build",
+            "--target",
+            "all",
+            "--prefix",
+            "none",
+            "--format",
+            "{p}",
+            "--locked",
+        ])
+        .output()
+        .map_err(|e| e.to_string())?;
+    if !tree.status.success() {
+        return Err(String::from_utf8_lossy(&tree.stderr).into_owned());
     }
+    let linked: std::collections::BTreeSet<(String, String)> =
+        String::from_utf8_lossy(&tree.stdout)
+            .lines()
+            .filter_map(|l| {
+                let mut w = l.split_whitespace();
+                let name = w.next()?;
+                let version = w.next()?.strip_prefix('v')?;
+                Some((name.to_owned(), version.to_owned()))
+            })
+            .collect();
+    let seen: Vec<String> = packages
+        .iter()
+        .filter(|p| {
+            let (Some(n), Some(v)) = (p["name"].as_str(), p["version"].as_str()) else {
+                return false;
+            };
+            linked.contains(&(n.to_owned(), v.to_owned()))
+        })
+        .filter_map(|p| p["id"].as_str().map(str::to_owned))
+        .collect();
     let mut rows: Vec<(String, String, String, String)> = seen
         .iter()
         .filter(|id| !members.contains(id))
