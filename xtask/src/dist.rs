@@ -384,6 +384,9 @@ runtime: org.freedesktop.Platform
 runtime-version: "25.08"
 sdk: org.freedesktop.Sdk
 command: inkra
+# The metainfo is installed as is; older flatpak-builder versions would run
+# appstream-compose, which current SDKs no longer ship.
+appstream-compose: false
 finish-args:
   - --share=ipc
   - --socket=fallback-x11
