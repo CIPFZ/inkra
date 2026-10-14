@@ -388,7 +388,8 @@ fn edge_op(p: &mut P<'_>) -> Option<(Line, Head, Head, usize, String)> {
 
 fn parse_color(spec: &str) -> Option<Rgba> {
     let h = spec.trim().strip_prefix('#')?;
-    let v = |i: usize, n: usize| u8::from_str_radix(&h[i..i + n], 16).ok();
+    // `get`: a byte range inside a multi-byte character (`#fʿ`) is no color.
+    let v = |i: usize, n: usize| u8::from_str_radix(h.get(i..i + n)?, 16).ok();
     match h.len() {
         3 => Some([v(0, 1)? * 17, v(1, 1)? * 17, v(2, 1)? * 17, 255]),
         6 => Some([v(0, 2)?, v(2, 2)?, v(4, 2)?, 255]),
@@ -1299,5 +1300,14 @@ mod tests {
         for e in &g.edges {
             assert!(e.from < g.nodes.len() && e.to < g.nodes.len());
         }
+    }
+
+    #[test]
+    fn colors_with_non_ascii_bytes_are_ignored() {
+        // Found by the `diagram` fuzz target: a byte slice inside `ʿ`.
+        assert_eq!(parse_color("#fʿ"), None);
+        assert_eq!(parse_color("#ʿʿʿ"), None);
+        assert_eq!(parse_color("#f9f"), Some([255, 153, 255, 255]));
+        assert!(parse("flowchart LR\n  a-->b\n  style a fill:#fʿ,stroke:#333\n").is_ok());
     }
 }

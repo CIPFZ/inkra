@@ -176,7 +176,8 @@ fn resolved_table(
 /// Parses `#rgb`, `#rrggbb`, `#rrggbbaa`.
 pub fn parse_color(s: &str) -> Option<Color32> {
     let h = s.trim().strip_prefix('#')?;
-    let v = |i: usize, n: usize| u8::from_str_radix(&h[i..i + n], 16).ok();
+    // `get`: a byte range inside a multi-byte character (`#fʿ`) is no color.
+    let v = |i: usize, n: usize| u8::from_str_radix(h.get(i..i + n)?, 16).ok();
     match h.len() {
         3 => {
             let d = |i: usize| v(i, 1).map(|x| x * 17);
@@ -574,6 +575,12 @@ mod tests {
             Some(Color32::from_rgba_unmultiplied(0x11, 0x22, 0x33, 0x44))
         );
         assert_eq!(parse_color("red"), None);
+        assert_eq!(
+            parse_color("#fʿ"),
+            None,
+            "no panic inside a multi-byte character"
+        );
+        assert_eq!(parse_color("#ʿʿʿʿ"), None);
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join("Mine")).unwrap();
         std::fs::write(
