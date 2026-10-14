@@ -314,6 +314,10 @@ pub struct Layout {
     k: Consts,
     /// Problems found while laying out.
     pub errors: Vec<String>,
+    /// `\left…\right` groups already laid out, by node address and context:
+    /// a body with `\middle` is laid out twice, which would make nesting cost
+    /// 2^depth (an unclosed `\left` nests everything after it).
+    left_right: std::collections::HashMap<(usize, MathStyle, bool, u32), Atom>,
 }
 
 #[derive(Debug, Clone)]
@@ -340,6 +344,7 @@ impl Layout {
         Self {
             k: consts(),
             errors: Vec::new(),
+            left_right: std::collections::HashMap::new(),
         }
     }
 
@@ -787,8 +792,25 @@ impl Layout {
             }
             Node::Sqrt { index, body } => Self::ord(self.sqrt(index.as_deref(), body, ctx)),
             Node::LeftRight { left, body, right } => {
+                // The result does not depend on an enclosing `\middle` size: the
+                // probe measures with neutral `\middle`s.
+                let key = (
+                    std::ptr::from_ref(n) as usize,
+                    ctx.style,
+                    ctx.cramped,
+                    ctx.base.to_bits(),
+                );
+                if let Some(a) = self.left_right.get(&key) {
+                    return Some(a.clone());
+                }
                 // First pass to measure without `\middle`, then lay out with them.
-                let probe = self.list(body, ctx);
+                let probe = self.list(
+                    body,
+                    Ctx {
+                        middle: None,
+                        ..ctx
+                    },
+                );
                 let target = self.delim_target(&probe, ctx);
                 let inner = if body.iter().any(|n| matches!(n, Node::Middle(_))) {
                     let c2 = Ctx {
@@ -801,12 +823,14 @@ impl Layout {
                 };
                 let lb = self.delim(*left, target, ctx);
                 let rb = self.delim(*right, target, ctx);
-                Atom {
+                let a = Atom {
                     class: Class::Inner,
                     b: MBox::hpack(vec![lb, inner, rb]),
                     is_char: false,
                     limits: false,
-                }
+                };
+                self.left_right.insert(key, a.clone());
+                a
             }
             Node::Middle(c) => {
                 let target = ctx.middle.unwrap_or_else(|| self.em(ctx));
