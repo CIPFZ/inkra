@@ -898,19 +898,32 @@ pub fn render(g: &Graph, pal: &Palette) -> Scene {
             let bb = band(&g.clusters[b], &across).map_or(0.0, |x| x.0);
             ba.total_cmp(&bb)
         });
+        // Nested subgraphs (and repeated ids) share members: only disjoint ones
+        // are moved apart, else every push widens the parent and the next push
+        // grows with it (a fuzzed input reached a million pixels).
+        let disjoint = |a: &Cluster, b: &Cluster| !a.nodes.iter().any(|v| b.nodes.contains(v));
+        // All slots side by side: no separation needs more room than that.
+        let limit = slots.iter().map(|s| s.w + gap_across).sum::<f32>()
+            + 2.0 * 26.0 * g.clusters.len() as f32;
         let mut done: Vec<usize> = Vec::new();
         for &ci in &order {
             let Some((lo, _)) = band(&g.clusters[ci], &across) else {
                 continue;
             };
-            let prev_hi = done
+            let others: Vec<usize> = done
+                .iter()
+                .copied()
+                .filter(|&d| disjoint(&g.clusters[d], &g.clusters[ci]))
+                .collect();
+            let prev_hi = others
                 .iter()
                 .filter_map(|&d| band(&g.clusters[d], &across))
                 .map(|b| b.1)
                 .fold(f32::NEG_INFINITY, f32::max);
             let need = prev_hi + 2.0 * 26.0 - lo;
-            if prev_hi.is_finite() && need > 0.0 {
-                let protected: std::collections::HashSet<usize> = done
+            let widest = across.iter().copied().fold(0.0, f32::max);
+            if prev_hi.is_finite() && need > 0.0 && widest + need < limit {
+                let protected: std::collections::HashSet<usize> = others
                     .iter()
                     .flat_map(|&d| g.clusters[d].nodes.iter().copied())
                     .collect();
