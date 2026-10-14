@@ -24,6 +24,56 @@ fn files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// Round trip, a few edits checked against a full parse, and undo back to the
+/// original bytes.
+fn check(path: &Path, o: &ParseOptions) {
+    let bytes = std::fs::read(path).unwrap();
+    let mut doc = Doc::from_bytes(&bytes, None, o.clone());
+    assert_eq!(
+        doc.to_bytes(),
+        bytes,
+        "round trip failed: {}",
+        path.display()
+    );
+    let _ = inkra_markdown::html::to_html(&doc.text().to_string(), o);
+    // a few deterministic edits, checked against a full parse
+    let len = doc.text().len();
+    for k in 1..4 {
+        let at = doc.text().snap(len * k / 4);
+        let ins = ["\n", "*", "# "][k - 1];
+        doc.apply(Transaction::single(at..at, ins), UndoPolicy::NewGroup);
+    }
+    let text = doc.text().to_string();
+    let full = inkra_markdown::parse(text.as_str(), o);
+    assert_eq!(
+        doc.ast().to_blocks(),
+        full.blocks,
+        "incremental mismatch: {}",
+        path.display()
+    );
+    while doc.undo().is_some() {}
+    assert_eq!(
+        doc.to_bytes(),
+        bytes,
+        "undo did not restore: {}",
+        path.display()
+    );
+}
+
+/// Files from user reports (T6, `docs/acceptance/user-reports.md`), checked in
+/// under `docs/acceptance/user-reports/`, in both dialects.
+#[test]
+fn user_reports_round_trip_and_edits() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/acceptance/user-reports");
+    let mut list = Vec::new();
+    files(&dir, &mut list);
+    assert!(!list.is_empty(), "{} is missing", dir.display());
+    for path in &list {
+        check(path, &ParseOptions::default());
+        check(path, &ParseOptions::commonmark());
+    }
+}
+
 #[test]
 fn corpus_round_trip_and_edits() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/corpus");
@@ -37,37 +87,7 @@ fn corpus_round_trip_and_edits() {
     let o = ParseOptions::default();
     let mut n = 0;
     for path in &list {
-        let bytes = std::fs::read(path).unwrap();
-        let mut doc = Doc::from_bytes(&bytes, None, o.clone());
-        assert_eq!(
-            doc.to_bytes(),
-            bytes,
-            "round trip failed: {}",
-            path.display()
-        );
-        let _ = inkra_markdown::html::to_html(&doc.text().to_string(), &o);
-        // a few deterministic edits, checked against a full parse
-        let len = doc.text().len();
-        for k in 1..4 {
-            let at = doc.text().snap(len * k / 4);
-            let ins = ["\n", "*", "# "][k - 1];
-            doc.apply(Transaction::single(at..at, ins), UndoPolicy::NewGroup);
-        }
-        let text = doc.text().to_string();
-        let full = inkra_markdown::parse(text.as_str(), &o);
-        assert_eq!(
-            doc.ast().to_blocks(),
-            full.blocks,
-            "incremental mismatch: {}",
-            path.display()
-        );
-        while doc.undo().is_some() {}
-        assert_eq!(
-            doc.to_bytes(),
-            bytes,
-            "undo did not restore: {}",
-            path.display()
-        );
+        check(path, &o);
         n += 1;
     }
     eprintln!("corpus: {n} files OK");

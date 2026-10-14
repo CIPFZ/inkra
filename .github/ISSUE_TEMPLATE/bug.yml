@@ -1,0 +1,67 @@
+name: Bug / 问题
+description: Something does not work as described / 功能与描述不符、崩溃、丢失内容
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing Inkra. The log never contains document text.
+        感谢试用 Inkra。日志不包含文档内容。
+        Log / 日志：Windows `%LOCALAPPDATA%\Inkra\logs\inkra.log`, macOS `~/Library/Application Support/Inkra/logs/inkra.log`, Linux `~/.local/share/inkra/logs/inkra.log`
+  - type: input
+    id: version
+    attributes:
+      label: Version / 版本
+      description: "Help → About, or `inkra --version`"
+      placeholder: 1.0.0-beta.1
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform / 平台
+      options:
+        - Windows x64
+        - Windows arm64
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Linux x86_64 (X11)
+        - Linux x86_64 (Wayland)
+        - Linux arm64
+    validations:
+      required: true
+  - type: input
+    id: package
+    attributes:
+      label: Package / 安装方式
+      placeholder: MSI, zip, dmg, AppImage, deb, rpm, Flatpak, tar.gz, built from source
+    validations:
+      required: true
+  - type: input
+    id: graphics
+    attributes:
+      label: "Graphics: the `graphics:` line of inkra.log / 日志中的 `graphics:` 行"
+      placeholder: "graphics: backends Backends(DX12) (default); 2 adapter(s) ...; using ..."
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps / 重现步骤
+      placeholder: |
+        1. Open the attached file
+        2. Put the caret at ...
+        3. Type ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual / 期望与实际
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Minimal .md and inkra.log / 最小 .md 文件与日志
+      description: Drag the files here. A small document that shows the problem helps most. / 把文件拖到这里；能重现问题的小文档最有帮助。

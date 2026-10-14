@@ -1,0 +1,24 @@
+name: Feature request / 功能请求
+description: Suggest a change / 建议新功能或改进
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Inkra follows docs/SPEC.md. Cloud sync, accounts, collaboration, plugins, multiple cursors and a web version are out of scope (SPEC 1.5).
+        Inkra 以 docs/SPEC.md 为准；云同步、账号、协作、插件、多光标、Web 版不在范围内（SPEC 1.5）。
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do? / 你想完成什么？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal / 建议
+  - type: input
+    id: spec
+    attributes:
+      label: Related requirement (optional) / 相关需求编号（可选）
+      placeholder: FS-050, CM-003, ...

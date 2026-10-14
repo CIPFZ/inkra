@@ -1,0 +1,45 @@
+name: Rendering difference / 渲染差异
+description: A Markdown file looks or parses differently than expected / 文档解析或显示与预期不同
+labels: [rendering]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version / 版本
+      placeholder: 1.0.0-beta.1
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area / 范围
+      options:
+        - Markdown parsing / 解析（CommonMark, GFM）
+        - Live view layout / 实时视图排版
+        - Math / 数学公式
+        - Mermaid diagram / 图表
+        - HTML in Markdown / 内联 HTML
+        - Export (HTML, PDF, image, Pandoc) / 导出
+        - Saving changed bytes I did not edit / 保存改动了未编辑的内容
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Markdown source / 源码
+      description: The smallest text that shows the difference (it becomes a test in docs/acceptance/user-reports.md). / 能体现差异的最小文本（会转成语料测试）。
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected, and how other tools show it / 期望效果，以及其他工具（GitHub、MathJax、mermaid.live）的显示
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What Inkra shows (screenshot) / Inkra 的显示（截图）
+    validations:
+      required: true
