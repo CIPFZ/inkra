@@ -1,7 +1,7 @@
 # Inkra 开发进度
 
 更新时间：2026-10-14
-当前阶段：1.0 收尾 — T5 Beta 发布（等待产品负责人确认 release notes，见"开放问题"2）；T7 设计稿待确认
+当前阶段：1.0 收尾 — T1～T4、T6 完成；T5 Beta 发布等待确认 release notes（开放问题 2）；T7 设计稿待确认（开放问题 3）
 CI 状态：GitHub Actions（`CIPFZ/inkra`）`ci.yml` ubuntu 绿 / windows 绿 / macos 绿（运行 #12 起；另含 bench 同机 A/B、cargo deny + cargo audit、三平台 `cargo xtask dist`）；`release.yml` 最近一次：成功（运行 #6，push 触发的 dry run：全部产物 + 安装验证 + `SHA256SUMS.txt`）。本地 `cargo xtask ci` 绿（Linux）
 当前版本：master 为 0.1.0；`1.0.0-beta.1` 的版本号、README、CHANGELOG、release notes 在本地分支 `beta1`（未推送，待确认）
 
@@ -9,7 +9,7 @@ CI 状态：GitHub Actions（`CIPFZ/inkra`）`ci.yml` ubuntu 绿 / windows 绿 /
 - [x] T1 决策落地与文档同步（2026-10-14）：SPEC 2.1/2.5/13 回填 D-1～D-6，ROADMAP 1.x 按 D-6 重排，旧启动 prompt 归档到 `docs/archive/AGENT_INKRA_m0.md`
 - [x] T2 DX12 启动优化（2026-10-14）：适配器缓存 `general.graphics.lastAdapter`、WARP→GL 回退（带 `glFallback` 防循环）、`static-dxc` 评估后不启用、关闭间接调用校验；测试机冷启动 ~390 → ~360 ms。**偏离**：验收"命中缓存比首次快 100 ms"无法达成——wgpu 30 安全 API 每次枚举都探测全部适配器，缓存不能跳过探测（见 SPEC 2.1 [回填 2026-10-14]、开放问题 1）
 - [x] T3 CI 三平台实跑与 Release 流水线（2026-10-14）：`ci.yml` 三平台绿；`release.yml` 产出 Linux x86_64/arm64（tar.gz、AppImage、deb、rpm、Flatpak）、Windows x64/arm64（zip、MSI）、macOS universal dmg，并在全新 runner 上安装验证（deb + Xvfb 首帧、rpm/Fedora、AppImage、tar.gz、Flatpak、MSI 关联/快捷方式/卸载于 windows-latest 与 windows-11-arm、dmg lipo + `--version`）；tag `v*` 时上传为 Release 草稿。说明：无 token 无法手动 `workflow_dispatch`，改为打包相关文件变更时 push 触发 dry run（等效）。失败日志通过公开的 annotation 读取（`tools/gh_runs.py`）
-- [ ] T4 安全与健壮性收口：已完成 cargo deny（许可证白名单 + 具名例外）与 cargo audit 进 CI、外部进程复核（Pandoc/mmdc/自定义导出命令/打印）、`open_external` 统一检查（四类 + Windows 危险协议，带测试）、third-party.md 改为按 `cargo tree` 实际链接集生成、egui 非 OFL 字体移除；fuzz 5 个目标：markdown_parse、markdown_incremental、html_to_markdown 各 2 h 无崩溃；diagram 发现 3 个问题、math 发现 1 个（均已修复并转为回归测试），修复后 math、diagram 的 2 h 复跑进行中（预计 16:40 结束）
+- [x] T4 安全与健壮性收口（2026-10-14）：cargo deny（许可证白名单 + 具名例外）与 cargo audit 进 CI；外部进程复核（Pandoc/mmdc/自定义导出命令/打印）；`open_external` 统一检查（`javascript:`/`vbscript:`/`data:`/指向程序的 `file:` 及 Windows 危险协议，带测试）；third-party.md 按 `cargo tree` 实际链接集生成；egui 非 OFL 字体移除。fuzz（`fuzz/`，各 ≥ 2 h，修复后复跑）：markdown_parse 206 万次、markdown_incremental 142 万次、html_to_markdown 875 万次无问题；diagram 2 个 panic + 3 个超慢/超大输入、math 2 个指数级布局，全部修复并转为回归测试，最终 diagram 317 万次、math 273 万次无崩溃。数学 fuzz 曾因 ASan 隔离区触发 RSS 上限（非泄漏：无 ASan 时 2.8 万次渲染峰值 24 MB）
 - [ ] T5 Beta 发布：版本号、README（截图 6 张、下载表、已知限制、反馈指引）、CHANGELOG、release notes 中英草稿（`docs/release-notes/v1.0.0-beta.1.md`）已在本地分支 `beta1` 完成；**等待确认后**推送、打 tag `v1.0.0-beta.1`、检查草稿并发布（pre-release）
 - [x] T6 Dogfooding 与反馈闭环（2026-10-14）：issue 模板（bug / 渲染差异 / 功能请求，bug 模板要求平台、安装方式、版本、`graphics:` 行）、`docs/acceptance/user-reports.md` 与 `user-reports/` 语料测试；README 反馈指引在 `beta1`
 - [ ] T7 CM-003：设计稿 `docs/design/control-protocol.md` 已完成（4 个开放问题），**待确认后实现**
@@ -19,7 +19,8 @@ CI 状态：GitHub Actions（`CIPFZ/inkra`）`ci.yml` ubuntu 绿 / windows 绿 /
 - macOS 经符号链接目录（`/var`、`/tmp`）打开的文件收不到外部修改通知（FS-007）——CI macos 发现
 - macOS 测试线程上创建原生菜单 panic——CI macos 发现
 - Mermaid：同名 subgraph 下标下溢 panic、`#fʿ` 颜色切片 panic（主题颜色解析同样问题）、嵌套 subgraph 宽度失控（1 077 120 px）——fuzz 发现
-- 数学：嵌套 `\left…\middle` 指数级布局时间（翻倍输入 46 s → 4.5 ms）——fuzz 发现
+- 数学：嵌套 `\left…\middle` 指数级布局时间（翻倍输入 46 s → 4.5 ms），aligned 单元格克隆导致同类问题（8.3 s → 11 ms）——fuzz 发现
+- Mermaid：大量虚线边切出数百万段（1.16 s → 55 ms，每条描边 ≤ ~300 段）——fuzz 发现
 - 数学/图表布局 panic 改为降级显示源码（缓存边界 `catch_unwind`），不再每帧失败
 - 更新检查指向占位仓库 `inkra-app/inkra`，且 beta 版看不到更新的 beta——改为 `CIPFZ/inkra` 与 SemVer 预发布比较
 - Windows 打印把文件名拼进 PowerShell 脚本（`’` 可越出字符串）——改为环境变量传参
@@ -136,7 +137,8 @@ CI 状态：GitHub Actions（`CIPFZ/inkra`）`ci.yml` ubuntu 绿 / windows 绿 /
 - 语料：`cargo xtask corpus` 拉取固定提交的 7 个仓库到 `target/corpus`（不入库）。
 
 ## 下次会话从这里继续
-- 先看 math、diagram 两个 fuzz 目标的 2 h 复跑结果（`fuzz/logs/{math,diagram}.log`，产物在 `fuzz/artifacts/`；`fuzz/run_all.sh` 可一次跑全部）；有新崩溃则转回归测试后关闭 T4。
-- 产品负责人确认 release notes 后：`git checkout beta1 && git rebase master`，重新生成截图（`docs/images/README.md`），`cargo xtask ci`，合入 master 并推送，打 tag `v1.0.0-beta.1`，检查 `release.yml` 生成的 Release 草稿（产物 + `SHA256SUMS.txt`），标记 pre-release 发布；随后在 Windows 测试机上从 Release 下载 MSI 安装运行（T5 验收）。
-- T7：按确认后的设计实现 `inkra-engine::control`、`inkra-ui::control`、`inkra --control`、`inkra-cli mcp`。
+- 等产品负责人确认 release notes（开放问题 2）后：`git checkout beta1 && git rebase master`，必要时按 `docs/images/README.md` 重新生成截图，`cargo xtask ci`，合入 master 并推送，打 tag `v1.0.0-beta.1`，检查 `release.yml` 生成的 Release 草稿（产物 + `SHA256SUMS.txt`），标记 pre-release 发布；随后在 Windows 测试机上从 Release 下载 MSI 安装运行（T5 验收）。
+- 等 T7 设计确认（开放问题 3）后：实现 `inkra-engine::control`、`inkra-ui::control`、`inkra --control`、`inkra-cli mcp`。
+- 可选：AD-5 偏离（图表布局在 UI 线程同步进行）移到后台线程；ttf-parser → skrifa。
+- fuzz：`fuzz/run_all.sh [秒]` 一次跑全部目标；产物在 `fuzz/artifacts/`（已修复的在 `archive/`），转为回归测试后登记到 `docs/acceptance/user-reports.md`。
 - 读 Actions 结果：`python3 tools/gh_runs.py`（运行列表）与 `python3 tools/gh_runs.py <run_id>`（annotation 与失败日志尾部）；无 gh CLI、无 token。
