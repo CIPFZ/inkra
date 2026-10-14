@@ -16,6 +16,22 @@ use crate::{cargo, root, run};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// The numeric part of the version (`1.0.0` of `1.0.0-beta.1`): MSI and the
+/// macOS bundle versions accept only numbers.
+pub fn numeric_version() -> &'static str {
+    VERSION.split(['-', '+']).next().unwrap_or(VERSION)
+}
+
+/// The version for `.deb` and `.rpm`, where a pre-release is written with `~`
+/// so that `1.0.0~beta.1` sorts before `1.0.0` (rpm also rejects `-`).
+fn package_version() -> String {
+    VERSION
+        .split('+')
+        .next()
+        .unwrap_or(VERSION)
+        .replacen('-', "~", 1)
+}
+
 /// Markdown extensions associated with Inkra.
 const EXTS: &[&str] = &[
     "md", "markdown", "mdown", "mkd", "mkdn", "mdwn", "mdtxt", "mdtext",
@@ -198,16 +214,17 @@ fn ar(members: &[(&str, Vec<u8>)]) -> Vec<u8> {
     out
 }
 
-fn deb(staging: &Path, out: &Path) -> Result<PathBuf, String> {
+fn deb(release: &Path, staging: &Path, out: &Path) -> Result<PathBuf, String> {
     let work = staging.join("deb");
     let data = work.join("data");
     let control = work.join("control");
     std::fs::create_dir_all(&control).map_err(io)?;
-    linux_tree(&root(), &target_dir().join("release"), &data.join("usr"))?;
+    linux_tree(&root(), release, &data.join("usr"))?;
     let size_kb = dir_size(&data) / 1024;
     let arch = if is_arm() { "arm64" } else { "amd64" };
     let text = format!(
-        "Package: inkra\nVersion: {VERSION}\nArchitecture: {arch}\nMaintainer: Inkra <inkra@users.noreply.github.com>\nInstalled-Size: {size_kb}\nDepends: libc6 (>= 2.31)\nRecommends: xdg-desktop-portal\nSuggests: pandoc\nSection: editors\nPriority: optional\nHomepage: {}\nDescription: Native WYSIWYM Markdown editor\n Inkra renders Markdown as you type: math, diagrams, tables, footnotes,\n export to HTML, PDF and images.\n",
+        "Package: inkra\nVersion: {}\nArchitecture: {arch}\nMaintainer: Inkra <inkra@users.noreply.github.com>\nInstalled-Size: {size_kb}\nDepends: libc6 (>= 2.35)\nRecommends: xdg-desktop-portal\nSuggests: pandoc\nSection: editors\nPriority: optional\nHomepage: {}\nDescription: Native WYSIWYM Markdown editor\n Inkra renders Markdown as you type: math, diagrams, tables, footnotes,\n export to HTML, PDF and images.\n",
+        package_version(),
         env!("CARGO_PKG_REPOSITORY")
     );
     std::fs::write(control.join("control"), text).map_err(io)?;
@@ -263,15 +280,16 @@ fn set_exec(_: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn rpm(staging: &Path, out: &Path) -> Result<PathBuf, String> {
+fn rpm(release: &Path, staging: &Path, out: &Path) -> Result<PathBuf, String> {
     let top = staging.join("rpm");
     let tree = staging.join("rpm-tree");
-    linux_tree(&root(), &target_dir().join("release"), &tree.join("usr"))?;
+    linux_tree(&root(), release, &tree.join("usr"))?;
     for d in ["BUILD", "RPMS", "SOURCES", "SPECS", "SRPMS"] {
         std::fs::create_dir_all(top.join(d)).map_err(io)?;
     }
     let spec = format!(
-        "Name: inkra\nVersion: {VERSION}\nRelease: 1\nSummary: Native WYSIWYM Markdown editor\nLicense: MIT OR Apache-2.0\nURL: {}\nAutoReqProv: no\n\n%description\nInkra renders Markdown as you type: math, diagrams, tables, footnotes,\nexport to HTML, PDF and images.\n\n%install\nmkdir -p %{{buildroot}}\ncp -a {}/. %{{buildroot}}/\n\n%files\n/usr/bin/inkra\n/usr/bin/inkra-cli\n/usr/share/applications/io.inkra.Inkra.desktop\n/usr/share/metainfo/io.inkra.Inkra.metainfo.xml\n/usr/share/mime/packages/io.inkra.Inkra.xml\n/usr/share/icons/hicolor/*/apps/*\n/usr/share/doc/inkra\n\n%post\nupdate-desktop-database -q >/dev/null 2>&1 || true\nupdate-mime-database /usr/share/mime >/dev/null 2>&1 || true\n",
+        "Name: inkra\nVersion: {}\nRelease: 1\nSummary: Native WYSIWYM Markdown editor\nLicense: MIT OR Apache-2.0\nURL: {}\nAutoReqProv: no\n\n%description\nInkra renders Markdown as you type: math, diagrams, tables, footnotes,\nexport to HTML, PDF and images.\n\n%install\nmkdir -p %{{buildroot}}\ncp -a {}/. %{{buildroot}}/\n\n%files\n/usr/bin/inkra\n/usr/bin/inkra-cli\n/usr/share/applications/io.inkra.Inkra.desktop\n/usr/share/metainfo/io.inkra.Inkra.metainfo.xml\n/usr/share/mime/packages/io.inkra.Inkra.xml\n/usr/share/icons/hicolor/*/apps/*\n/usr/share/doc/inkra\n\n%post\nupdate-desktop-database -q >/dev/null 2>&1 || true\nupdate-mime-database /usr/share/mime >/dev/null 2>&1 || true\n",
+        package_version(),
         env!("CARGO_PKG_REPOSITORY"),
         tree.display()
     );
@@ -295,9 +313,9 @@ fn rpm(staging: &Path, out: &Path) -> Result<PathBuf, String> {
     Ok(file)
 }
 
-fn appimage(staging: &Path, out: &Path) -> Result<PathBuf, String> {
+fn appimage(release: &Path, staging: &Path, out: &Path) -> Result<PathBuf, String> {
     let dir = staging.join("Inkra.AppDir");
-    linux_tree(&root(), &target_dir().join("release"), &dir.join("usr"))?;
+    linux_tree(&root(), release, &dir.join("usr"))?;
     copy(
         &root().join("apps/inkra/linux/io.inkra.Inkra.desktop"),
         &dir.join("io.inkra.Inkra.desktop"),
@@ -325,14 +343,14 @@ fn linux(root: &Path, release: &Path, out: &Path) -> Result<Vec<PathBuf>, String
         &staging.join(&name).join("install.sh"),
     )?;
     set_exec(&staging.join(&name).join("install.sh"))?;
-    let mut files = vec![tar_gz(&staging, &name, out)?, deb(&staging, out)?];
+    let mut files = vec![tar_gz(&staging, &name, out)?, deb(release, &staging, out)?];
     if have("rpmbuild") {
-        files.push(rpm(&staging, out)?);
+        files.push(rpm(release, &staging, out)?);
     } else {
         eprintln!("dist: rpmbuild not found, no .rpm");
     }
     if have("appimagetool") {
-        files.push(appimage(&staging, out)?);
+        files.push(appimage(release, &staging, out)?);
     } else {
         eprintln!("dist: appimagetool not found, no AppImage");
     }
@@ -357,7 +375,7 @@ fn flatpak_manifest(tree: &Path) -> String {
     format!(
         r#"app-id: io.inkra.Inkra
 runtime: org.freedesktop.Platform
-runtime-version: "24.08"
+runtime-version: "25.08"
 sdk: org.freedesktop.Sdk
 command: inkra
 finish-args:
@@ -384,7 +402,9 @@ fn flatpak(manifest: &Path, out: &Path) -> Result<PathBuf, String> {
     let build = target_dir().join("flatpak-build");
     let repo = target_dir().join("flatpak-repo");
     let mut c = Command::new("flatpak-builder");
+    // No rofiles-fuse: CI runners and containers often lack FUSE.
     c.arg("--force-clean")
+        .arg("--disable-rofiles-fuse")
         .arg("--repo")
         .arg(&repo)
         .arg(&build)
@@ -392,7 +412,9 @@ fn flatpak(manifest: &Path, out: &Path) -> Result<PathBuf, String> {
     run("flatpak-builder", c)?;
     let bundle = out.join(format!("inkra-{VERSION}-{}.flatpak", arch()));
     let mut b = Command::new("flatpak");
+    // The bundle names Flathub so that installing it can fetch the runtime.
     b.arg("build-bundle")
+        .arg("--runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo")
         .arg(&repo)
         .arg(&bundle)
         .arg("io.inkra.Inkra");
@@ -438,7 +460,7 @@ fn wxs(release: &Path, root: &Path) -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-  <Product Id="*" Name="Inkra" Language="1033" Version="{VERSION}" Manufacturer="Inkra" UpgradeCode="6B8C3B5E-6F4E-4C3A-9F7B-1E7C2A9D4B10">
+  <Product Id="*" Name="Inkra" Language="1033" Version="{version}" Manufacturer="Inkra" UpgradeCode="6B8C3B5E-6F4E-4C3A-9F7B-1E7C2A9D4B10">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="{platform}" Description="Inkra Markdown editor" />
     <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of Inkra is already installed." />
     <MediaTemplate EmbedCab="yes" />
@@ -479,6 +501,7 @@ fn wxs(release: &Path, root: &Path) -> String {
         exe = exe.display(),
         cli = cli.display(),
         platform = win_arch(),
+        version = numeric_version(),
     )
 }
 
@@ -540,7 +563,7 @@ fn macos(root: &Path, release: &Path, out: &Path) -> Result<Vec<PathBuf>, String
     std::fs::create_dir_all(app.join("Resources")).map_err(io)?;
     let plist = std::fs::read_to_string(root.join("apps/inkra/macos/Info.plist"))
         .map_err(io)?
-        .replace("$VERSION", VERSION);
+        .replace("$VERSION", numeric_version());
     std::fs::write(app.join("Info.plist"), plist).map_err(io)?;
     copy(&release.join("inkra"), &app.join("MacOS/inkra"))?;
     copy(&release.join("inkra-cli"), &app.join("MacOS/inkra-cli"))?;
@@ -574,12 +597,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn versions_per_format() {
+        let n = numeric_version();
+        assert!(n.split('.').all(|p| p.parse::<u32>().is_ok()), "{n}");
+        let p = package_version();
+        assert!(!p.contains('-'), "{p}");
+        assert!(p.starts_with(n));
+        assert_eq!(VERSION.contains('-'), p.contains('~'));
+    }
+
+    #[test]
     fn ar_archive_layout() {
         let a = ar(&[("debian-binary", b"2.0\n".to_vec()), ("x", b"abc".to_vec())]);
         assert!(a.starts_with(b"!<arch>\ndebian-binary   "));
         // 8 + (60 + 4) + (60 + 3 + 1 padding)
         assert_eq!(a.len(), 8 + 64 + 64);
         let w = wxs(Path::new("rel"), Path::new("root"));
-        assert!(w.contains("<Extension Id=\"md\"") && w.contains(VERSION));
+        assert!(w.contains("<Extension Id=\"md\"") && w.contains(numeric_version()));
     }
 }

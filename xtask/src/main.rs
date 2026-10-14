@@ -198,7 +198,7 @@ fn bundle_macos(release: bool) -> Result<(), String> {
     std::fs::create_dir_all(app.join("Resources")).map_err(io)?;
     let plist = std::fs::read_to_string(root.join("apps/inkra/macos/Info.plist"))
         .map_err(io)?
-        .replace("$VERSION", env!("CARGO_PKG_VERSION"));
+        .replace("$VERSION", dist::numeric_version());
     std::fs::write(app.join("Info.plist"), plist).map_err(io)?;
     std::fs::copy(target.join("inkra"), app.join("MacOS/inkra")).map_err(io)?;
     std::fs::copy(

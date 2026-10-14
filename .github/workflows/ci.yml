@@ -59,20 +59,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # The reference baseline from the default branch.
-      - uses: actions/cache@v4
-        with:
-          path: target/criterion
-          key: criterion-${{ github.sha }}
-          restore-keys: criterion-
-      - name: Compare against the reference (fails on > 20 % regression)
+      # Same-runner A/B: the reference is measured on this machine from the
+      # base commit, then the head is compared with it. A reference from another
+      # shared runner is too noisy for a 20 % threshold.
+      - name: Reference from the base commit
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            BASE=$(git rev-parse HEAD~1)
+          fi
+          echo "reference: $BASE"
+          git worktree add "$RUNNER_TEMP/base" "$BASE"
+          cd "$RUNNER_TEMP/base"
+          CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target" cargo xtask bench --save 2>&1 | tee -a "$RUNNER_TEMP/job.log"
+      - name: Compare the head (fails on > 20 % regression at p95)
         shell: bash
         run: cargo xtask bench 2>&1 | tee -a "$RUNNER_TEMP/job.log"
-      - name: Record the reference on the default branch
-        if: github.event_name == 'push'
-        run: cargo xtask bench --save
       - name: Publish the failure log
         if: failure()
         shell: bash

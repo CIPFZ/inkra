@@ -1,0 +1,302 @@
+name: Release
+
+# NF-006 packages for every platform, installed and started on fresh runners,
+# with SHA256SUMS.txt. A `v*` tag uploads them to a draft GitHub Release; manual
+# runs and changes to the packaging are dry runs that keep the files as a
+# workflow artifact.
+on:
+  push:
+    tags: ["v*"]
+    branches: [master]
+    paths:
+      - .github/workflows/release.yml
+      - xtask/src/dist.rs
+      - apps/inkra/linux/**
+      - apps/inkra/macos/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: linux packages (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The oldest supported runner: the binaries need glibc 2.35.
+          - { arch: x86_64, runner: ubuntu-22.04 }
+          - { arch: aarch64, runner: ubuntu-22.04-arm }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.arch }}
+      - name: Packaging tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev \
+            rpm file desktop-file-utils flatpak flatpak-builder
+          sudo curl -fsSL -o /usr/local/bin/appimagetool \
+            "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${{ matrix.arch }}.AppImage"
+          sudo chmod +x /usr/local/bin/appimagetool
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08
+      - name: cargo xtask dist
+        shell: bash
+        env:
+          # AppImages need FUSE unless they unpack themselves.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: cargo xtask dist 2>&1 | tee -a "$RUNNER_TEMP/job.log"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          if-no-files-found: error
+          path: |
+            target/dist/*.tar.gz
+            target/dist/*.deb
+            target/dist/*.rpm
+            target/dist/*.AppImage
+            target/dist/*.flatpak
+      - name: Publish the failure log
+        if: failure()
+        shell: bash
+        run: bash .github/scripts/failure-summary.sh "$RUNNER_TEMP/job.log"
+
+  windows:
+    name: windows packages (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, target: "" }
+          # Cross-built on x64: the runner's Visual Studio has the ARM64 tools,
+          # and LLVM clang for `ring`.
+          - { arch: arm64, target: aarch64-pc-windows-msvc }
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.arch }}
+      - name: WiX Toolset 3
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP\wix.zip"
+          Invoke-WebRequest -Uri https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip -OutFile $zip
+          Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP\wix"
+          "WIX=$env:RUNNER_TEMP\wix" >> $env:GITHUB_ENV
+      - name: cargo xtask dist
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.target }}" ]; then
+            cargo xtask dist --target "${{ matrix.target }}" 2>&1 | tee -a "$RUNNER_TEMP/job.log"
+          else
+            cargo xtask dist 2>&1 | tee -a "$RUNNER_TEMP/job.log"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          if-no-files-found: error
+          path: |
+            target/dist/*.zip
+            target/dist/*.msi
+      - name: Publish the failure log
+        if: failure()
+        shell: bash
+        run: bash .github/scripts/failure-summary.sh "$RUNNER_TEMP/job.log"
+
+  macos:
+    name: macos package (universal)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-universal
+      - name: cargo xtask dist
+        shell: bash
+        run: cargo xtask dist --target universal-apple-darwin 2>&1 | tee -a "$RUNNER_TEMP/job.log"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-universal
+          if-no-files-found: error
+          path: target/dist/*.dmg
+      - name: Publish the failure log
+        if: failure()
+        shell: bash
+        run: bash .github/scripts/failure-summary.sh "$RUNNER_TEMP/job.log"
+
+  verify-linux:
+    name: install on ${{ matrix.runner }}
+    needs: linux
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, deb: amd64, runner: ubuntu-latest }
+          - { arch: aarch64, deb: arm64, runner: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: pkg
+      - name: deb
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb mesa-vulkan-drivers libgl1-mesa-dri
+          sudo apt-get install -y ./pkg/inkra_*_${{ matrix.deb }}.deb
+          inkra --version
+          inkra-cli --version
+          test -f /usr/share/applications/io.inkra.Inkra.desktop
+          grep -q 'text/markdown' /usr/share/applications/io.inkra.Inkra.desktop
+          test -f /usr/share/mime/packages/io.inkra.Inkra.xml
+          test -f /usr/share/icons/hicolor/256x256/apps/io.inkra.Inkra.png
+          # The window opens and presents a frame (software Vulkan / GL).
+          xvfb-run -a inkra --measure-startup --config "$RUNNER_TEMP/inkra-deb"
+          sudo apt-get remove -y inkra
+      - name: tar.gz
+        shell: bash
+        run: |
+          mkdir t && tar -C t -xzf pkg/inkra-*-linux-*.tar.gz
+          ./t/inkra-*/bin/inkra --version
+          PREFIX="$RUNNER_TEMP/prefix" ./t/inkra-*/install.sh
+          "$RUNNER_TEMP/prefix/bin/inkra-cli" --version
+      - name: AppImage
+        shell: bash
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: |
+          chmod +x pkg/Inkra-*.AppImage
+          ./pkg/Inkra-*.AppImage --version
+      - name: rpm (Fedora)
+        if: matrix.arch == 'x86_64'
+        shell: bash
+        run: |
+          docker run --rm -v "$PWD/pkg:/pkg" fedora:latest bash -c \
+            'dnf install -y /pkg/inkra-*.rpm && inkra --version && inkra-cli --version && test -f /usr/share/applications/io.inkra.Inkra.desktop'
+      - name: Flatpak
+        shell: bash
+        run: |
+          sudo apt-get install -y flatpak
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.freedesktop.Platform//25.08
+          flatpak install --user -y --noninteractive --bundle pkg/inkra-*.flatpak
+          flatpak run io.inkra.Inkra --version
+
+  verify-windows:
+    name: install on ${{ matrix.runner }}
+    needs: windows
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x64, runner: windows-latest }
+          - { arch: arm64, runner: windows-11-arm }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}
+          path: pkg
+      - name: MSI
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem pkg\inkra-*-${{ matrix.arch }}.msi).FullName
+          $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$msi`"", '/qn', '/l*v', "$env:RUNNER_TEMP\msi.log" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\msi.log" -Tail 60; throw "msiexec exit $($p.ExitCode)" }
+          $dir = "$env:ProgramFiles\Inkra"
+          if (-not (Test-Path "$dir\inkra.exe")) { throw "inkra.exe not installed" }
+          & "$dir\inkra-cli.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw "inkra-cli --version failed" }
+          & "$dir\inkra.exe" --version | Out-String
+          # File association (NF-006; per-machine, so under HKLM) and Start menu shortcut.
+          $ext = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\.md').'(default)'
+          if ($ext -ne 'Inkra.Markdown') { throw ".md is associated with '$ext'" }
+          $cmd = (Get-ItemProperty 'HKLM:\SOFTWARE\Classes\Inkra.Markdown\shell\open\command').'(default)'
+          if ($cmd -notlike '*inkra.exe*') { throw "open command is '$cmd'" }
+          $lnk = "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Inkra.lnk"
+          if (-not (Test-Path $lnk)) { throw "no Start menu shortcut" }
+          "MSI OK: $ext -> $cmd"
+          $p = Start-Process msiexec.exe -ArgumentList '/x', "`"$msi`"", '/qn' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "uninstall exit $($p.ExitCode)" }
+          if (Test-Path "$dir\inkra.exe") { throw "inkra.exe left after uninstall" }
+      - name: zip
+        shell: pwsh
+        run: |
+          Expand-Archive (Get-ChildItem pkg\inkra-*-windows-${{ matrix.arch }}.zip).FullName -DestinationPath z
+          & (Get-ChildItem z\*\inkra-cli.exe).FullName --version
+          if ($LASTEXITCODE -ne 0) { throw "inkra-cli --version failed" }
+
+  verify-macos:
+    name: install on macos-latest
+    needs: macos
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-universal
+          path: pkg
+      - name: dmg
+        shell: bash
+        run: |
+          hdiutil attach pkg/Inkra-*-universal.dmg -mountpoint /Volumes/Inkra -nobrowse
+          app=/Volumes/Inkra/Inkra.app
+          lipo -archs "$app/Contents/MacOS/inkra" | tee /dev/stderr | grep -q x86_64
+          lipo -archs "$app/Contents/MacOS/inkra" | grep -q arm64
+          "$app/Contents/MacOS/inkra" --version
+          "$app/Contents/MacOS/inkra-cli" --version
+          plutil -lint "$app/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleDocumentTypes:0:CFBundleTypeExtensions' "$app/Contents/Info.plist" | grep -q md
+          # Unsigned (code signing is P2): verification is skipped.
+          hdiutil detach /Volumes/Inkra
+
+  publish:
+    name: checksums and release
+    needs: [verify-linux, verify-windows, verify-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: SHA256SUMS.txt
+        shell: bash
+        run: |
+          cd artifacts
+          sha256sum * | tee SHA256SUMS.txt
+          ls -l
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inkra-release
+          path: artifacts/*
+      - name: Draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          notes="docs/release-notes/$TAG.md"
+          [ -f "$notes" ] || notes=CHANGELOG.md
+          pre=""
+          case "$TAG" in *-*) pre="--prerelease" ;; esac
+          gh release create "$TAG" --draft $pre --title "Inkra ${TAG#v}" --notes-file "$notes" artifacts/*
