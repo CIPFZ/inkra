@@ -17,4 +17,6 @@
 | 2026-10-14 | `cargo fuzz` diagram | 同名 subgraph 重复删除占位节点导致下标下溢 panic | `inkra-diagram` `subgraphs_sharing_an_id_share_the_placeholder`、`tests/fuzz-regressions/` | c0e6db4 |
 | 2026-10-14 | `cargo fuzz` diagram | `style … fill:#fʿ` 在多字节字符内切片 panic；主题颜色解析同样问题 | `colors_with_non_ascii_bytes_are_ignored`、`colors_and_user_themes` | 01858aa |
 | 2026-10-14 | README 截图 | 高于行高的行内公式基线偏高（`\frac{a}{b}` 偏 6 px） | `inkra-layout/tests/inline_math.rs` | a9eca06 |
+| 2026-10-14 | `cargo fuzz` diagram | 嵌套/同名 subgraph 互相推开，2.7 KB 流程图宽 1 077 120 px、耗时 0.6 s | `tests/fuzz-regressions/flowchart-nested-subgraphs-width.mmd`（尺寸上限） | 8aade7f |
+| 2026-10-14 | `cargo fuzz` math | 未闭合 `\left…\middle` 嵌套布局指数级耗时（1 KB 0.1 s，翻倍 46 s） | `inkra-math/tests/fuzz_regressions.rs` | ddf8cfe |
 | 2026-10-14 | CI macos-latest | 经符号链接目录打开的文件收不到外部修改通知 | `watch::tests::event_paths_map_back_through_symlinks` | d1ffd14 |
