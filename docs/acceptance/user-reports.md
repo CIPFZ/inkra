@@ -20,4 +20,5 @@
 | 2026-10-14 | `cargo fuzz` diagram | 嵌套/同名 subgraph 互相推开，2.7 KB 流程图宽 1 077 120 px、耗时 0.6 s | `tests/fuzz-regressions/flowchart-nested-subgraphs-width.mmd`（尺寸上限） | 8aade7f |
 | 2026-10-14 | `cargo fuzz` math | 未闭合 `\left…\middle` 嵌套布局指数级耗时（1 KB 0.1 s，翻倍 46 s） | `inkra-math/tests/fuzz_regressions.rs` | ddf8cfe |
 | 2026-10-14 | `cargo fuzz` diagram | 16 KB 流程图（789 条边）虚线切出数百万段、耗时 1.05 s | `draw::tests::dashes_per_stroke_are_bounded` | 48568ae |
+| 2026-10-14 | `cargo fuzz` math | aligned 右列单元格被克隆，嵌套 `\left` 失去记忆化，仍呈指数（翻倍 8.3 s） | `tests/fuzz-regressions/aligned-left-middle-nested.bin` | 见 git log `aligned cells are not cloned` |
 | 2026-10-14 | CI macos-latest | 经符号链接目录打开的文件收不到外部修改通知 | `watch::tests::event_paths_map_back_through_symlinks` | d1ffd14 |
