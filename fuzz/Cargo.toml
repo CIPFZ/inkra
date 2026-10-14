@@ -1,0 +1,58 @@
+# cargo-fuzz targets (T4, NF-002): `cargo +nightly fuzz run <target>`.
+# Not a workspace member (libFuzzer needs nightly and sanitizer flags).
+[package]
+name = "inkra-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+inkra-markdown = { path = "../crates/inkra-markdown" }
+inkra-html = { path = "../crates/inkra-html" }
+inkra-math = { path = "../crates/inkra-math" }
+inkra-diagram = { path = "../crates/inkra-diagram" }
+
+[workspace]
+
+[[bin]]
+name = "markdown_parse"
+path = "fuzz_targets/markdown_parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "markdown_incremental"
+path = "fuzz_targets/markdown_incremental.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "html_to_markdown"
+path = "fuzz_targets/html_to_markdown.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "math"
+path = "fuzz_targets/math.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "diagram"
+path = "fuzz_targets/diagram.rs"
+test = false
+doc = false
+bench = false
+
+[profile.release]
+debug = 1
