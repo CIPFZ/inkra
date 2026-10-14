@@ -902,8 +902,10 @@ pub fn render(g: &Graph, pal: &Palette) -> Scene {
         // are moved apart, else every push widens the parent and the next push
         // grows with it (a fuzzed input reached a million pixels).
         let disjoint = |a: &Cluster, b: &Cluster| !a.nodes.iter().any(|v| b.nodes.contains(v));
-        // All slots side by side: no separation needs more room than that.
-        let limit = slots.iter().map(|s| s.w + gap_across).sum::<f32>()
+        // No more room than all slots side by side, nor than four times the
+        // width before separating.
+        let before = across.iter().copied().fold(0.0, f32::max);
+        let limit = (slots.iter().map(|s| s.w + gap_across).sum::<f32>()).min(4.0 * before)
             + 2.0 * 26.0 * g.clusters.len() as f32;
         let mut done: Vec<usize> = Vec::new();
         for &ci in &order {

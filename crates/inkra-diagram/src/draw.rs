@@ -47,6 +47,11 @@ impl Scene {
         let Some(path) = path else { return };
         let path = match dash {
             Some((on, off)) => {
+                // At most ~4000 dashes per stroke: a dotted edge across a huge
+                // (fuzzed) diagram would otherwise make millions of segments.
+                let b = path.bounds();
+                let k = ((b.width() + b.height()) / (on + off) / 4000.0).max(1.0);
+                let (on, off) = (on * k, off * k);
                 match StrokeDash::new(vec![on, off], 0.0).and_then(|d| path.dash(&d, 1.0)) {
                     Some(p) => p,
                     None => path,
@@ -336,4 +341,41 @@ pub fn lines_size(lines: &[String], size: f32) -> (f32, f32) {
         .map(|l| text_width(l, size))
         .fold(0.0, f32::max);
     (w, size * 1.3 * lines.len() as f32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dashes_per_stroke_are_bounded() {
+        // A dotted edge across a million pixels (a fuzzed diagram) once made
+        // ~170 000 dashes; the pattern now stretches beyond ~4000.
+        let mut sc = Scene {
+            width: 1e6,
+            height: 10.0,
+            fills: Vec::new(),
+        };
+        sc.stroke(
+            polyline(&[(0.0, 5.0), (1e6, 5.0)]),
+            [0, 0, 0, 255],
+            1.4,
+            Some((3.0, 3.0)),
+        );
+        let points: usize = sc.fills.iter().map(|f| f.path.len()).sum();
+        assert!(points > 0 && points < 50_000, "{points} points");
+        // Short dotted lines keep their pattern.
+        let mut short = Scene {
+            width: 100.0,
+            height: 10.0,
+            fills: Vec::new(),
+        };
+        short.stroke(
+            polyline(&[(0.0, 5.0), (60.0, 5.0)]),
+            [0, 0, 0, 255],
+            1.4,
+            Some((3.0, 3.0)),
+        );
+        assert!(short.fills[0].path.len() >= 10 * 4);
+    }
 }
