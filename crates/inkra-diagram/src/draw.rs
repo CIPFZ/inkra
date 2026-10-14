@@ -47,10 +47,11 @@ impl Scene {
         let Some(path) = path else { return };
         let path = match dash {
             Some((on, off)) => {
-                // At most ~4000 dashes per stroke: a dotted edge across a huge
+                // At most ~300 dashes per stroke (a dotted edge of 1800 px);
+                // longer strokes stretch the pattern. Edges across a huge
                 // (fuzzed) diagram would otherwise make millions of segments.
                 let b = path.bounds();
-                let k = ((b.width() + b.height()) / (on + off) / 4000.0).max(1.0);
+                let k = ((b.width() + b.height()) / (on + off) / 300.0).max(1.0);
                 let (on, off) = (on * k, off * k);
                 match StrokeDash::new(vec![on, off], 0.0).and_then(|d| path.dash(&d, 1.0)) {
                     Some(p) => p,
@@ -350,7 +351,7 @@ mod tests {
     #[test]
     fn dashes_per_stroke_are_bounded() {
         // A dotted edge across a million pixels (a fuzzed diagram) once made
-        // ~170 000 dashes; the pattern now stretches beyond ~4000.
+        // ~170 000 dashes; the pattern now stretches beyond ~300.
         let mut sc = Scene {
             width: 1e6,
             height: 10.0,
@@ -363,7 +364,7 @@ mod tests {
             Some((3.0, 3.0)),
         );
         let points: usize = sc.fills.iter().map(|f| f.path.len()).sum();
-        assert!(points > 0 && points < 50_000, "{points} points");
+        assert!(points > 0 && points < 5_000, "{points} points");
         // Short dotted lines keep their pattern.
         let mut short = Scene {
             width: 100.0,
