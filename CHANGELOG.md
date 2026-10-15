@@ -5,7 +5,7 @@ All notable changes to Inkra are documented here. The format follows
 
 ## [Unreleased]
 
-## [1.0.0-beta.1] — 2026-10-?? (draft)
+## [1.0.0-beta.1] — 2026-10-15
 
 The first public build: every milestone M0–M7 and the SPEC audit below, plus
 the 1.0 wrap-up.
