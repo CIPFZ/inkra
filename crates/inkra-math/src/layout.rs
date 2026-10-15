@@ -1,7 +1,7 @@
 //! Box layout of a math list, following the OpenType MATH specification and
 //! TeX's Appendix G in simplified form.
 
-use ttf_parser::GlyphId;
+use crate::font::Gid as GlyphId;
 
 use crate::font;
 use crate::parse::{ArrayKind, ColAlign, MathStyle, Node};
@@ -159,22 +159,23 @@ struct Consts {
 }
 
 fn consts() -> Consts {
-    let face = font::math_face();
-    let upem = face.map_or(1000.0, |f| f32::from(f.units_per_em()));
-    let k = face.and_then(|f| f.tables().math).and_then(|m| m.constants);
-    let min_overlap = face
-        .and_then(|f| f.tables().math)
-        .and_then(|m| m.variants)
-        .map_or(0.0, |v| f32::from(v.min_connector_overlap));
+    let upem = font::upem(0);
+    let k = font::constants();
+    let min_overlap = font::min_connector_overlap().map_or(0.0, f32::from);
     macro_rules! v {
         ($m:ident, $d:expr) => {
-            k.map_or($d * upem, |c| f32::from(c.$m().value))
+            k.as_ref()
+                .map_or($d * upem, |c| f32::from(c.$m().value().to_i16()))
         };
     }
     Consts {
         upem,
-        script_pct: k.map_or(70.0, |c| f32::from(c.script_percent_scale_down())),
-        script_script_pct: k.map_or(50.0, |c| f32::from(c.script_script_percent_scale_down())),
+        script_pct: k
+            .as_ref()
+            .map_or(70.0, |c| f32::from(c.script_percent_scale_down())),
+        script_script_pct: k
+            .as_ref()
+            .map_or(50.0, |c| f32::from(c.script_script_percent_scale_down())),
         axis: v!(axis_height, 0.25),
         accent_base_height: v!(accent_base_height, 0.45),
         sub_shift_down: v!(subscript_shift_down, 0.2),
@@ -219,11 +220,14 @@ fn consts() -> Consts {
         radical_kern_before: v!(radical_kern_before_degree, 0.28),
         radical_kern_after: v!(radical_kern_after_degree, -0.55),
         radical_degree_raise: k
+            .as_ref()
             .map_or(60.0, |c| f32::from(c.radical_degree_bottom_raise_percent())),
-        delimited_min: k.map_or(1.3 * upem, |c| {
-            f32::from(c.delimited_sub_formula_min_height())
+        delimited_min: k.as_ref().map_or(1.3 * upem, |c| {
+            f32::from(c.delimited_sub_formula_min_height().to_u16())
         }),
-        display_op_min: k.map_or(1.3 * upem, |c| f32::from(c.display_operator_min_height())),
+        display_op_min: k.as_ref().map_or(1.3 * upem, |c| {
+            f32::from(c.display_operator_min_height().to_u16())
+        }),
         min_overlap,
     }
 }
@@ -359,25 +363,13 @@ impl Layout {
     // ---- glyphs ----
 
     fn glyph_box(&self, face_id: u8, gid: GlyphId, size: f32) -> MBox {
-        let Some(f) = font::face(face_id) else {
-            return MBox::default();
-        };
-        let s = size / f32::from(f.units_per_em());
-        let adv = f.glyph_hor_advance(gid).map_or(0.0, f32::from) * s;
-        let (h, d) = f.glyph_bounding_box(gid).map_or((0.0, 0.0), |r| {
-            (f32::from(r.y_max) * s, -f32::from(r.y_min) * s)
-        });
+        let (adv, ext) = font::metrics(face_id, gid);
+        let s = size / font::upem(face_id);
+        let adv = adv.unwrap_or(0.0) * s;
+        let (h, d) = ext.map_or((0.0, 0.0), |(y0, y1)| (y1 * s, -y0 * s));
         let (italic, accent_x) = if face_id == 0 {
-            let gi = f.tables().math.and_then(|m| m.glyph_info);
-            let it = gi
-                .and_then(|g| g.italic_corrections)
-                .and_then(|v| v.get(gid))
-                .map_or(0.0, |v| f32::from(v.value) * s);
-            let ax = gi
-                .and_then(|g| g.top_accent_attachments)
-                .and_then(|v| v.get(gid))
-                .map(|v| f32::from(v.value) * s);
-            (it, ax)
+            let (it, ax) = font::glyph_info(gid);
+            (it.map_or(0.0, |v| v as f32 * s), ax.map(|v| v as f32 * s))
         } else {
             (0.0, None)
         };
@@ -394,7 +386,7 @@ impl Layout {
                 0.0,
                 Elem::Glyph {
                     face: face_id,
-                    gid: gid.0,
+                    gid,
                     size,
                 },
             )],
@@ -454,31 +446,22 @@ impl Layout {
         if base.h + base.d >= target && min == 0 {
             return base;
         }
-        let Some(f) = font::math_face() else {
-            return base;
-        };
         let s = size / self.k.upem;
-        let Some(cons) = f
-            .tables()
-            .math
-            .and_then(|m| m.variants)
-            .and_then(|v| v.vertical_constructions.get(gid))
-        else {
+        let Some(cons) = font::construction(gid, true) else {
             return base;
         };
         let mut best = base;
         for (i, v) in cons.variants.into_iter().enumerate() {
-            let b = self.glyph_box(0, v.variant_glyph, size);
+            let b = self.glyph_box(0, v, size);
             let total = b.h + b.d;
             best = b;
             if total >= target && i >= min {
                 return best;
             }
         }
-        let Some(asm) = cons.assembly else {
+        let Some((asm_italic, parts)) = cons.assembly else {
             return best;
         };
-        let parts: Vec<_> = asm.parts.into_iter().collect();
         if parts.is_empty() {
             return best;
         }
@@ -487,7 +470,7 @@ impl Layout {
             let mut t = 0.0;
             let mut count = 0;
             for p in &parts {
-                let reps = if p.part_flags.extender() { n } else { 1 };
+                let reps = if p.extender { n } else { 1 };
                 t += f32::from(p.full_advance) * s * reps as f32;
                 count += reps;
             }
@@ -503,13 +486,13 @@ impl Layout {
         let mut first = true;
         let mut w = 0.0f32;
         for p in &parts {
-            let reps = if p.part_flags.extender() { n } else { 1 };
+            let reps = if p.extender { n } else { 1 };
             for _ in 0..reps {
                 if !first {
                     y -= overlap;
                 }
                 first = false;
-                let g = self.glyph_box(0, p.glyph_id, size);
+                let g = self.glyph_box(0, p.glyph, size);
                 w = w.max(g.w);
                 // Align the part's bottom (bbox) with y.
                 let shift = y + g.d;
@@ -520,7 +503,7 @@ impl Layout {
         out.w = w;
         out.h = y;
         out.d = 0.0;
-        out.italic = f32::from(asm.italics_correction.value) * s;
+        out.italic = asm_italic as f32 * s;
         out
     }
 
@@ -534,31 +517,22 @@ impl Layout {
         if base.w >= target {
             return base;
         }
-        let Some(f) = font::math_face() else {
-            return base;
-        };
         let s = size / self.k.upem;
-        let Some(cons) = f
-            .tables()
-            .math
-            .and_then(|m| m.variants)
-            .and_then(|v| v.horizontal_constructions.get(gid))
-        else {
+        let Some(cons) = font::construction(gid, false) else {
             return base;
         };
         let mut best = base;
         for v in cons.variants {
-            let b = self.glyph_box(0, v.variant_glyph, size);
+            let b = self.glyph_box(0, v, size);
             let w = b.w;
             best = b;
             if w >= target {
                 return best;
             }
         }
-        let Some(asm) = cons.assembly else {
+        let Some((_, parts)) = cons.assembly else {
             return best;
         };
-        let parts: Vec<_> = asm.parts.into_iter().collect();
         if parts.is_empty() {
             return best;
         }
@@ -567,7 +541,7 @@ impl Layout {
             let mut t = 0.0;
             let mut count = 0;
             for p in &parts {
-                let reps = if p.part_flags.extender() { n } else { 1 };
+                let reps = if p.extender { n } else { 1 };
                 t += f32::from(p.full_advance) * s * reps as f32;
                 count += reps;
             }
@@ -585,13 +559,13 @@ impl Layout {
         let mut x = 0.0f32;
         let mut first = true;
         for p in &parts {
-            let reps = if p.part_flags.extender() { n } else { 1 };
+            let reps = if p.extender { n } else { 1 };
             for _ in 0..reps {
                 if !first {
                     x -= overlap;
                 }
                 first = false;
-                let g = self.glyph_box(0, p.glyph_id, size);
+                let g = self.glyph_box(0, p.glyph, size);
                 out.h = out.h.max(g.h);
                 out.d = out.d.max(g.d);
                 out.push(x, 0.0, g);

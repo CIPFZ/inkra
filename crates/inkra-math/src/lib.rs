@@ -104,7 +104,7 @@ fn flatten(b: &MBox, x: f32, base_y: f32, color: Option<[u8; 3]>, out: &mut Vec<
         let (ex, ey) = (x + dx, base_y - dy);
         match e {
             Elem::Glyph { face, gid, size } => {
-                let Some(p) = font::outline(*face, ttf_parser::GlyphId(*gid)) else {
+                let Some(p) = font::outline(*face, *gid) else {
                     continue;
                 };
                 let s = size / font::upem(*face);

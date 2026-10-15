@@ -77,7 +77,7 @@ jobs:
         run: cargo deny check 2>&1 | tee -a "$RUNNER_TEMP/job.log"
       - name: cargo audit
         shell: bash
-        run: cargo audit --ignore RUSTSEC-2026-0192 2>&1 | tee -a "$RUNNER_TEMP/job.log"
+        run: cargo audit 2>&1 | tee -a "$RUNNER_TEMP/job.log"
       - name: Publish the failure log
         if: failure()
         shell: bash

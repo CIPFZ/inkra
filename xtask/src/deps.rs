@@ -16,6 +16,12 @@ pub enum Scope {
 /// `(crate, scope, license, reason)`.
 pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
     (
+        "skrifa",
+        Scope::Only(&["inkra-math", "inkra-diagram", "inkra-export"]),
+        "MIT OR Apache-2.0",
+        "font metrics, outlines and the MATH table (T9, replaces the unmaintained ttf-parser)",
+    ),
+    (
         "getrandom",
         Scope::Only(&["inkra-engine"]),
         "MIT OR Apache-2.0",
@@ -63,12 +69,6 @@ pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
         Scope::Only(&["inkra-highlight"]),
         "MIT",
         "code highlighting (SPEC 2.1), pure-Rust fancy-regex",
-    ),
-    (
-        "ttf-parser",
-        Scope::Only(&["inkra-math", "inkra-diagram", "inkra-export"]),
-        "MIT OR Apache-2.0",
-        "OpenType MATH table and glyph outlines for the math engine (SPEC 2.4); glyph ids and outlines for PDF/image export",
     ),
     (
         "tiny-skia-path",

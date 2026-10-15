@@ -5,6 +5,13 @@ All notable changes to Inkra are documented here. The format follows
 
 ## [Unreleased]
 
+### ttf-parser replaced by skrifa (T9)
+- Math, diagram labels and image/PDF export read fonts with skrifa /
+  read-fonts (the MATH table needs read-fonts 0.45). All 233 corpus formulas
+  (display and inline) render byte-identically and the 35 corpus diagrams
+  pixel-identically; ttf-parser, flagged unmaintained (RUSTSEC-2026-0192), is
+  no longer a dependency and the advisory ignore is gone.
+
 ### Diagrams in the background (AD-5)
 - Mermaid diagrams are laid out on a worker thread: typing inside a diagram
   that takes 150 ms to lay out keeps the 100k-character typing latency at a

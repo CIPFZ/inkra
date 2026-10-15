@@ -5,7 +5,6 @@
 
 use std::collections::HashMap;
 use std::ops::Range;
-use std::sync::Arc;
 
 use inkra_layout::epaint::text::{FontDefinitions, FontFamily, FontsView, LayoutJob};
 use inkra_layout::epaint::{Color32, Pos2, Rect, pos2, vec2};
@@ -109,7 +108,7 @@ pub struct Face {
     pub index: u32,
     /// Size scale (epaint font tweak).
     pub scale: f32,
-    parsed: Arc<ttf_parser::Face<'static>>,
+    parsed: skrifa::FontRef<'static>,
 }
 
 /// The faces of the editor's font definitions and the family fallback chains.
@@ -134,7 +133,7 @@ impl FaceTable {
                 std::borrow::Cow::Borrowed(b) => b,
                 std::borrow::Cow::Owned(v) => leak_once(name, v),
             };
-            let Ok(parsed) = ttf_parser::Face::parse(data, fd.index) else {
+            let Ok(parsed) = skrifa::FontRef::from_index(data, fd.index) else {
                 continue;
             };
             by_name.insert(name.clone(), faces.len());
@@ -143,7 +142,7 @@ impl FaceTable {
                 data,
                 index: fd.index,
                 scale: fd.tweak.scale,
-                parsed: Arc::new(parsed),
+                parsed,
             });
         }
         let chains = defs
@@ -173,11 +172,14 @@ impl FaceTable {
         }
         let r = self.chains.get(family).and_then(|chain| {
             chain.iter().find_map(|&i| {
+                use skrifa::MetadataProvider;
                 self.faces[i]
                     .parsed
-                    .glyph_index(c)
-                    .filter(|g| g.0 != 0)
-                    .map(|g| (i, g.0))
+                    .charmap()
+                    .map(c)
+                    .and_then(|g| u16::try_from(g.to_u32()).ok())
+                    .filter(|g| *g != 0)
+                    .map(|g| (i, g))
             })
         });
         self.cache.insert((family.clone(), c), r);
@@ -185,8 +187,17 @@ impl FaceTable {
     }
 
     /// The parsed face `i`.
-    pub fn face(&self, i: usize) -> &ttf_parser::Face<'static> {
+    pub fn face(&self, i: usize) -> &skrifa::FontRef<'static> {
         &self.faces[i].parsed
+    }
+
+    /// Units per em of face `i`.
+    pub fn upem(&self, i: usize) -> f32 {
+        use skrifa::raw::TableProvider;
+        self.faces[i]
+            .parsed
+            .head()
+            .map_or(1000.0, |h| f32::from(h.units_per_em()))
     }
 
     /// Index of the face named `name`.

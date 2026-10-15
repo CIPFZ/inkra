@@ -46,7 +46,7 @@ const MAX_SIDE: f32 = 32_000.0;
 
 struct Outline(tiny_skia_path::PathBuilder);
 
-impl ttf_parser::OutlineBuilder for Outline {
+impl skrifa::outline::OutlinePen for Outline {
     fn move_to(&mut self, x: f32, y: f32) {
         self.0.move_to(x, -y);
     }
@@ -121,10 +121,19 @@ impl Raster<'_> {
         self.glyphs
             .entry((face, gid))
             .or_insert_with(|| {
+                use skrifa::MetadataProvider;
+                use skrifa::instance::{LocationRef, Size};
                 let mut o = Outline(tiny_skia_path::PathBuilder::new());
-                self.faces
-                    .face(face)
-                    .outline_glyph(ttf_parser::GlyphId(gid), &mut o)?;
+                let glyph = self.faces.face(face).outline_glyphs().get(gid.into())?;
+                glyph
+                    .draw(
+                        skrifa::outline::DrawSettings::unhinted(
+                            Size::unscaled(),
+                            LocationRef::default(),
+                        ),
+                        &mut o,
+                    )
+                    .ok()?;
                 o.0.finish()
             })
             .clone()
@@ -241,7 +250,7 @@ impl Raster<'_> {
                 glyphs,
                 ..
             } => {
-                let upem = f32::from(self.faces.face(*face).units_per_em()).max(1.0);
+                let upem = self.faces.upem(*face).max(1.0);
                 let k = size / upem;
                 let p = paint(*color);
                 for g in glyphs {

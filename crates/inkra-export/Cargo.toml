@@ -27,7 +27,7 @@ krilla.workspace = true
 image.workspace = true
 tiny-skia.workspace = true
 resvg.workspace = true
-ttf-parser.workspace = true
+skrifa.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

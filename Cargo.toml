@@ -74,7 +74,9 @@ ureq = { version = "3", default-features = false, features = ["rustls-no-provide
 krilla = { version = "0.8", default-features = false, features = ["raster-images"] }
 resvg = { version = "0.48", default-features = false, features = ["text", "system-fonts", "memmap-fonts"] }
 spellbook = "0.4"
-ttf-parser = { version = "0.25", default-features = false, features = ["std", "opentype-layout"] }
+# Font tables for math (MATH), diagrams and exports (T9: replaces ttf-parser,
+# RUSTSEC-2026-0192). 0.48 is the first release with the MATH table.
+skrifa = { version = "0.48", default-features = false, features = ["std"] }
 tiny-skia-path = "0.12"
 tiny-skia = { version = "0.12", default-features = false, features = ["std", "simd"] }
 grep-searcher = "0.1"

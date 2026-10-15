@@ -2099,10 +2099,10 @@ name = "inkra-diagram"
 version = "1.0.0-beta.1"
 dependencies = [
  "proptest",
+ "skrifa 0.48.0",
  "tempfile",
  "tiny-skia",
  "tiny-skia-path",
- "ttf-parser",
 ]
 
 [[package]]
@@ -2157,10 +2157,10 @@ dependencies = [
  "krilla",
  "log",
  "resvg",
+ "skrifa 0.48.0",
  "tempfile",
  "tiny-skia",
  "tiny-skia-path",
- "ttf-parser",
 ]
 
 [[package]]
@@ -2226,9 +2226,9 @@ dependencies = [
 name = "inkra-math"
 version = "1.0.0-beta.1"
 dependencies = [
+ "skrifa 0.48.0",
  "tiny-skia",
  "tiny-skia-path",
- "ttf-parser",
 ]
 
 [[package]]
@@ -3752,6 +3752,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "read-fonts"
+version = "0.45.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a5b7bed3d16ab428d8fa533640ab805ff50e7ad8a4d00649de1259e70023282"
+dependencies = [
+ "bytemuck",
+ "font-types 0.12.6",
+ "once_cell",
+ "yoke",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4263,6 +4275,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "skrifa"
+version = "0.48.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5213b4825bac3587046330052d61bfac7bd3bd0d203c758d7c2ef726fcea034"
+dependencies = [
+ "bytemuck",
+ "read-fonts 0.45.0",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4526,7 +4548,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.5",
  "windows-sys 0.61.2",
@@ -4818,12 +4840,6 @@ dependencies = [
  "urlencoding",
  "windows",
 ]
-
-[[package]]
-name = "ttf-parser"
-version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 
 [[package]]
 name = "type-map"

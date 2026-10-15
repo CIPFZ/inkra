@@ -19,7 +19,7 @@ Inkra is MIT OR Apache-2.0. It contains the following works.
 
 ## Rust crates
 
-512 crates linked into `inkra` and `inkra-cli` on any platform.
+513 crates linked into `inkra` and `inkra-cli` on any platform.
 
 | Crate | Version | License | Source |
 |---|---|---|---|
@@ -312,6 +312,7 @@ Inkra is MIT OR Apache-2.0. It contains the following works.
 | raw-window-metal | 1.1.0 | MIT OR Apache-2.0 | https://github.com/rust-windowing/raw-window-metal |
 | read-fonts | 0.39.2 | MIT OR Apache-2.0 | https://github.com/googlefonts/fontations |
 | read-fonts | 0.41.0 | MIT OR Apache-2.0 | https://github.com/googlefonts/fontations |
+| read-fonts | 0.45.0 | MIT OR Apache-2.0 | https://github.com/googlefonts/fontations |
 | redox_syscall | 0.4.1 | MIT | https://gitlab.redox-os.org/redox-os/syscall |
 | redox_syscall | 0.5.18 | MIT | https://gitlab.redox-os.org/redox-os/syscall |
 | redox_syscall | 0.9.4 | MIT | https://gitlab.redox-os.org/redox-os/kernel |
@@ -363,6 +364,7 @@ Inkra is MIT OR Apache-2.0. It contains the following works.
 | siphasher | 1.0.4 | MIT OR Apache-2.0 | https://github.com/jedisct1/rust-siphash |
 | skrifa | 0.42.1 | MIT OR Apache-2.0 | https://github.com/googlefonts/fontations |
 | skrifa | 0.44.0 | MIT OR Apache-2.0 | https://github.com/googlefonts/fontations |
+| skrifa | 0.48.0 | MIT OR Apache-2.0 | https://github.com/googlefonts/fontations |
 | slab | 0.4.12 | MIT | https://github.com/tokio-rs/slab |
 | slotmap | 1.1.1 | Zlib | https://github.com/orlp/slotmap |
 | smallvec | 1.16.3 | MIT OR Apache-2.0 | https://github.com/servo/rust-smallvec |
@@ -410,7 +412,6 @@ Inkra is MIT OR Apache-2.0. It contains the following works.
 | tracing-attributes | 0.1.31 | MIT | https://github.com/tokio-rs/tracing |
 | tracing-core | 0.1.36 | MIT | https://github.com/tokio-rs/tracing |
 | trash | 5.2.9 | MIT | https://github.com/ArturKovacs/trash |
-| ttf-parser | 0.25.1 | MIT OR Apache-2.0 | https://github.com/harfbuzz/ttf-parser |
 | type-map | 0.5.1 | MIT/Apache-2.0 | https://github.com/kardeiz/type-map |
 | typeid | 1.0.3 | MIT OR Apache-2.0 | https://github.com/dtolnay/typeid |
 | uds_windows | 1.2.1 | MIT | https://github.com/haraldh/rust_uds_windows |

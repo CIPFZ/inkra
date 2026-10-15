@@ -14,7 +14,6 @@
 - 性能（D-2、D-4）：冷启动门槛按 SPEC 2.5 [回填 2026-10-13] 只在单 GPU 实体机上考核；虚拟 GPU 测试机（Windows Server 2022，3 个适配器）仅作参考。T2 后测试机 ~360 ms：引擎就绪 4 ms；窗口与 DX12 枚举 ~207 ms（两个 RTX 3080 与 WARP，wgpu 为每个创建设备探测）；设备与渲染器 ~88 ms（原 124 ms，关闭间接调用校验后少编译两个着色器）；界面与首帧 ~65 ms。适配器缓存因 wgpu 30 无法只打开单个 DX12 适配器而不能跳过探测（PROGRESS 开放问题 1）；`static-dxc` 收益 ~3 ms，不启用。待办：单 GPU 实体机复测；可选把字体加载（~16 ms）移到与 GPU 初始化并行的后台线程。
 - 内存（D-3）：门槛改为 Linux 空文档 < 120 MB RSS、Windows 空文档私有字节 < 150 MB（GPU 驱动占用不计入）。Windows 测试机空文档工作集 211 MB / 专用 376 MB，主要来自 GPU 驱动，需在实体机上用 VMMap 拆分后再判定；Linux 匿名内存 57 MB（其中系统 CJK 字体 19 MB 读入内存，`forbid(unsafe)` 下无法 mmap）。
 - [已关闭 2026-10-14，`release.yml` 运行 #6] deb/rpm：ubuntu-latest（x86_64）与 ubuntu-24.04-arm 上 `apt install ./inkra_*.deb`、`.desktop`/MIME/图标就位、Xvfb 下 `--measure-startup` 出首帧；Fedora 容器 `dnf install` rpm 后 `--version` 通过。
-- ttf-parser 已不再维护（RUSTSEC-2026-0192，无漏洞）：`inkra-math` 与 `inkra-diagram` 改用 skrifa（已随 krilla 在依赖树中）读取 MATH 表与字形轮廓；`deny.toml` 中的忽略项随之删除。
 
 ## 1.x（SPEC 13 P2 汇总，按 D-6 排序）
 

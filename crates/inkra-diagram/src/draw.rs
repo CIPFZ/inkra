@@ -2,8 +2,11 @@
 
 use std::sync::RwLock;
 
+use skrifa::instance::{LocationRef, Size};
+use skrifa::outline::{DrawSettings, OutlinePen};
+use skrifa::raw::TableProvider;
+use skrifa::{FontRef, GlyphId, MetadataProvider};
 use tiny_skia_path::{Path, PathBuilder, Rect, Stroke, StrokeDash, Transform};
-use ttf_parser::{Face, GlyphId, OutlineBuilder};
 
 /// An RGBA color.
 pub type Rgba = [u8; 4];
@@ -175,15 +178,25 @@ pub fn set_fonts(fonts: Vec<(&'static [u8], u32)>) {
     }
 }
 
-fn faces() -> Vec<Face<'static>> {
+fn faces() -> Vec<FontRef<'static>> {
     FONTS
         .read()
         .map(|f| {
             f.iter()
-                .filter_map(|(d, i)| Face::parse(d, *i).ok())
+                .filter_map(|(d, i)| FontRef::from_index(d, *i).ok())
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn upem(f: &FontRef<'_>) -> f32 {
+    f.head().map_or(1000.0, |h| f32::from(h.units_per_em()))
+}
+
+fn advance(f: &FontRef<'_>, g: GlyphId) -> f32 {
+    f.glyph_metrics(Size::unscaled(), LocationRef::default())
+        .advance_width(g)
+        .unwrap_or(0.0)
 }
 
 struct Outline<'a> {
@@ -193,7 +206,7 @@ struct Outline<'a> {
     y: f32,
 }
 
-impl OutlineBuilder for Outline<'_> {
+impl OutlinePen for Outline<'_> {
     fn move_to(&mut self, x: f32, y: f32) {
         self.b.move_to(self.x + x * self.s, self.y - y * self.s);
     }
@@ -223,11 +236,13 @@ impl OutlineBuilder for Outline<'_> {
     }
 }
 
-fn glyph(faces: &[Face<'static>], c: char) -> Option<(usize, GlyphId)> {
-    faces
-        .iter()
-        .enumerate()
-        .find_map(|(i, f)| f.glyph_index(c).filter(|g| g.0 != 0).map(|g| (i, g)))
+fn glyph(faces: &[FontRef<'static>], c: char) -> Option<(usize, GlyphId)> {
+    faces.iter().enumerate().find_map(|(i, f)| {
+        f.charmap()
+            .map(c)
+            .filter(|g| g.to_u32() != 0)
+            .map(|g| (i, g))
+    })
 }
 
 /// Advance width of `s` at `size` px.
@@ -235,10 +250,7 @@ pub fn text_width(s: &str, size: f32) -> f32 {
     let faces = faces();
     s.chars()
         .map(|c| match glyph(&faces, c) {
-            Some((i, g)) => {
-                faces[i].glyph_hor_advance(g).map_or(0.0, f32::from) * size
-                    / f32::from(faces[i].units_per_em())
-            }
+            Some((i, g)) => advance(&faces[i], g) * size / upem(&faces[i]),
             None => size * if (c as u32) > 0x2E80 { 1.0 } else { 0.55 },
         })
         .sum()
@@ -300,15 +312,20 @@ pub fn draw_text(scene: &mut Scene, s: &str, x: f32, y: f32, size: f32, color: R
         match glyph(&faces, c) {
             Some((i, g)) => {
                 let f = &faces[i];
-                let sc = size / f32::from(f.units_per_em());
+                let sc = size / upem(f);
                 let mut o = Outline {
                     b: &mut b,
                     s: sc,
                     x: pen,
                     y,
                 };
-                let _ = f.outline_glyph(g, &mut o);
-                pen += f.glyph_hor_advance(g).map_or(0.0, f32::from) * sc;
+                if let Some(gl) = f.outline_glyphs().get(g) {
+                    let _ = gl.draw(
+                        DrawSettings::unhinted(Size::unscaled(), LocationRef::default()),
+                        &mut o,
+                    );
+                }
+                pen += advance(f, g) * sc;
             }
             None => pen += size * 0.55,
         }

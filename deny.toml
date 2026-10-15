@@ -46,12 +46,7 @@ wildcards = "allow"
 # fail unless listed here with a reason.
 unmaintained = "workspace"
 yanked = "deny"
-ignore = [
-    # ttf-parser is unmaintained (no vulnerability). inkra-math and
-    # inkra-diagram read the OpenType MATH table and glyph outlines with it;
-    # moving to skrifa (already in the tree via krilla) is T9 in AGENT.md.
-    { id = "RUSTSEC-2026-0192", reason = "unmaintained, no known vulnerability; replacement is T9 (AGENT.md), required before 1.0" },
-]
+ignore = []
 
 [sources]
 unknown-registry = "deny"

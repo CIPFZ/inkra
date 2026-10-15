@@ -12,7 +12,7 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
-ttf-parser.workspace = true
+skrifa.workspace = true
 tiny-skia-path.workspace = true
 
 
