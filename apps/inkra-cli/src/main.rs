@@ -3,6 +3,8 @@
 //! Exit codes: 0 success, 1 bad arguments, 2 file error, 3 conversion error
 //! (and, for `lint`, problems found).
 
+mod mcp;
+
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
@@ -24,6 +26,11 @@ Commands:
                Run editor commands on the document; prints it unless saved
   commands [--json]
                List all commands
+  mcp [--automation-read-root <dir>]... [--automation-write-root <dir>]...
+               MCP server on stdio, running the editor in this process; files
+               are limited to the roots (default: the current folder)
+  mcp --attach [--pid <pid>] [--config <dir>]
+               MCP server driving a running `inkra --control <port>`
   version      Print version
 
 Options:
@@ -48,6 +55,7 @@ fn main() -> ExitCode {
         Some("lint") => lint(rest),
         Some("fmt") => fmt(rest),
         Some("run") => run(rest),
+        Some("mcp") => mcp::run(rest),
         Some("commands") => {
             let json = rest.iter().any(|a| a == "--json");
             let reg = inkra_engine::builtin_registry();
