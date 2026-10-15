@@ -304,6 +304,8 @@ impl Shell {
         self.load_spelling(ctx);
         let c = ctx.clone();
         inkra_diagram::external::on_ready(move || c.request_repaint());
+        let c = ctx.clone();
+        inkra_diagram::background::on_ready(move || c.request_repaint());
         // Syntax definitions load in the background (AD-5).
         let c = ctx.clone();
         inkra_highlight::on_ready(move || c.request_repaint());

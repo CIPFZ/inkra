@@ -226,6 +226,7 @@ workspace 级 `#![forbid(unsafe_code)]`，macOS 的 Apple Event（Finder 双击�
 - P2：`gantt`、`classDiagram`、`stateDiagram-v2`、`erDiagram`、`journey`、`gitGraph`、`mindmap`、`timeline`、`xychart`、`quadrantChart`、`sankey`、`block`、`packet`、`kanban`、`architecture`、`radar`、`treemap`。
 - 兜底：偏好设置可指定外部 `mmdc` 可执行文件；若设置且本地渲染器不支持该图表类型，则调用 `mmdc -i - -o svg` 得到 SVG 用 resvg 渲染。
 - 图表布局在后台线程完成，结果缓存；编辑中实时更新（防抖 150 ms），解析错误显示在图表位置下方。
+- [回填 2026-10-14] 实现（T8）：`inkra-diagram::background` 单个工作线程按（源码、调色板）计算并缓存；同一块源码改变时取消旧源码的布局（流程图布局的各阶段与边循环检查取消标志），编辑在上次请求后 150 ms 才开始；可见但仍在等待的块每帧"保持需要"，1 s 无人需要的布局放弃；结果到达时重绘，期间显示该块上一次成功的图（首次显示"Drawing the diagram…"）。导出路径仍同步计算（`inkra_diagram::render`）。
 
 ### 2.5 性能预算（可量化的非功能约束）
 

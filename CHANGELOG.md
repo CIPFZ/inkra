@@ -5,6 +5,12 @@ All notable changes to Inkra are documented here. The format follows
 
 ## [Unreleased]
 
+### Diagrams in the background (AD-5)
+- Mermaid diagrams are laid out on a worker thread: typing inside a diagram
+  that takes 150 ms to lay out keeps the 100k-character typing latency at a
+  p95 of 4 ms. Edits are debounced by 150 ms, a superseded or scrolled-away
+  layout is cancelled, and the previous rendering stays visible meanwhile.
+
 ### Control channel and MCP (CM-003)
 - `inkra --control <port>`: local JSON-RPC on the loopback interface with a
   per-start token in `<data_dir>/control/<pid>.json`; methods `hello`,

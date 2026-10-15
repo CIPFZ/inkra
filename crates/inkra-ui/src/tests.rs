@@ -1024,3 +1024,62 @@ fn control_channel_drives_the_shell() {
     assert!(saved.contains('X') && saved.contains('Y'), "{saved:?}");
     assert_ne!(saved, "# Note\n\nbody\n");
 }
+
+/// T8 / AD-5: typing inside a large diagram in a 100k-character document
+/// stays responsive: the diagram is laid out off the UI thread.
+#[test]
+fn typing_in_a_large_diagram_stays_responsive() {
+    let mut diagram = String::from("```mermaid\nflowchart TD\n");
+    let mut x: u64 = 7;
+    for i in 0..160 {
+        for _ in 0..3 {
+            x = x
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            diagram.push_str(&format!("  n{i} -.-> n{}\n", (x >> 33) % 160));
+        }
+    }
+    diagram.push_str("```\n\n");
+    let t = std::time::Instant::now();
+    let pal = inkra_diagram::Palette::light();
+    let _ = inkra_diagram::render_uncached(
+        diagram
+            .trim_start_matches("```mermaid\n")
+            .trim_end_matches("```\n\n"),
+        &pal,
+    );
+    let sync_ms = t.elapsed().as_secs_f64() * 1000.0;
+    let unit =
+        "这是一段用于性能测试的中文段落，包含 **粗体** 和 `code`。Some English words too.\n\n";
+    let mut doc = String::new();
+    while doc.chars().count() < 50_000 {
+        doc.push_str(unit);
+    }
+    let at = doc.len() + "```mermaid\nflowchart TD\n".len();
+    doc.push_str(&diagram);
+    while doc.chars().count() < 100_000 {
+        doc.push_str(unit);
+    }
+    let mut h = editor_harness(&doc);
+    // The caret inside the diagram: its source is shown with a live preview,
+    // and every keystroke changes the diagram.
+    h.state_mut().engine.state.editor.sel = inkra_doc::Selection::caret(at);
+    h.run_steps(5);
+    let mut times = Vec::new();
+    for c in "abcdefghijklmnopqrstuvwxyz".chars().cycle().take(60) {
+        h.event(egui::Event::Text(c.to_string()));
+        let t = std::time::Instant::now();
+        h.step();
+        times.push(t.elapsed().as_secs_f64() * 1000.0);
+    }
+    times.sort_by(f64::total_cmp);
+    let p95 = times[(times.len() * 95) / 100 - 1];
+    eprintln!(
+        "typing in a diagram: p50 {:.2} ms, p95 {p95:.2} ms (one synchronous layout: {sync_ms:.0} ms)",
+        times[times.len() / 2]
+    );
+    assert!(h.state().engine.state.editor.text().contains("n0 -.->"));
+    if !cfg!(debug_assertions) {
+        assert!(p95 < 16.0, "p95 {p95} ms");
+    }
+}

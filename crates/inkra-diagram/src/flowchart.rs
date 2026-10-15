@@ -680,6 +680,12 @@ fn node_size(n: &Node) -> (Vec<String>, f32, f32) {
 
 /// Lays out and draws a flowchart.
 pub fn render(g: &Graph, pal: &Palette) -> Scene {
+    render_with(g, pal, &|| false).unwrap_or_default()
+}
+
+/// Lays out and draws `g`, giving up (`None`) as soon as `cancel` returns true:
+/// a background layout whose source changed again is not finished (AD-5).
+pub fn render_with(g: &Graph, pal: &Palette, cancel: &dyn Fn() -> bool) -> Option<Scene> {
     let n = g.nodes.len();
     let horizontal = matches!(g.dir, Dir::LR | Dir::RL);
     let sizes: Vec<(Vec<String>, f32, f32)> = g.nodes.iter().map(node_size).collect();
@@ -726,6 +732,9 @@ pub fn render(g: &Graph, pal: &Palette) -> Scene {
         }
     }
     let max_rank = rank.iter().copied().max().unwrap_or(0);
+    if cancel() {
+        return None;
+    }
     // 2. Layers with dummy nodes for long edges.
     #[derive(Clone)]
     struct Slot {
@@ -781,6 +790,9 @@ pub fn render(g: &Graph, pal: &Palette) -> Scene {
             }
         }
     }
+    if cancel() {
+        return None;
+    }
     // 3. Ordering: barycenter sweeps.
     let mut pos_in: Vec<f32> = vec![0.0; slots.len()];
     for l in &layers {
@@ -789,6 +801,9 @@ pub fn render(g: &Graph, pal: &Palette) -> Scene {
         }
     }
     for sweep in 0..8 {
+        if cancel() {
+            return None;
+        }
         let downward = sweep % 2 == 0;
         let order: Vec<usize> = if downward {
             (1..layers.len()).collect()
@@ -839,6 +854,9 @@ pub fn render(g: &Graph, pal: &Palette) -> Scene {
             }
         }
     }
+    if cancel() {
+        return None;
+    }
     // 4. Coordinates (in "layout space": along = rank axis, across = order axis).
     let gap_across = 36.0;
     let gap_along = 56.0;
@@ -852,6 +870,9 @@ pub fn render(g: &Graph, pal: &Palette) -> Scene {
     }
     // Neighbour averaging with overlap resolution.
     for it in 0..12 {
+        if cancel() {
+            return None;
+        }
         let downward = it % 2 == 0;
         let rs: Vec<usize> = if downward {
             (0..layers.len()).collect()
@@ -882,6 +903,9 @@ pub fn render(g: &Graph, pal: &Palette) -> Scene {
                 across[s] = want[i];
             }
         }
+    }
+    if cancel() {
+        return None;
     }
     // Subgraphs occupy disjoint bands: overlapping clusters (members on
     // different ranks) push later ones, and everything right of them, aside.
@@ -1010,6 +1034,9 @@ pub fn render(g: &Graph, pal: &Palette) -> Scene {
         height,
         fills: Vec::new(),
     };
+    if cancel() {
+        return None;
+    }
     // Clusters behind everything.
     for c in &g.clusters {
         let mut r: Option<(f32, f32, f32, f32)> = None;
@@ -1052,6 +1079,9 @@ pub fn render(g: &Graph, pal: &Palette) -> Scene {
     // Edges.
     let mut labels = Vec::new();
     for (k, path) in &chains {
+        if cancel() {
+            return None;
+        }
         let e = &g.edges[*k];
         if e.line == Line::Invisible {
             continue;
@@ -1105,6 +1135,9 @@ pub fn render(g: &Graph, pal: &Palette) -> Scene {
             labels.push((e.label.clone(), mid));
         }
     }
+    if cancel() {
+        return None;
+    }
     // Nodes.
     for (v, nd) in g.nodes.iter().enumerate() {
         let p = placed[v];
@@ -1123,7 +1156,7 @@ pub fn render(g: &Graph, pal: &Palette) -> Scene {
         );
         draw::draw_lines_centered(&mut sc, &lines, x, y, FONT * 0.9, pal.fg);
     }
-    sc
+    Some(sc)
 }
 
 fn shorten(a: (f32, f32), b: (f32, f32), by: f32) -> (f32, f32) {

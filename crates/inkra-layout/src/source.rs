@@ -286,5 +286,6 @@ pub fn layout_line(
         hits: Vec::new(),
         caret_range: Some(0..text.len()),
         overlays: Vec::new(),
+        pending_diagram: None,
     }
 }

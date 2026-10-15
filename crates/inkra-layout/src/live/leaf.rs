@@ -454,7 +454,10 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                     if is_diagram && !active {
                         // MD-100: the diagram instead of its source.
                         let src = text.slice(body.clone()).into_owned();
-                        let (shown, err, ext) = diagram(&src, style, w, item.src.start);
+                        let (shown, err, ext, pending) = diagram(&src, style, w, item.src.start);
+                        if pending {
+                            out.pending_diagram = Some(item.src.start);
+                        }
                         let top = y + 0.3 * em;
                         let mut h = 0.6 * em;
                         if let Some(p) = ext {
@@ -557,7 +560,11 @@ pub fn layout(item: &LiveItem, cx: &LiveCx<'_>, fonts: &mut FontsView<'_>) -> Bl
                         if is_diagram {
                             // Live preview below the source while editing (MD-100).
                             let src = text.slice(body.clone()).into_owned();
-                            let (shown, err, ext) = diagram(&src, style, w, item.src.start);
+                            let (shown, err, ext, pending) =
+                                diagram(&src, style, w, item.src.start);
+                            if pending {
+                                out.pending_diagram = Some(item.src.start);
+                            }
                             let top = y + content_h + 0.4 * em;
                             if let Some(p) = ext {
                                 content_h += external_image(&p, cx, x, top, w, &mut out) + 0.6 * em;
@@ -1353,8 +1360,21 @@ fn diagram(
     Option<crate::run::MathScene>,
     Option<String>,
     Option<String>,
+    bool,
 ) {
-    let (shown, err) = diagram_builtin(src, style, max_w, block);
+    let Some((shown, err)) = diagram_builtin(src, style, max_w, block) else {
+        // AD-5: laid out in the background; the previous rendering of the
+        // block meanwhile.
+        let prev = LAST_GOOD
+            .get_or_init(Default::default)
+            .lock()
+            .ok()
+            .and_then(|m| m.get(&block).cloned());
+        return match prev {
+            Some((k, sc)) => (Some(to_math_scene(&sc, max_w, k, None)), None, None, true),
+            None => (None, Some("Drawing the diagram…".to_owned()), None, true),
+        };
+    };
     // Types the built-in renderer lacks go to `mmdc` when configured.
     if shown.is_none()
         && let Some(e) = &err
@@ -1363,15 +1383,17 @@ fn diagram(
     {
         return match st {
             inkra_diagram::external::Status::Ready(p) => {
-                (None, None, Some(p.to_string_lossy().into_owned()))
+                (None, None, Some(p.to_string_lossy().into_owned()), false)
             }
             inkra_diagram::external::Status::Pending => {
-                (None, Some("Rendering with mmdc…".to_owned()), None)
+                (None, Some("Rendering with mmdc…".to_owned()), None, false)
             }
-            inkra_diagram::external::Status::Failed(e) => (None, Some(format!("mmdc: {e}")), None),
+            inkra_diagram::external::Status::Failed(e) => {
+                (None, Some(format!("mmdc: {e}")), None, false)
+            }
         };
     }
-    (shown, err, None)
+    (shown, err, None, false)
 }
 
 /// An image rendered by an external tool, scaled to the column; returns its height.
@@ -1393,15 +1415,19 @@ fn external_image(
     ih
 }
 
+/// `None` while the diagram is laid out in the background (AD-5).
 fn diagram_builtin(
     src: &str,
     style: &Style,
     max_w: f32,
     block: usize,
-) -> (Option<crate::run::MathScene>, Option<String>) {
+) -> Option<(Option<crate::run::MathScene>, Option<String>)> {
     use std::hash::{Hash, Hasher};
     let pal = diagram_palette(style);
-    let r = inkra_diagram::render(src, &pal);
+    let r = match inkra_diagram::background::poll(block, src, &pal) {
+        inkra_diagram::background::Poll::Ready(r) => r,
+        inkra_diagram::background::Poll::Pending => return None,
+    };
     let mut h = std::collections::hash_map::DefaultHasher::new();
     (src, &pal, max_w.to_bits()).hash(&mut h);
     let key = h.finish();
@@ -1415,12 +1441,12 @@ fn diagram_builtin(
                 }
                 m.insert(block, (key, arc));
             }
-            (Some(to_math_scene(sc, max_w, key, None)), None)
+            Some((Some(to_math_scene(sc, max_w, key, None)), None))
         }
         Err(e) => {
             let prev = last.lock().ok().and_then(|m| m.get(&block).cloned());
             let shown = prev.map(|(k, sc)| to_math_scene(&sc, max_w, k, Some(style.bg)));
-            (shown, Some(e.to_string()))
+            Some((shown, Some(e.to_string())))
         }
     }
 }

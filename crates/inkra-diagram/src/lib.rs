@@ -7,6 +7,7 @@
 //! outlines). Parse errors carry a line number; the host shows them below the
 //! last good rendering.
 
+pub mod background;
 pub mod draw;
 pub mod external;
 pub mod flowchart;
@@ -170,10 +171,23 @@ pub fn is_unsupported(e: &Error) -> bool {
 
 /// Parses, lays out and draws a diagram (uncached).
 pub fn render_uncached(src: &str, pal: &Palette) -> Result<Scene, Error> {
+    render_cancellable(src, pal, &|| false).unwrap_or_else(|| Err(Error::new(0, "cancelled")))
+}
+
+/// Like [`render_uncached`], giving up (`None`) when `cancel` returns true
+/// (background layouts whose source changed, AD-5).
+pub fn render_cancellable(
+    src: &str,
+    pal: &Palette,
+    cancel: &dyn Fn() -> bool,
+) -> Option<Result<Scene, Error>> {
     // Front matter (`---\nconfig…\n---`) and `%%{init}%%` directives are skipped.
     let src = strip_header(src);
-    match kind(&src) {
-        Ok(Kind::Flowchart) => flowchart::parse(&src).map(|g| flowchart::render(&g, pal)),
+    Some(match kind(&src) {
+        Ok(Kind::Flowchart) => match flowchart::parse(&src) {
+            Ok(g) => Ok(flowchart::render_with(&g, pal, cancel)?),
+            Err(e) => Err(e),
+        },
         Ok(Kind::Sequence) => sequence::parse(&src).map(|s| sequence::render(&s, pal)),
         Ok(Kind::Pie) => pie::parse(&src).map(|p| pie::render(&p, pal)),
         Err(w) if w.is_empty() => Err(Error::new(0, "empty diagram")),
@@ -181,7 +195,7 @@ pub fn render_uncached(src: &str, pal: &Palette) -> Result<Scene, Error> {
             1,
             &format!("diagram type `{w}` is not supported"),
         )),
-    }
+    })
 }
 
 fn strip_header(src: &str) -> String {
@@ -198,14 +212,30 @@ fn strip_header(src: &str) -> String {
 type Cache = Mutex<HashMap<(String, Palette), Arc<Result<Scene, Error>>>>;
 static CACHE: OnceLock<Cache> = OnceLock::new();
 
-/// Renders with caching by source and palette.
-pub fn render(src: &str, pal: &Palette) -> Arc<Result<Scene, Error>> {
+/// The cached result for `src`, if laid out already (never computes).
+pub fn cached(src: &str, pal: &Palette) -> Option<Arc<Result<Scene, Error>>> {
     let cache = CACHE.get_or_init(Default::default);
-    let key = (src.to_owned(), pal.clone());
-    if let Ok(c) = cache.lock()
-        && let Some(r) = c.get(&key)
-    {
-        return r.clone();
+    cache
+        .lock()
+        .ok()?
+        .get(&(src.to_owned(), pal.clone()))
+        .cloned()
+}
+
+fn store(src: &str, pal: &Palette, r: Arc<Result<Scene, Error>>) {
+    if let Ok(mut c) = CACHE.get_or_init(Default::default).lock() {
+        if c.len() > 512 {
+            c.clear();
+        }
+        c.insert((src.to_owned(), pal.clone()), r);
+    }
+}
+
+/// Renders with caching by source and palette, on the calling thread
+/// (exports; the live view uses [`background::poll`]).
+pub fn render(src: &str, pal: &Palette) -> Arc<Result<Scene, Error>> {
+    if let Some(r) = cached(src, pal) {
+        return r;
     }
     // NF-002: a layout bug becomes an error under the source block instead of
     // taking the frame down; the result is cached like any other.
@@ -213,12 +243,7 @@ pub fn render(src: &str, pal: &Palette) -> Arc<Result<Scene, Error>> {
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| render_uncached(src, pal)))
             .unwrap_or_else(|_| Err(Error::new(0, "internal error while drawing the diagram"))),
     );
-    if let Ok(mut c) = cache.lock() {
-        if c.len() > 512 {
-            c.clear();
-        }
-        c.insert(key, r.clone());
-    }
+    store(src, pal, r.clone());
     r
 }
 

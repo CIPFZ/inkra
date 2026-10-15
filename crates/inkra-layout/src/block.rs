@@ -136,4 +136,7 @@ pub struct BlockLayout {
     pub caret_range: Option<Range<usize>>,
     /// Host-drawn overlays.
     pub overlays: Vec<Overlay>,
+    /// The block's diagram is still laid out in the background (AD-5): the
+    /// slot to [`inkra_diagram::background::touch`] while it is visible.
+    pub pending_diagram: Option<usize>,
 }

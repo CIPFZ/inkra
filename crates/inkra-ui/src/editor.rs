@@ -1036,6 +1036,11 @@ impl EditorView {
                 ctx.request_repaint_after(Duration::from_secs_f64(1.25));
             }
         }
+        // AD-5: while a visible diagram is laid out in the background, frames
+        // keep it wanted (the result itself requests a repaint when done).
+        if self.view.pending_diagrams() {
+            ctx.request_repaint_after(Duration::from_millis(250));
+        }
         self.last_ms = t0.elapsed().as_secs_f32() * 1000.0;
         out
     }

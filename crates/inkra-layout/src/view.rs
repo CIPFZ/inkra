@@ -549,6 +549,17 @@ impl ViewLayout {
             if matches!(b.kind, inkra_markdown::BlockKind::MathBlock { .. }) {
                 self.math_numbers.get(&item.src.start).hash(&mut h);
             }
+            // Diagrams laid out in the background (AD-5) appear when they finish.
+            if cx.style.diagrams && matches!(b.kind, inkra_markdown::BlockKind::CodeBlock { .. }) {
+                let src = cx.doc.text().slice(item.src.clone());
+                if src
+                    .trim_start_matches(['`', '~'])
+                    .trim_start()
+                    .starts_with("mermaid")
+                {
+                    inkra_diagram::background::generation().hash(&mut h);
+                }
+            }
             // Diagrams rendered by `mmdc` appear when the job and the image load finish.
             if inkra_diagram::external::enabled()
                 && matches!(b.kind, inkra_markdown::BlockKind::CodeBlock { .. })
@@ -669,6 +680,10 @@ impl ViewLayout {
         let it = &mut self.items[i];
         it.height = h;
         it.measured = true;
+        // AD-5: a visible block waiting for its diagram keeps it wanted.
+        if let Some(slot) = layout.pending_diagram {
+            inkra_diagram::background::touch(slot);
+        }
         self.frame.insert(
             i,
             Laid {
@@ -678,6 +693,14 @@ impl ViewLayout {
             },
         );
         true
+    }
+
+    /// Whether a block laid out in this frame still waits for its diagram (the
+    /// host repaints now and then until it arrives).
+    pub fn pending_diagrams(&self) -> bool {
+        self.frame
+            .values()
+            .any(|l| l.layout.pending_diagram.is_some())
     }
 
     fn note_height_change(&mut self, i: usize, new_h: f32) {
