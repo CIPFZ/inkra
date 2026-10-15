@@ -49,6 +49,9 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: xvfb-run -a ./target/release/inkra --measure-startup --config "$RUNNER_TEMP/inkra" 2>&1 | tee -a "$RUNNER_TEMP/job.log"
+      - name: Issue triage tool self-test (T6)
+        if: runner.os == 'Linux'
+        run: python3 tools/triage_issues.py --self-test
       - name: Control channel end to end (CM-003)
         if: runner.os == 'Linux'
         shell: bash
