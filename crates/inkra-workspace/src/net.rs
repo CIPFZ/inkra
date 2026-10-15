@@ -46,11 +46,17 @@ pub fn newer_release(repo: &str, current: &str) -> Result<Option<(String, String
     } else {
         format!("https://api.github.com/repos/{repo}/releases/latest")
     };
-    let mut r = agent()
+    let mut r = match agent()
         .get(&api)
         .header("Accept", "application/vnd.github+json")
         .call()
-        .map_err(|e| e.to_string())?;
+    {
+        Ok(r) => r,
+        // `releases/latest` skips pre-releases and drafts: 404 while there is
+        // no final release yet, which means "no update", not an error.
+        Err(ureq::Error::StatusCode(404)) if !pre => return Ok(None),
+        Err(e) => return Err(e.to_string()),
+    };
     let body = r
         .body_mut()
         .with_config()
