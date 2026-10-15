@@ -5,6 +5,17 @@ All notable changes to Inkra are documented here. The format follows
 
 ## [Unreleased]
 
+### Control channel and MCP (CM-003)
+- `inkra --control <port>`: local JSON-RPC on the loopback interface with a
+  per-start token in `<data_dir>/control/<pid>.json`; methods `hello`,
+  `commands`, `execute`, `batch`, `inspect_document`, `open`, `save`,
+  `screenshot`, `click`, `key`. Commands that would open a dialog return an
+  error instead; injected input is logged without its text; an "Automation"
+  marker in the status bar shows that the channel is open.
+- `inkra-cli mcp`: the same as MCP tools on stdio. Headless by default, with
+  files limited to `--automation-read-root` / `--automation-write-root` (the
+  current folder when not given); `--attach` drives a running Inkra.
+
 ## [1.0.0-beta.1] — 2026-10-15
 
 The first public build: every milestone M0–M7 and the SPEC audit below, plus

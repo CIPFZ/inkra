@@ -1,6 +1,6 @@
 # 控制通道与 MCP 设计（CM-003）
 
-> 状态：**设计草稿，待产品负责人确认后实现**（AGENT.md T7）。版本 0.1，2026-10-14。
+> 状态：**已确认，实现中**（AGENT.md T7）。版本 0.2，2026-10-14：Q1～Q4 按推荐；第 7 节增加无头模式，第 8 节增加读写根目录与注入日志两条（产品负责人 2026-10-14）。
 > 需求来源：SPEC 11 CM-003（P2）、AD-3（命令系统）、NF-002/NF-004/NF-005/NF-008，按 D-6 在 1.x 中排在 FS-050 之前。
 
 ## 1. 目标与非目标
@@ -93,7 +93,9 @@ UI 线程 (Shell::ui 每帧开头)：drain channel → 在 Engine 上执行 → 
 ## 7. `inkra-cli mcp`
 
 - stdio 上的 MCP 服务器（JSON-RPC 2.0，按行分隔），实现 `initialize`、`tools/list`、`tools/call`、`resources/list`、`resources/read`。
-- 连接目标：读取 `<data_dir>/control/*.json`，选择存活的进程（多个时取最新，或 `--pid`）；没有运行中的 Inkra 时，`--launch` 选项以 `inkra --control 0` 启动一个并等待连接文件出现。
+- 两种模式：
+  - **无头模式（默认）**：`inkra-cli mcp [--automation-read-root <dir>] [--automation-write-root <dir>]`。在 `inkra-cli` 进程内运行 `inkra-engine`（不开窗口、不连接 GUI），与 `inkra-cli run` 同一条命令路径；导出任务同步执行。可访问的文件受第 8 节"无头模式的文件范围"限制。`inkra_screenshot`、`inkra_click`、`inkra_key` 在无头模式下返回错误（没有界面）。
+  - **连接模式**：`inkra-cli mcp --attach [--pid <pid>]`。读取 `<data_dir>/control/*.json`，选择存活的进程（多个时取最新，或 `--pid`），经控制通道驱动 GUI。此时以 GUI 用户的身份操作，文件范围与 GUI 相同。
 - 工具（推荐**少量通用工具**，见开放问题 Q2）：
 
 | MCP 工具 | 对应方法 |
@@ -119,6 +121,9 @@ UI 线程 (Shell::ui 每帧开头)：drain channel → 在 Engine 上执行 → 
 | 资源耗尽 | 行长度上限 16 MiB、连接数上限 4、请求超时 30 s。 |
 | 用户内容丢失 | 写操作只能经命令系统；`save` 与 GUI 保存相同（原子写、外部修改冲突检查，NF-003）；未保存的修改照常进入恢复目录。 |
 | 用户不知情 | 开启时状态栏显示"控制通道已开启"图标，悬停显示端口与已连接客户端数。 |
+| 无头模式越界读写文件（a） | `inkra-cli mcp` 无头模式接受 `--automation-read-root <dir>` 与 `--automation-write-root <dir>`（各可重复），**未指定时两者都限制在启动时的当前工作目录**。所有路径参数（`path`、`dest`）先按当前目录解析为绝对路径并规范化（解析符号链接，新文件取其所在文件夹），读类命令须落在读根之内，写类命令须落在写根之内；会在文档旁写文件的命令（保存、快速导出、`sameFolder` 导出、重命名、移动、删除、插入图片复制到 assets）还要求当前文档所在文件夹在写根之内。越界返回错误 `4`，不执行命令。无头模式另外拒绝：打开链接或文件管理器（`app.openUrl`、`app.openFolder`、`*.reveal*`、`image.open*`）、打印、导入设置、自定义导出命令，以及设置指向外部程序的偏好（`export.pandocPath`、`export.custom`、`markdown.mermaidCli`）。 |
+| 注入输入不可追溯（b） | `click` 与 `key` 每次注入都写一条 `info` 日志：`control: injected click (x, y, button, count, modifiers)` / `control: injected key <键名与修饰键>`；`text` 只记录字符数，不记录内容（NF-008）。 |
+| 截图泄漏到磁盘（b） | `screenshot` 只在响应中返回 PNG 字节（base64），控制通道、`inkra-cli mcp` 与 egui 截图路径都不写任何文件。 |
 
 ## 9. 测试计划
 
@@ -127,7 +132,7 @@ UI 线程 (Shell::ui 每帧开头)：drain channel → 在 Engine 上执行 → 
 3. 端到端：CI 的 Linux job 在 Xvfb 下启动 `inkra --control 0`，用 `inkra-cli` 客户端跑一组命令（打开示例、加粗、保存、截图），比较保存结果与截图尺寸。
 4. MCP：对 `inkra-cli mcp` 做 stdio 往返测试（`initialize` → `tools/list` → `tools/call inkra_execute`）。
 
-## 10. 开放问题（需产品负责人决策）
+## 10. 开放问题（已决策 2026-10-14：全部按推荐）
 
 | 编号 | 问题 | 推荐 | 其他选项 | 不决策的后果 |
 |---|---|---|---|---|

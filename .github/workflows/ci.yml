@@ -49,6 +49,10 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: xvfb-run -a ./target/release/inkra --measure-startup --config "$RUNNER_TEMP/inkra" 2>&1 | tee -a "$RUNNER_TEMP/job.log"
+      - name: Control channel end to end (CM-003)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: xvfb-run -a python3 .github/scripts/control-e2e.py ./target/release/inkra ./target/release/inkra-cli 2>&1 | tee -a "$RUNNER_TEMP/job.log"
       - name: Bundle macOS app
         if: runner.os == 'macOS'
         shell: bash

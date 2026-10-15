@@ -1127,6 +1127,7 @@ inkra-cli commands                          # 列出命令
 
 **CM-003 (P2) 控制通道与 MCP**
 `inkra --control <port>` 开启本地 JSON-RPC（loopback，随机密钥文件授权）：`execute`、`batch`、`inspect_document`、`screenshot`、`click`、`key`、`open`、`save`。`inkra-cli mcp` 把命令包装为 MCP 工具，使 AI 代理能驱动编辑器。
+[回填 2026-10-14] 协议与安全边界见 `docs/design/control-protocol.md`（已确认）：换行分隔的 JSON-RPC 2.0 over TCP（仅回环）；连接文件 `<data_dir>/control/<pid>.json`（256 位令牌，仅本人可读，被杀进程留下的文件由下次启动与客户端清理）；首个请求须为带令牌的 `hello`；会弹出对话框的命令返回错误 `4` 而不弹窗；`click`/`key` 每次注入记日志（文本只记字符数），`screenshot` 只返回字节不落盘；状态栏显示"自动化"标记。`inkra-cli mcp` 默认无头模式（进程内引擎），文件限制在 `--automation-read-root` / `--automation-write-root`（未指定时为当前目录），并拒绝打开链接、文件管理器、打印、导入设置、自定义导出命令与设置外部程序路径；`--attach [--pid] [--config]` 驱动运行中的 GUI。
 
 **CM-004 (P1) 命令行参数**
 `inkra [files...|folder]`、`--new`、`--source-mode`、`--theme <name>`、`--config <path>`、`--version`、`--measure-startup`、`--no-session`。
