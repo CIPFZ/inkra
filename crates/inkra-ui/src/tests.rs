@@ -944,3 +944,83 @@ fn m7_document_is_exposed_to_assistive_technology() {
     let para = h.get_by_role(egui::accesskit::Role::Paragraph);
     assert_eq!(para.accesskit_node().value().as_deref(), Some("world"));
 }
+
+/// CM-003 end to end: a TCP client drives the shell through the control
+/// channel while the harness runs frames.
+#[test]
+fn control_channel_drives_the_shell() {
+    use std::io::{BufRead, BufReader, Write};
+    let d = tempfile::tempdir().unwrap();
+    let mut sh = shell("en-US");
+    sh.engine.state.paths = Some(inkra_workspace::Paths::rooted(d.path()));
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(900.0, 600.0))
+        .build_ui_state(|ui, shell: &mut Shell| shell.ui(ui), sh);
+    h.run();
+    let ctx = h.ctx.clone();
+    let port = h.state_mut().start_control(&ctx, 0).unwrap();
+    let dir = inkra_engine::control::control_dir(&d.path().join("data"));
+    let info = inkra_engine::control::ConnectionInfo::list(&dir)[0]
+        .1
+        .clone();
+    let doc = d.path().join("note.md");
+    std::fs::write(&doc, "# Note\n\nbody\n").unwrap();
+    let doc2 = doc.clone();
+    let client = std::thread::spawn(move || {
+        let mut c = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        let mut r = BufReader::new(c.try_clone().unwrap());
+        let mut call = |id: u64, method: &str, params: serde_json::Value| {
+            writeln!(c, "{}", inkra_engine::control::request(id, method, &params)).unwrap();
+            let mut line = String::new();
+            r.read_line(&mut line).unwrap();
+            inkra_engine::control::parse_response(&line)
+        };
+        let hello = call(1, "hello", serde_json::json!({ "token": info.token })).unwrap();
+        assert_eq!(hello["version"], 1);
+        call(2, "open", serde_json::json!({ "path": doc2 })).unwrap();
+        call(
+            3,
+            "execute",
+            serde_json::json!({ "command": "edit.insertText", "params": { "text": "X" } }),
+        )
+        .unwrap();
+        // Dialog commands answer with an error instead of opening a dialog.
+        let e = call(
+            4,
+            "execute",
+            serde_json::json!({ "command": "file.saveAs" }),
+        )
+        .unwrap_err();
+        assert_eq!(e.code, inkra_engine::control::code::FAILED);
+        call(5, "key", serde_json::json!({ "text": "Y" })).unwrap();
+        let v = call(
+            6,
+            "inspect_document",
+            serde_json::json!({ "include": ["text"] }),
+        )
+        .unwrap();
+        call(7, "save", serde_json::json!({})).unwrap();
+        let unknown = call(8, "bogus", serde_json::json!({})).unwrap_err();
+        assert_eq!(unknown.code, inkra_engine::control::code::METHOD_NOT_FOUND);
+        v["text"].as_str().unwrap().to_owned()
+    });
+    // Frames until the client is done; injected input goes in through the
+    // same hook the app uses (`raw_input_hook`).
+    for _ in 0..500 {
+        let mut raw = egui::RawInput::default();
+        h.state_mut().control_raw_input(&mut raw);
+        for e in raw.events {
+            h.event(e);
+        }
+        h.step();
+        if client.is_finished() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let text = client.join().unwrap();
+    assert!(text.contains('X') && text.contains('Y'), "{text:?}");
+    let saved = std::fs::read_to_string(&doc).unwrap();
+    assert!(saved.contains('X') && saved.contains('Y'), "{saved:?}");
+    assert_ne!(saved, "# Note\n\nbody\n");
+}

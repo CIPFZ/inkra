@@ -658,3 +658,7 @@ filter-all = 所有文件
 filter-documents = 文档
 a11y-document = 文档
 code-language-hint = 语言
+
+# Control channel (CM-003)
+status-control = 自动化
+status-control-tip = 控制通道已开启：回环端口 { $port }，已连接 { $clients } 个客户端。

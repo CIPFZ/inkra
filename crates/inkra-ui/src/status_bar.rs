@@ -81,6 +81,7 @@ pub fn show(
     engine: &Engine,
     i18n: &I18n,
     style: &Style,
+    control: Option<(u16, usize)>,
 ) -> Option<String> {
     let e = &engine.state.editor;
     if cache.version != Some(e.doc.version()) {
@@ -165,6 +166,17 @@ pub fn show(
         }
         if (engine.state.view.zoom - 1.0).abs() > 1e-3 {
             ui.label(format!("{:.0}%", engine.state.view.zoom * 100.0));
+        }
+        // CM-003: the user always sees that automation can drive the app.
+        if let Some((port, clients)) = control {
+            ui.label(egui::RichText::new(i18n.tr("status-control")).strong())
+                .on_hover_text(i18n.tr_args(
+                    "status-control-tip",
+                    &[
+                        ("port", i64::from(port).into()),
+                        ("clients", (clients as i64).into()),
+                    ],
+                ));
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             let t = e.doc.text();

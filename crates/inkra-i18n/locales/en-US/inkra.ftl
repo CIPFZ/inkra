@@ -658,3 +658,7 @@ filter-all = All files
 filter-documents = Documents
 a11y-document = Document
 code-language-hint = language
+
+# Control channel (CM-003)
+status-control = Automation
+status-control-tip = Control channel open on loopback port { $port }; { $clients } connected client(s).

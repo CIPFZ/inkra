@@ -80,6 +80,11 @@ impl eframe::App for App {
         }
     }
 
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        // CM-003: `click` and `key` from the control channel.
+        self.shell.control_raw_input(raw_input);
+    }
+
     fn on_exit(&mut self) {
         if self.save_session && !self.measure_startup {
             let s = self.shell.session();
@@ -278,7 +283,7 @@ fn main() -> std::process::ExitCode {
         }
     };
     #[cfg(windows)]
-    if args.version || args.help || args.measure_startup {
+    if args.version || args.help || args.measure_startup || args.control.is_some() {
         platform_windows::attach_parent_console();
     }
     if args.version {
@@ -346,6 +351,7 @@ fn main() -> std::process::ExitCode {
         && !args.no_session
         && engine.state.prefs.string("general.startup") == "restore";
     let source_mode = args.source_mode;
+    let control_port = args.control;
     let mut viewport = egui::ViewportBuilder::default()
         .with_title(title)
         .with_app_id(APP_ID)
@@ -447,6 +453,15 @@ fn main() -> std::process::ExitCode {
             }
             if source_mode {
                 shell.engine.state.editor.mode = inkra_engine::editor::ViewMode::Source;
+            }
+            if let Some(port) = control_port {
+                match shell.start_control(&cc.egui_ctx, port) {
+                    Ok(p) => eprintln!("inkra: control channel on 127.0.0.1:{p}"),
+                    Err(e) => {
+                        log::error!("cannot open the control channel: {e}");
+                        eprintln!("inkra: cannot open the control channel: {e}");
+                    }
+                }
             }
             log::info!(
                 "startup: UI set up after {:.1} ms",

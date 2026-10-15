@@ -9,6 +9,7 @@
 pub mod clipboard;
 mod completion;
 mod context_menu;
+pub mod control;
 pub mod dialogs;
 pub mod editor;
 pub mod find_bar;
@@ -177,6 +178,17 @@ pub struct Shell {
     import_offer: Option<PathBuf>,
     #[cfg(target_os = "macos")]
     native_menu: Option<native_menu::NativeMenu>,
+    /// The control channel (CM-003), when started with `--control`.
+    control: Option<control::Server>,
+    /// Input to inject at the next frame, with the replies to send after it.
+    control_input: Vec<(Vec<egui::Event>, control::Reply)>,
+    /// Injected in this frame; answered at the start of the next one.
+    control_injected: Vec<control::Reply>,
+    /// Injected in the previous frame (processed by now).
+    control_done: Vec<control::Reply>,
+    /// Screenshots requested from the platform: request number and reply.
+    control_shots: Vec<(u64, control::Reply)>,
+    control_seq: u64,
 }
 
 impl Shell {
@@ -248,6 +260,12 @@ impl Shell {
             theme_names_at: f64::NEG_INFINITY,
             #[cfg(target_os = "macos")]
             native_menu: None,
+            control: None,
+            control_input: Vec::new(),
+            control_injected: Vec::new(),
+            control_done: Vec::new(),
+            control_shots: Vec::new(),
+            control_seq: 0,
         }
     }
 
@@ -1687,6 +1705,7 @@ impl Shell {
                 ctx.repaint_causes()
             );
         }
+        self.poll_control(&ctx);
         self.handle_dialogs(&ctx);
         self.frame_tasks(&ctx);
 
@@ -2053,6 +2072,7 @@ impl Shell {
 
         let style_bg = self.win().editor.style.bg;
         let style = self.win().editor.style.clone();
+        let control = self.control.as_ref().map(|c| (c.port(), c.clients()));
         if self.engine.state.view.status_bar {
             egui::Panel::bottom("inkra-status")
                 .frame(
@@ -2062,9 +2082,14 @@ impl Shell {
                 )
                 .show(ui, |ui| {
                     let w = self.windows.entry(id).or_insert_with(WinUi::new);
-                    if let Some(cmd) =
-                        status_bar::show(ui, &mut w.status, &self.engine, &self.i18n, &style)
-                    {
+                    if let Some(cmd) = status_bar::show(
+                        ui,
+                        &mut w.status,
+                        &self.engine,
+                        &self.i18n,
+                        &style,
+                        control,
+                    ) {
                         self.invoke(&ctx, &cmd, &Value::Null);
                     }
                 });

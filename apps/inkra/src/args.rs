@@ -23,6 +23,9 @@ pub struct Args {
     pub measure_startup: bool,
     /// `--no-session`: do not restore or save the session.
     pub no_session: bool,
+    /// `--control <port>`: open the control channel on a loopback port (CM-003;
+    /// `0` picks a free one).
+    pub control: Option<u16>,
 }
 
 /// Usage text.
@@ -36,6 +39,7 @@ Options:
       --config <DIR>     Use DIR for configuration, data and cache
       --no-session       Do not restore or save the session
       --measure-startup  Print the time to the first frame and exit
+      --control <PORT>   Accept automation on a loopback port (0: any free port)
   -V, --version          Print version
   -h, --help             Print help
 ";
@@ -70,6 +74,13 @@ pub fn parse(args: impl IntoIterator<Item = String>) -> Result<Args, String> {
             "--help" | "-h" => out.help = true,
             "--measure-startup" => out.measure_startup = true,
             "--no-session" => out.no_session = true,
+            "--control" => {
+                let v = value("--control")?;
+                out.control = Some(
+                    v.parse()
+                        .map_err(|_| format!("--control needs a port number, not `{v}`"))?,
+                );
+            }
             // macOS passes a process serial number when launched from Finder.
             f if f.starts_with("-psn_") => {}
             other => return Err(format!("unknown option `{other}`")),
@@ -108,5 +119,8 @@ mod tests {
         assert!(p(&["-V"]).unwrap().version);
         assert!(p(&["--bogus"]).is_err());
         assert!(p(&["--theme"]).is_err());
+        assert_eq!(p(&["--control", "0"]).unwrap().control, Some(0));
+        assert_eq!(p(&["--control=5123"]).unwrap().control, Some(5123));
+        assert!(p(&["--control", "x"]).is_err());
     }
 }
