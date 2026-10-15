@@ -29,6 +29,7 @@ regex.workspace = true
 inkra-html.workspace = true
 inkra-math.workspace = true
 inkra-diagram.workspace = true
+getrandom.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

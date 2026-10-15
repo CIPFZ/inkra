@@ -15,6 +15,12 @@ pub enum Scope {
 
 /// `(crate, scope, license, reason)`.
 pub const ALLOWED: &[(&str, Scope, &str, &str)] = &[
+    (
+        "getrandom",
+        Scope::Only(&["inkra-engine"]),
+        "MIT OR Apache-2.0",
+        "control channel token from the system's random source (CM-003)",
+    ),
     ("egui", Scope::Any, "MIT OR Apache-2.0", "GUI (SPEC 2.1)"),
     (
         "epaint",

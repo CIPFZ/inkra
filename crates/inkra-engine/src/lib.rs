@@ -9,6 +9,7 @@
 pub mod analysis;
 pub mod builtin;
 pub mod command;
+pub mod control;
 pub mod editing;
 pub mod editor;
 pub mod exporting;
