@@ -410,6 +410,10 @@ modules:
 fn flatpak(manifest: &Path, out: &Path) -> Result<PathBuf, String> {
     let build = target_dir().join("flatpak-build");
     let repo = target_dir().join("flatpak-repo");
+    // Fresh every time: a cache of `target/` (CI) can leave an emptied repo
+    // folder behind, which flatpak-builder cannot open.
+    let _ = std::fs::remove_dir_all(&build);
+    let _ = std::fs::remove_dir_all(&repo);
     let mut c = Command::new("flatpak-builder");
     // No rofiles-fuse: CI runners and containers often lack FUSE.
     c.arg("--force-clean")
