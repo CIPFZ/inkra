@@ -296,7 +296,7 @@ jobs:
         with:
           name: inkra-release
           path: artifacts/*
-      - name: Draft release
+      - name: Publish the release (pre-release tags) or a draft (final tags)
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
         env:
@@ -310,3 +310,26 @@ jobs:
             *) mode="--draft" ;;
           esac
           gh release create "$TAG" $mode --verify-tag --title "Inkra ${TAG#v}" --notes-file "$notes" artifacts/*
+      # The Release must exist as intended: a published pre-release (not the
+      # "latest" release, which GitHub's releases/latest only gives for final
+      # versions) or a draft, with every file and the checksums.
+      - name: Check the release through the API
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          json=$(gh api "repos/${{ github.repository }}/releases" --jq ".[] | select(.tag_name == \"$TAG\") | {draft, prerelease, assets: [.assets[].name]}")
+          echo "$json"
+          [ -n "$json" ] || { echo "::error::no release object for $TAG"; exit 1; }
+          case "$TAG" in
+            *-*) want_draft=false; want_pre=true ;;
+            *) want_draft=true; want_pre=false ;;
+          esac
+          [ "$(jq -r .draft <<<"$json")" = "$want_draft" ] || { echo "::error::draft is not $want_draft"; exit 1; }
+          [ "$(jq -r .prerelease <<<"$json")" = "$want_pre" ] || { echo "::error::prerelease is not $want_pre"; exit 1; }
+          expected=$(ls artifacts | wc -l)
+          got=$(jq '.assets | length' <<<"$json")
+          [ "$got" -eq "$expected" ] || { echo "::error::$got assets uploaded, $expected built"; exit 1; }
+          jq -e '.assets | index("SHA256SUMS.txt")' <<<"$json" >/dev/null || { echo "::error::SHA256SUMS.txt missing"; exit 1; }
