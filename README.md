@@ -8,7 +8,7 @@
 - 文档的唯一真相是源码 rope，所有编辑都是可撤销的 Transaction。
 - 每个动作都是一个命令（`docs/commands.md`），菜单、快捷键、CLI 都只是入口。
 
-> **1.0.0-beta.1 是公开测试版。** 功能已完整，但还需要真实文档与真实机器上的反馈，见下文"已知限制"与"反馈问题"。
+> **1.0.0-beta.1 是公开测试版。** 功能已完整，但还需要真实文档与真实机器上的反馈，见下文"已知限制"与"反馈问题"。用 beta 版编辑重要文档前请先备份（复制文件夹或使用 Git）。
 
 <p align="center"><img src="docs/images/light.png" width="720" alt="Inkra 亮色主题（Paper）"></p>
 
@@ -22,13 +22,13 @@
 
 ## 下载
 
-从 [GitHub Releases](https://github.com/CIPFZ/inkra/releases) 下载，`SHA256SUMS.txt` 列出每个文件的校验和。安装包未做代码签名（签名与公证在 1.x 路线图中）。
+从 [GitHub Releases](https://github.com/CIPFZ/inkra/releases) 下载，`SHA256SUMS.txt` 列出每个文件的 SHA-256（`sha256sum -c SHA256SUMS.txt --ignore-missing`；Windows 用 `Get-FileHash`）。安装包未做代码签名（签名与公证在 1.x 路线图中）。
 
 | 平台 | 文件 | 说明 |
 |---|---|---|
 | Windows 10 1809+ x64 | `inkra-<版本>-x64.msi`、`inkra-<版本>-windows-x64.zip` | MSI 注册 `.md` 等文件关联与开始菜单；zip 解压即用 |
 | Windows 10 1809+ arm64 | `inkra-<版本>-arm64.msi`、`inkra-<版本>-windows-arm64.zip` | 同上 |
-| macOS 12+（Intel 与 Apple 芯片） | `Inkra-<版本>-universal.dmg` | 未签名：首次打开请在 Finder 中右键 → 打开 |
+| macOS 12+（Intel 与 Apple 芯片） | `Inkra-<版本>-universal.dmg` | 未签名，见"已知限制" |
 | Linux x86_64 | `Inkra-<版本>-x86_64.AppImage`、`inkra_<版本>_amd64.deb`、`inkra-<版本>-1.x86_64.rpm`、`inkra-<版本>-x86_64.flatpak`、`inkra-<版本>-linux-x86_64.tar.gz` | deb 需要 glibc 2.35+（Ubuntu 22.04、Debian 12 起）；tar.gz 内含 `install.sh` |
 | Linux arm64 | `Inkra-<版本>-arm64.AppImage`、`inkra_<版本>_arm64.deb`、`inkra-<版本>-1.aarch64.rpm`、`inkra-<版本>-arm64.flatpak`、`inkra-<版本>-linux-arm64.tar.gz` | 同上 |
 
@@ -39,7 +39,8 @@
 - **彩色 emoji**：emoji 以单色字形显示（内置 Noto Emoji）；egui 文字管线尚不能绘制彩色字形。
 - **Windows 11 贴靠布局**：一体化标题栏的最大化按钮不弹出贴靠布局浮层；需要时可在偏好设置中改用系统标题栏（`appearance.titleBar`）。
 - **Wayland**：默认经 XWayland 运行（Wayland 下 winit 收不到拖放的文件）；`INKRA_WAYLAND=1` 强制原生 Wayland，尚未在 Wayland 会话中实测。
-- 安装包未签名；Windows SmartScreen 与 macOS Gatekeeper 会在首次运行时提示。
+- **安装包未签名**：macOS 的 dmg 与 `Inkra.app` 未签名、未公证，首次请在 Finder 中右键 → 打开；Windows SmartScreen 选择"更多信息 → 仍要运行"。
+- **arm64 未在真机上验证**：Windows/Linux arm64 与 macOS Apple 芯片部分只在 GitHub Actions 的 arm64 虚拟机 runner 上做过安装与启动验证。
 - 冷启动在虚拟 GPU 环境中约 360 ms（DX12 会逐个探测全部显卡），单 GPU 实体机的数据还在收集。
 
 ## 反馈问题

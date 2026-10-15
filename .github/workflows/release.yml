@@ -1,13 +1,15 @@
 name: Release
 
 # NF-006 packages for every platform, installed and started on fresh runners,
-# with SHA256SUMS.txt. A `v*` tag uploads them to a draft GitHub Release; manual
-# runs and changes to the packaging are dry runs that keep the files as a
-# workflow artifact.
+# with SHA256SUMS.txt. A `v*` tag publishes them: a pre-release tag (`v1.0.0-beta.1`)
+# as a published pre-release, approved by the product owner before tagging
+# (AGENT.md section 4 rule 5); a final release tag as a draft to review. Manual
+# runs, changes to the packaging and release branches (`beta*`) are dry runs
+# that keep the files as a workflow artifact.
 on:
   push:
     tags: ["v*"]
-    branches: [master]
+    branches: [master, "beta*"]
     paths:
       - .github/workflows/release.yml
       - .github/scripts/**
@@ -303,6 +305,8 @@ jobs:
         run: |
           notes="docs/release-notes/$TAG.md"
           [ -f "$notes" ] || notes=CHANGELOG.md
-          pre=""
-          case "$TAG" in *-*) pre="--prerelease" ;; esac
-          gh release create "$TAG" --draft $pre --title "Inkra ${TAG#v}" --notes-file "$notes" artifacts/*
+          case "$TAG" in
+            *-*) mode="--prerelease" ;;
+            *) mode="--draft" ;;
+          esac
+          gh release create "$TAG" $mode --verify-tag --title "Inkra ${TAG#v}" --notes-file "$notes" artifacts/*
