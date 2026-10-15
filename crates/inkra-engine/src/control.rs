@@ -670,6 +670,7 @@ mod tests {
         let dir = control_dir(d.path());
         let info = ConnectionInfo::new(4242).unwrap();
         let p = info.write(&dir).unwrap();
+        assert!(p.is_file());
         let list = ConnectionInfo::list(&dir);
         assert_eq!(list.len(), 1);
         assert_eq!(list[0].1, info);
