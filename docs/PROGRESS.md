@@ -1,7 +1,7 @@
 # Inkra 开发进度
 
 更新时间：2026-10-15
-当前阶段：1.0 收尾 — T1～T9 完成；`1.0.0-beta.1` 已公开发布（pre-release），下一步依据 beta 反馈定 1.0 正式版
+当前阶段：**beta 反馈期**（2026-10-15 起，不开新功能）：等待产品负责人实机测试 issue；阻塞写作的 bug 立即修，其余汇总到下方"beta 反馈"等一起定 1.0 范围
 CI 状态：GitHub Actions `ci.yml` ubuntu 绿 / windows 绿 / macos 绿（含 bench 同机 A/B、cargo deny + cargo audit（无忽略项）、三平台打包、Linux 控制通道端到端）；`release.yml` 最近一次：成功（运行 #12，tag `v1.0.0-beta.1`）
 当前版本：1.0.0-beta.1（[Release](https://github.com/CIPFZ/inkra/releases/tag/v1.0.0-beta.1)，pre-release，15 个安装包 + `SHA256SUMS.txt`）
 
@@ -15,6 +15,19 @@ CI 状态：GitHub Actions `ci.yml` ubuntu 绿 / windows 绿 / macos 绿（含 b
 - [x] T7 CM-003（2026-10-15）：`inkra --control <port>`（回环 JSON-RPC、令牌连接文件、hello/commands/execute/batch/inspect_document/open/save/screenshot/click/key、对话框命令返回错误、注入记日志不含文本、截图不落盘、状态栏"自动化"标记、被杀进程的连接文件自动清理）；`inkra-cli mcp` 无头模式（读写根目录默认当前目录，越界与危险命令拒绝）与 `--attach [--pid] [--config]`；单元测试 + Shell 端到端测试 + CI Linux 真实进程端到端（`.github/scripts/control-e2e.py`）。说明：注入输入的帧视为窗口获得焦点（egui 在未聚焦窗口中忽略按键，而自动化通常在后台进行）
 - [x] T8 AD-5（2026-10-15）：`inkra-diagram::background` 工作线程布局、按源码+调色板缓存、编辑防抖 150 ms、源码变化取消旧布局（流程图各阶段与边循环检查取消标志）、可见待定块每帧保持需要、1 s 无人需要即放弃；结果到达重绘，期间显示上一次结果。验收：10 万字文档中在一张同步布局需 149 ms 的图内连续输入，p95 4.3 ms（`typing_in_a_large_diagram_stays_responsive`，release 下断言 < 16 ms）
 - [x] T9 ttf-parser → skrifa（2026-10-15）：inkra-math、inkra-diagram、inkra-export 改用 skrifa 0.48 / read-fonts 0.45（树中原有的 0.42/0.44 没有 MATH 表，故新增该版本，许可证 MIT OR Apache-2.0）；字形框沿用 ttf-parser 定义（全部轮廓点含控制点、截断取整）。验收：233 个公式的 474 次渲染场景哈希（含轮廓）完全一致；35 个图表栅格化像素完全一致；PNG 快照不变；ttf-parser 已不在依赖树中，`deny.toml` 与 `cargo audit` 的 RUSTSEC-2026-0192 忽略项删除
+
+## beta 反馈（分诊规则与汇总）
+- 来源：GitHub Issues（模板 bug / 渲染差异 / 功能请求）。`python3 tools/triage_issues.py` 读取 issue，提取版本、平台、安装方式、`graphics:` 行，重写 `docs/acceptance/user-reports.md` 的自动生成段（`--fetch-logs` 另读附件中的 inkra.log；本机出口 IP 的匿名 API 配额常被耗尽，可设 `GH_TOKEN`，或在 Windows 测试机上取 JSON 后用 `--input`）。
+- 分诊：bug 模板按 平台 / 版本 / 后端（`graphics:` 行）/ 复现步骤 / 最小 .md 核对；**阻塞写作**（崩溃、丢内容、无法输入/保存/打开/启动、数据损坏）立即修复并发布修复版（`1.0.0-beta.N`）；其余记入下表，等产品负责人一起定 1.0 范围。
+- 当前：0 个 issue（2026-10-15）。
+
+| Issue | 平台 / 版本 | 分诊 | 结论 | 处理 |
+|---|---|---|---|---|
+| — | — | — | 暂无 | — |
+
+## beta 期间的维护记录（2026-10-15）
+- Release 对象核对（API，经 Windows 测试机出口查询）：`v1.0.0-beta.1` 存在，`draft=false`、`prerelease=true`、16 个文件、发布于 2026-10-15T08:25:37Z。`releases/latest` 返回 404 是 GitHub 的设计（该端点不含 pre-release 与草稿），不是发布失败。修复与加固：(1) 正式版构建在只有 pre-release 时查 `releases/latest` 得到 404，手动检查更新会报错，现按"无更新"处理；(2) release.yml 发布后经 API 自检 Release 对象（存在、draft/prerelease 标志、文件数与 `SHA256SUMS.txt`），用本次真实 JSON 验证过检查逻辑。
+- 代码签名与公证调研：`docs/design/code-signing.md`（未执行；第 6 节 5 个待决事项）。
 
 ## 1.0 收尾中修复的缺陷（2026-10-14）
 - 行内公式高于行高时基线偏高（`\frac{a}{b}` 偏 6 px）——README 截图发现，`inkra-layout/tests/inline_math.rs`
@@ -93,7 +106,8 @@ CI 状态：GitHub Actions `ci.yml` ubuntu 绿 / windows 绿 / macos 绿（含 b
 - Wayland 下窗口图标依赖安装 `.desktop` 与 hicolor 图标：`cargo xtask dist` 的 tar.gz/deb/rpm/AppImage 均已包含；Wayland 未实测。
 
 ## 开放问题（需产品负责人决策）
-- 无。2026-10-14 决策：(1) T2 偏离接受、不 fork wgpu；(2) T5 批准发布（release notes 满足清单即发布）；(3) T7 Q1～Q4 按推荐并补两条安全约束；(4) 六个许可证例外批准，MPL-2.0（仅限未修改链接）、BSL-1.0、CC0-1.0、CDLA-Permissive-2.0 加入 AGENT.md 第 4 节白名单，RUSTSEC-2026-0192 忽略接受、skrifa 迁移列为 T9。
+- 已决策（2026-10-14）：(1) T2 偏离接受、不 fork wgpu；(2) T5 批准发布（release notes 满足清单即发布）；(3) T7 Q1～Q4 按推荐并补两条安全约束；(4) 六个许可证例外批准，MPL-2.0（仅限未修改链接）、BSL-1.0、CC0-1.0、CDLA-Permissive-2.0 加入 AGENT.md 第 4 节白名单，RUSTSEC-2026-0192 忽略接受、skrifa 迁移列为 T9。
+- 代码签名（`docs/design/code-signing.md` 第 6 节）：签名主体（个人/组织）、Windows 方案（SignPath Foundation 免费但证书主体为 SignPath Foundation / Azure Artifact Signing 需主体在支持地区 / Certum + 自建 runner）、预算（Apple 99 美元/年）、时间点（1.0 前或维持 P2）、是否现在就加免费的 GitHub Artifact Attestations。
 - 原开放问题（启动预算与 Windows 渲染后端）已于 2026-10-13 决策：D-1 保持 DX12 默认，D-2/D-3 改写预算，D-4 三项 DX12 启动优化纳入 T2。
 
 ## 回填到 SPEC 的决策
