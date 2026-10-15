@@ -1,20 +1,20 @@
 # Inkra 开发进度
 
-更新时间：2026-10-14
-当前阶段：1.0 收尾 — T1～T4、T6 完成；2026-10-14 产品负责人决策后进行 T5 Beta 发布，随后 T7 → T8（AD-5）→ T9（skrifa）
-CI 状态：GitHub Actions（`CIPFZ/inkra`）`ci.yml` ubuntu 绿 / windows 绿 / macos 绿（运行 #12 起；另含 bench 同机 A/B、cargo deny + cargo audit、三平台 `cargo xtask dist`）；`release.yml` 最近一次：成功（运行 #6，push 触发的 dry run：全部产物 + 安装验证 + `SHA256SUMS.txt`）。本地 `cargo xtask ci` 绿（Linux）
-当前版本：master 为 0.1.0；`1.0.0-beta.1` 的版本号、README、CHANGELOG、release notes 在本地分支 `beta1`（未推送，待确认）
+更新时间：2026-10-15
+当前阶段：1.0 收尾 — T1～T9 完成；`1.0.0-beta.1` 已公开发布（pre-release），下一步依据 beta 反馈定 1.0 正式版
+CI 状态：GitHub Actions `ci.yml` ubuntu 绿 / windows 绿 / macos 绿（含 bench 同机 A/B、cargo deny + cargo audit（无忽略项）、三平台打包、Linux 控制通道端到端）；`release.yml` 最近一次：成功（运行 #12，tag `v1.0.0-beta.1`）
+当前版本：1.0.0-beta.1（[Release](https://github.com/CIPFZ/inkra/releases/tag/v1.0.0-beta.1)，pre-release，15 个安装包 + `SHA256SUMS.txt`）
 
 ## 本阶段任务进度
 - [x] T1 决策落地与文档同步（2026-10-14）：SPEC 2.1/2.5/13 回填 D-1～D-6，ROADMAP 1.x 按 D-6 重排，旧启动 prompt 归档到 `docs/archive/AGENT_INKRA_m0.md`
 - [x] T2 DX12 启动优化（2026-10-14，偏离已接受）：适配器缓存 `general.graphics.lastAdapter`（多适配器时直接选用上次成功者；不能跳过探测，代码注释已注明）、WARP→GL 回退（带 `glFallback` 防循环）、`static-dxc` 评估后不启用、关闭间接调用校验；测试机冷启动 ~390 → ~360 ms。"命中缓存快 100 ms"不达成：wgpu 30 安全 API 每次枚举都探测全部适配器；产品负责人决定不 fork wgpu，实体机数据由 beta 用户日志（`graphics:` 行）回收
 - [x] T3 CI 三平台实跑与 Release 流水线（2026-10-14）：`ci.yml` 三平台绿；`release.yml` 产出 Linux x86_64/arm64（tar.gz、AppImage、deb、rpm、Flatpak）、Windows x64/arm64（zip、MSI）、macOS universal dmg，并在全新 runner 上安装验证（deb + Xvfb 首帧、rpm/Fedora、AppImage、tar.gz、Flatpak、MSI 关联/快捷方式/卸载于 windows-latest 与 windows-11-arm、dmg lipo + `--version`）；tag `v*` 时上传为 Release 草稿。说明：无 token 无法手动 `workflow_dispatch`，改为打包相关文件变更时 push 触发 dry run（等效）。失败日志通过公开的 annotation 读取（`tools/gh_runs.py`）
 - [x] T4 安全与健壮性收口（2026-10-14）：cargo deny（许可证白名单 + 具名例外）与 cargo audit 进 CI；外部进程复核（Pandoc/mmdc/自定义导出命令/打印）；`open_external` 统一检查（`javascript:`/`vbscript:`/`data:`/指向程序的 `file:` 及 Windows 危险协议，带测试）；third-party.md 按 `cargo tree` 实际链接集生成；egui 非 OFL 字体移除。fuzz（`fuzz/`，各 ≥ 2 h，修复后复跑）：markdown_parse 206 万次、markdown_incremental 142 万次、html_to_markdown 875 万次无问题；diagram 2 个 panic + 3 个超慢/超大输入、math 2 个指数级布局，全部修复并转为回归测试，最终 diagram 317 万次、math 273 万次无崩溃。数学 fuzz 曾因 ASan 隔离区触发 RSS 上限（非泄漏：无 ASan 时 2.8 万次渲染峰值 24 MB）
-- [ ] T5 Beta 发布：版本号、README（截图 6 张、下载表、已知限制、反馈指引）、CHANGELOG、release notes 中英草稿（`docs/release-notes/v1.0.0-beta.1.md`）已在本地分支 `beta1` 完成；**等待确认后**推送、打 tag `v1.0.0-beta.1`、检查草稿并发布（pre-release）
+- [x] T5 Beta 发布（2026-10-15）：release notes 按产品负责人清单补齐（beta 声明与备份建议、三平台下载表与 SHA256 校验方法、已知限制含 macOS 未签名与 arm64 未真机验证、反馈指引、许可证；中英双语）；`beta1` 推送后 CI #28 与打包演练 #10 绿，快进合入 master，tag `v1.0.0-beta.1` 触发 release.yml #12，以 pre-release 直接发布（无 token 无法把草稿转为发布，故 pre-release tag 直接发布、正式版 tag 仍为草稿）。验收：从 Release 下载 Linux AppImage，`sha256sum -c` 通过，`--version` 与 Xvfb 首帧（159 ms）正常；Windows 测试机从 Release 下载 x64 MSI，SHA256 一致，`msiexec /qn` 退出码 0，`.md` → `Inkra.Markdown`、打开命令、开始菜单快捷方式、文件版本 1.0.0-beta.1 均正确，冷启动 365 ms，经文件关联打开含公式与图表的文档渲染正常（截图）
 - [x] T6 Dogfooding 与反馈闭环（2026-10-14）：issue 模板（bug / 渲染差异 / 功能请求，bug 模板要求平台、安装方式、版本、`graphics:` 行）、`docs/acceptance/user-reports.md` 与 `user-reports/` 语料测试；README 反馈指引在 `beta1`
-- [ ] T7 CM-003：设计已确认（Q1～Q4 按推荐，第 8 节补充读写根目录与注入日志），实现中
-- [ ] T8 AD-5：图表布局移到后台线程并支持取消（1.0 正式版前）
-- [ ] T9 ttf-parser → skrifa 迁移（1.0 正式版前必做；之后删除 RUSTSEC-2026-0192 忽略项）
+- [x] T7 CM-003（2026-10-15）：`inkra --control <port>`（回环 JSON-RPC、令牌连接文件、hello/commands/execute/batch/inspect_document/open/save/screenshot/click/key、对话框命令返回错误、注入记日志不含文本、截图不落盘、状态栏"自动化"标记、被杀进程的连接文件自动清理）；`inkra-cli mcp` 无头模式（读写根目录默认当前目录，越界与危险命令拒绝）与 `--attach [--pid] [--config]`；单元测试 + Shell 端到端测试 + CI Linux 真实进程端到端（`.github/scripts/control-e2e.py`）。说明：注入输入的帧视为窗口获得焦点（egui 在未聚焦窗口中忽略按键，而自动化通常在后台进行）
+- [x] T8 AD-5（2026-10-15）：`inkra-diagram::background` 工作线程布局、按源码+调色板缓存、编辑防抖 150 ms、源码变化取消旧布局（流程图各阶段与边循环检查取消标志）、可见待定块每帧保持需要、1 s 无人需要即放弃；结果到达重绘，期间显示上一次结果。验收：10 万字文档中在一张同步布局需 149 ms 的图内连续输入，p95 4.3 ms（`typing_in_a_large_diagram_stays_responsive`，release 下断言 < 16 ms）
+- [x] T9 ttf-parser → skrifa（2026-10-15）：inkra-math、inkra-diagram、inkra-export 改用 skrifa 0.48 / read-fonts 0.45（树中原有的 0.42/0.44 没有 MATH 表，故新增该版本，许可证 MIT OR Apache-2.0）；字形框沿用 ttf-parser 定义（全部轮廓点含控制点、截断取整）。验收：233 个公式的 474 次渲染场景哈希（含轮廓）完全一致；35 个图表栅格化像素完全一致；PNG 快照不变；ttf-parser 已不在依赖树中，`deny.toml` 与 `cargo audit` 的 RUSTSEC-2026-0192 忽略项删除
 
 ## 1.0 收尾中修复的缺陷（2026-10-14）
 - 行内公式高于行高时基线偏高（`\frac{a}{b}` 偏 6 px）——README 截图发现，`inkra-layout/tests/inline_math.rs`
@@ -110,6 +110,8 @@ CI 状态：GitHub Actions（`CIPFZ/inkra`）`ci.yml` ubuntu 绿 / windows 绿 /
 - 2026-10-13：TH-002 字体名映射到随包字体（Inter / Source Serif 4 / JetBrains Mono），用户主题目录格式，选择主题时同步 Auto 明暗槽位
 - 2026-10-13：2.1 Windows 后端保持 DX12 与 DX12 启动优化三项（D-1、D-4）
 - 2026-10-13：2.5 冷启动只在单 GPU 实体机考核、内存预算分平台（D-2、D-3）
+- 2026-10-14：11 CM-003 协议与安全边界（无头模式读写根目录、注入日志、截图不落盘）
+- 2026-10-14：2.4 图表后台布局（T8：防抖、取消、过期）
 - 2026-10-14：2.1 T2 实施结论（缓存不能跳过探测、`static-dxc` 不启用、关闭间接调用校验）
 - 2026-10-13：13 章 1.0 收尾以 `1.0.0-beta.1` 公开 beta，彩色 emoji / 贴靠布局 / 原生 Wayland 不阻塞（D-5）；1.x 顺序 CM-003 先于 FS-050（D-6）
 
@@ -136,8 +138,7 @@ CI 状态：GitHub Actions（`CIPFZ/inkra`）`ci.yml` ubuntu 绿 / windows 绿 /
 - 语料：`cargo xtask corpus` 拉取固定提交的 7 个仓库到 `target/corpus`（不入库）。
 
 ## 下次会话从这里继续
-- 等产品负责人确认 release notes（开放问题 2）后：`git checkout beta1 && git rebase master`，必要时按 `docs/images/README.md` 重新生成截图，`cargo xtask ci`，合入 master 并推送，打 tag `v1.0.0-beta.1`，检查 `release.yml` 生成的 Release 草稿（产物 + `SHA256SUMS.txt`），标记 pre-release 发布；随后在 Windows 测试机上从 Release 下载 MSI 安装运行（T5 验收）。
-- 等 T7 设计确认（开放问题 3）后：实现 `inkra-engine::control`、`inkra-ui::control`、`inkra --control`、`inkra-cli mcp`。
-- 可选：AD-5 偏离（图表布局在 UI 线程同步进行）移到后台线程；ttf-parser → skrifa。
-- fuzz：`fuzz/run_all.sh [秒]` 一次跑全部目标；产物在 `fuzz/artifacts/`（已修复的在 `archive/`），转为回归测试后登记到 `docs/acceptance/user-reports.md`。
-- 读 Actions 结果：`python3 tools/gh_runs.py`（运行列表）与 `python3 tools/gh_runs.py <run_id>`（annotation 与失败日志尾部）；无 gh CLI、无 token。
+- 收集 beta 反馈：Issues（模板）→ `docs/acceptance/user-reports.md` 与 `user-reports/` 语料；用户日志中的 `graphics:` 行用于实体机冷启动数据（D-2，T2 偏离的后续）。
+- 依据反馈定 1.0 正式版范围；正式版 tag（无 `-`）由 release.yml 生成草稿，发布前按 AGENT.md 第 4 节第 5 条给出 release notes 确认。
+- ROADMAP 余项：TH-007 高 DPI 实测、PR-035 Windows 词典、UI-001/UI-033 macOS/GNOME 实测、原生 Wayland、彩色 emoji、贴靠布局浮层、内存实体机 VMMap 拆分；1.x 顺序见 ROADMAP（CM-003 已完成，下一项 FS-050 标签页）。
+- fuzz：`fuzz/run_all.sh [秒]`；读 Actions：`python3 tools/gh_runs.py [run_id]`。

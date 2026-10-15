@@ -19,7 +19,7 @@
 
 按以下顺序执行（D-6：控制通道提前到标签页之前）：
 
-1. 控制通道与 MCP（CM-003）：先出设计文档 `docs/design/control-protocol.md`，经确认后实现。
+1. [已完成 2026-10-15] 控制通道与 MCP（CM-003），设计见 `docs/design/control-protocol.md`。
 2. 标签页（FS-050）。
 3. Mermaid 全部图表类型；旧 flow/sequence 语法。
 4. 图片上传服务（ED-094）。
