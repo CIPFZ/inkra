@@ -1,9 +1,10 @@
 # cargo-deny (T4): `cargo deny check` runs in CI.
 #
 # Licenses: the allow list is AGENT.md section 4 rule 4 (MIT, Apache-2.0, BSD,
-# ISC, OFL (fonts, not crates), Zlib, Unicode). Crates only available under another
-# license are listed one by one below with the reason they are acceptable, so
-# that any new one fails CI and gets reviewed.
+# ISC, OFL (fonts, not crates), Zlib, Unicode, and since 2026-10-14 BSL-1.0,
+# CC0-1.0, CDLA-Permissive-2.0 and MPL-2.0). MPL-2.0 is allowed only for crates
+# linked unmodified, so each MPL crate is still listed below and a new one fails
+# CI until it is reviewed.
 
 [graph]
 all-features = false
@@ -20,20 +21,15 @@ allow = [
     "ISC",
     "Zlib",
     "Unicode-3.0",
+    "BSL-1.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
 ]
 
 exceptions = [
-    # SPEC 2.1 names both (fuzzy search, spell checking). MPL-2.0 is file-level
-    # copyleft: Inkra does not modify their files and links them unchanged.
+    # SPEC 2.1 names both (fuzzy search, spell checking); linked unmodified.
     { allow = ["MPL-2.0"], crate = "nucleo-matcher" },
     { allow = ["MPL-2.0"], crate = "spellbook" },
-    # Boost Software License 1.0: permissive (arboard's Windows clipboard).
-    { allow = ["BSL-1.0"], crate = "clipboard-win" },
-    { allow = ["BSL-1.0"], crate = "error-code" },
-    # CC0-1.0: public-domain dedication (SPEC 2.1 file watching).
-    { allow = ["CC0-1.0"], crate = "notify" },
-    # Mozilla's root certificate data for the update check (NF-009).
-    { allow = ["CDLA-Permissive-2.0"], crate = "webpki-root-certs" },
 ]
 
 [licenses.private]
@@ -53,8 +49,8 @@ yanked = "deny"
 ignore = [
     # ttf-parser is unmaintained (no vulnerability). inkra-math and
     # inkra-diagram read the OpenType MATH table and glyph outlines with it;
-    # moving to skrifa (already in the tree via krilla) is on the ROADMAP.
-    { id = "RUSTSEC-2026-0192", reason = "unmaintained, no known vulnerability; replacement planned" },
+    # moving to skrifa (already in the tree via krilla) is T9 in AGENT.md.
+    { id = "RUSTSEC-2026-0192", reason = "unmaintained, no known vulnerability; replacement is T9 (AGENT.md), required before 1.0" },
 ]
 
 [sources]

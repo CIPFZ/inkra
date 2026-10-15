@@ -71,7 +71,7 @@ Inkra（墨刻）是用 100% Rust（egui 0.36 + eframe + wgpu）从零实现的�
 1. 需要更换 SPEC 2.1 规定的技术选型，或新增第二处 `unsafe` 例外。
 2. 两条需求互相矛盾且无法用 SPEC 1.3 产品原则裁决。
 3. 某项验收标准或性能门槛在真实硬件上（非虚拟 GPU）确认无法达成。
-4. 新增依赖的许可证不是 MIT / Apache-2.0 / BSD / ISC / OFL / Zlib / Unicode 之一。
+4. 新增依赖的许可证不是 MIT / Apache-2.0 / BSD / ISC / OFL / Zlib / Unicode / MPL-2.0（仅限未修改、直接链接）/ BSL-1.0 / CC0-1.0 / CDLA-Permissive-2.0 之一。[2026-10-14 产品负责人批准后四项；`deny.toml` 与之同步]
 5. 对外发布动作（打 tag、发 Release、改 README 中面向用户的承诺）之前，先给出 release notes 草稿等确认。
 6. 任何会删除或重命名已发布配置文件键、命令 id、快捷键默认值的变更。
 
@@ -167,8 +167,22 @@ Inkra（墨刻）是用 100% Rust（egui 0.36 + eframe + wgpu）从零实现的�
 - [ ] 建立 `docs/acceptance/user-reports.md`，记录来自真实用户文件的解析/渲染问题并转化为语料测试。
 
 ### T7 1.x 第一项：CM-003 控制通道与 MCP（按 D-6 提前）
-- 读 SPEC CM-003 后先出设计文档 `docs/design/control-protocol.md`（JSON-RPC over loopback、密钥文件、方法列表、与命令注册表的映射、安全边界），**经确认后再实现**。
+- 读 SPEC CM-003 后先出设计文档 `docs/design/control-protocol.md`（JSON-RPC over loopback、密钥文件、方法列表、与命令注册表的映射、安全边界），**经确认后再实现**。[2026-10-14 已确认：Q1～Q4 按推荐；补充 `inkra-cli mcp` 无头模式读写根目录、click/key 注入记日志、screenshot 不落盘]
 - 之后按 ROADMAP 1.x 顺序继续：FS-050 标签页、Mermaid 全部类型、ED-094 图床、FS-033 命令面板……
+
+### T8 AD-5 修复：图表布局移到后台线程（1.0 正式版前）
+- [ ] 内置 Mermaid 布局不在 UI 线程同步进行：后台线程计算、按源码 + 调色板缓存、编辑中 150 ms 防抖（SPEC 2.4、AD-5）；布局中显示上一次成功结果或占位。
+- [ ] 支持取消：源码再次变化或块离开视图时，过期的布局任务尽早放弃（协作式取消标志），不阻塞后续请求。
+- [ ] 导出（HTML/PDF/Pandoc）路径仍可同步获取结果。
+- 验收：10 万字文档含 fuzz 构造的超大图时输入延迟 p95 仍 < 16 ms；图表结果到达后自动重绘；单元测试覆盖取消与过期结果丢弃。
+
+### T9 ttf-parser → skrifa 迁移（1.0 正式版前必做）
+- [ ] `inkra-math`、`inkra-diagram`（及其他直接依赖 ttf-parser 的 crate）改用 skrifa（已随 krilla 在依赖树中）读取 OpenType MATH 表、度量与字形轮廓。
+- [ ] 删除 `deny.toml` 与 CI `cargo audit` 中 RUSTSEC-2026-0192 的忽略项。
+- 验收：数学语料 233 个公式、图表语料 35 个渲染结果逐一与迁移前一致（场景哈希或像素比较）；PNG 快照基线不变。
+
+### 之后
+- 依据 beta 用户反馈（`docs/acceptance/user-reports.md`）与实体机日志定 1.0 正式版范围。
 
 ### 不做的事（不要被"顺手"诱惑）
 - 不重构已验收模块的内部结构，除非修 bug 必需。

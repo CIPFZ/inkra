@@ -1,18 +1,20 @@
 # Inkra 开发进度
 
 更新时间：2026-10-14
-当前阶段：1.0 收尾 — T1～T4、T6 完成；T5 Beta 发布等待确认 release notes（开放问题 2）；T7 设计稿待确认（开放问题 3）
+当前阶段：1.0 收尾 — T1～T4、T6 完成；2026-10-14 产品负责人决策后进行 T5 Beta 发布，随后 T7 → T8（AD-5）→ T9（skrifa）
 CI 状态：GitHub Actions（`CIPFZ/inkra`）`ci.yml` ubuntu 绿 / windows 绿 / macos 绿（运行 #12 起；另含 bench 同机 A/B、cargo deny + cargo audit、三平台 `cargo xtask dist`）；`release.yml` 最近一次：成功（运行 #6，push 触发的 dry run：全部产物 + 安装验证 + `SHA256SUMS.txt`）。本地 `cargo xtask ci` 绿（Linux）
 当前版本：master 为 0.1.0；`1.0.0-beta.1` 的版本号、README、CHANGELOG、release notes 在本地分支 `beta1`（未推送，待确认）
 
 ## 本阶段任务进度
 - [x] T1 决策落地与文档同步（2026-10-14）：SPEC 2.1/2.5/13 回填 D-1～D-6，ROADMAP 1.x 按 D-6 重排，旧启动 prompt 归档到 `docs/archive/AGENT_INKRA_m0.md`
-- [x] T2 DX12 启动优化（2026-10-14）：适配器缓存 `general.graphics.lastAdapter`、WARP→GL 回退（带 `glFallback` 防循环）、`static-dxc` 评估后不启用、关闭间接调用校验；测试机冷启动 ~390 → ~360 ms。**偏离**：验收"命中缓存比首次快 100 ms"无法达成——wgpu 30 安全 API 每次枚举都探测全部适配器，缓存不能跳过探测（见 SPEC 2.1 [回填 2026-10-14]、开放问题 1）
+- [x] T2 DX12 启动优化（2026-10-14，偏离已接受）：适配器缓存 `general.graphics.lastAdapter`（多适配器时直接选用上次成功者；不能跳过探测，代码注释已注明）、WARP→GL 回退（带 `glFallback` 防循环）、`static-dxc` 评估后不启用、关闭间接调用校验；测试机冷启动 ~390 → ~360 ms。"命中缓存快 100 ms"不达成：wgpu 30 安全 API 每次枚举都探测全部适配器；产品负责人决定不 fork wgpu，实体机数据由 beta 用户日志（`graphics:` 行）回收
 - [x] T3 CI 三平台实跑与 Release 流水线（2026-10-14）：`ci.yml` 三平台绿；`release.yml` 产出 Linux x86_64/arm64（tar.gz、AppImage、deb、rpm、Flatpak）、Windows x64/arm64（zip、MSI）、macOS universal dmg，并在全新 runner 上安装验证（deb + Xvfb 首帧、rpm/Fedora、AppImage、tar.gz、Flatpak、MSI 关联/快捷方式/卸载于 windows-latest 与 windows-11-arm、dmg lipo + `--version`）；tag `v*` 时上传为 Release 草稿。说明：无 token 无法手动 `workflow_dispatch`，改为打包相关文件变更时 push 触发 dry run（等效）。失败日志通过公开的 annotation 读取（`tools/gh_runs.py`）
 - [x] T4 安全与健壮性收口（2026-10-14）：cargo deny（许可证白名单 + 具名例外）与 cargo audit 进 CI；外部进程复核（Pandoc/mmdc/自定义导出命令/打印）；`open_external` 统一检查（`javascript:`/`vbscript:`/`data:`/指向程序的 `file:` 及 Windows 危险协议，带测试）；third-party.md 按 `cargo tree` 实际链接集生成；egui 非 OFL 字体移除。fuzz（`fuzz/`，各 ≥ 2 h，修复后复跑）：markdown_parse 206 万次、markdown_incremental 142 万次、html_to_markdown 875 万次无问题；diagram 2 个 panic + 3 个超慢/超大输入、math 2 个指数级布局，全部修复并转为回归测试，最终 diagram 317 万次、math 273 万次无崩溃。数学 fuzz 曾因 ASan 隔离区触发 RSS 上限（非泄漏：无 ASan 时 2.8 万次渲染峰值 24 MB）
 - [ ] T5 Beta 发布：版本号、README（截图 6 张、下载表、已知限制、反馈指引）、CHANGELOG、release notes 中英草稿（`docs/release-notes/v1.0.0-beta.1.md`）已在本地分支 `beta1` 完成；**等待确认后**推送、打 tag `v1.0.0-beta.1`、检查草稿并发布（pre-release）
 - [x] T6 Dogfooding 与反馈闭环（2026-10-14）：issue 模板（bug / 渲染差异 / 功能请求，bug 模板要求平台、安装方式、版本、`graphics:` 行）、`docs/acceptance/user-reports.md` 与 `user-reports/` 语料测试；README 反馈指引在 `beta1`
-- [ ] T7 CM-003：设计稿 `docs/design/control-protocol.md` 已完成（4 个开放问题），**待确认后实现**
+- [ ] T7 CM-003：设计已确认（Q1～Q4 按推荐，第 8 节补充读写根目录与注入日志），实现中
+- [ ] T8 AD-5：图表布局移到后台线程并支持取消（1.0 正式版前）
+- [ ] T9 ttf-parser → skrifa 迁移（1.0 正式版前必做；之后删除 RUSTSEC-2026-0192 忽略项）
 
 ## 1.0 收尾中修复的缺陷（2026-10-14）
 - 行内公式高于行高时基线偏高（`\frac{a}{b}` 偏 6 px）——README 截图发现，`inkra-layout/tests/inline_math.rs`
@@ -91,11 +93,8 @@ CI 状态：GitHub Actions（`CIPFZ/inkra`）`ci.yml` ubuntu 绿 / windows 绿 /
 - Wayland 下窗口图标依赖安装 `.desktop` 与 hicolor 图标：`cargo xtask dist` 的 tar.gz/deb/rpm/AppImage 均已包含；Wayland 未实测。
 
 ## 开放问题（需产品负责人决策）
-1. **T2 验收"命中缓存比首次快 100 ms"无法按原设想达成**：wgpu 30 的安全 API 在 DX12 上每次枚举都对每个适配器调用 `D3D12CreateDevice` 探测（`wgpu-hal` 的 `Adapter::expose` 是 crate 私有），缓存无法跳过探测；唯一途径是 fork/patch `wgpu-hal` 增加"按 LUID 只打开一个适配器"并在其中写 unsafe。推荐：不 fork，接受本次 −30 ms（关闭间接调用校验）的收益，在单 GPU 实体机上复测（那里只有 GPU + WARP 两个适配器，枚举成本约为测试机的 2/3）后再判断是否需要。不决策的后果：T2 按"偏离"关闭，冷启动在虚拟 GPU 测试机上仍为 ~360 ms（D-2 下仅作参考）。
-2. **T5 发布确认（AGENT.md 第 4 节第 5 条）**：请审阅本地分支 `beta1` 的 release notes 草稿 `docs/release-notes/v1.0.0-beta.1.md`（中英）、README 新增的"下载 / 已知限制 / 反馈问题"段与 CHANGELOG 条目。推荐：确认后推送 `beta1` 到 master、打 tag `v1.0.0-beta.1`，`release.yml` 生成 Release 草稿，检查产物后标记 pre-release 发布。不决策的后果：beta 不发布，其余工作不受影响。
-3. **T7 控制通道设计**：`docs/design/control-protocol.md` 第 10 节 Q1～Q4（传输格式、MCP 工具粒度、是否加偏好项、第一期是否含点击/按键/截图），每项附推荐选项。不决策的后果：按推荐方案实现需等确认（AGENT.md T7）。
-4. **许可证例外确认**（AGENT.md 第 4 节第 4 条）：依赖树中有只以非白名单许可证发布的 crate，均非本次新增：`nucleo-matcher`、`spellbook`（MPL-2.0，SPEC 2.1 指定的模糊搜索与拼写检查）、`clipboard-win`、`error-code`（BSL-1.0，arboard 的 Windows 剪贴板）、`notify`（CC0-1.0，SPEC 2.1 文件监控）、`webpki-root-certs`（CDLA-Permissive-2.0，更新检查的根证书数据）。已在 `deny.toml` 中逐个列为具名例外并注明理由；推荐保留。另：`ttf-parser` 被 RustSec 标为不再维护（无漏洞），已忽略并列入 ROADMAP 改用 skrifa。
-- 原开放问题（启动预算与 Windows 渲染后端）已于 2026-10-13 决策：D-1 保持 DX12 默认，D-2/D-3 改写预算，D-4 三项 DX12 启动优化纳入 T2（见 `AGENT.md` 第 3 节）。
+- 无。2026-10-14 决策：(1) T2 偏离接受、不 fork wgpu；(2) T5 批准发布（release notes 满足清单即发布）；(3) T7 Q1～Q4 按推荐并补两条安全约束；(4) 六个许可证例外批准，MPL-2.0（仅限未修改链接）、BSL-1.0、CC0-1.0、CDLA-Permissive-2.0 加入 AGENT.md 第 4 节白名单，RUSTSEC-2026-0192 忽略接受、skrifa 迁移列为 T9。
+- 原开放问题（启动预算与 Windows 渲染后端）已于 2026-10-13 决策：D-1 保持 DX12 默认，D-2/D-3 改写预算，D-4 三项 DX12 启动优化纳入 T2。
 
 ## 回填到 SPEC 的决策
 - 2026-10-12：2.2 层内子层（L1a/L1b、L3a/L3b）、i18n 横切、apps 与 xtask 的位置

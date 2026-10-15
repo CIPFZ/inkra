@@ -4,11 +4,13 @@
 //! them into eframe's wgpu setup.
 //!
 //! The adapter that worked last time is remembered in the internal preference
-//! `general.graphics.lastAdapter`. wgpu 30 has no safe way to open a single DX12
-//! adapter (every enumeration creates a device on each adapter to probe it), so the
-//! cache cannot skip probing. It keeps the choice stable across starts and
-//! remembers when DX12 offered only the WARP software adapter, so that the next
-//! start goes to GL (keeping DX12 as the fallback) without probing twice.
+//! `general.graphics.lastAdapter`. With several adapters, the next start picks it
+//! directly instead of ranking them again. **It does not skip probing**: wgpu 30
+//! has no safe way to open a single DX12 adapter (every enumeration creates a
+//! device on each adapter), so startup still pays for all of them (accepted
+//! deviation of T2, 2026-10-14). The cache also remembers when DX12 offered only
+//! the WARP software adapter, so that the next start goes to GL (keeping DX12 as
+//! the fallback).
 
 use eframe::wgpu::{Backend, Backends, DeviceType};
 use serde_json::{Value, json};
